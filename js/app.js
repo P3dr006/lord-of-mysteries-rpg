@@ -6,24 +6,31 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '
 const STEPS = [
   { id: 'identidade', nome: 'Identidade', render: renderIdentidade, valido: () => P.nome.trim().length > 0 },
   { id: 'atributos',  nome: 'Atributos',  render: renderAtributos, valido: () => ATTRS.every(a => P.attrs[a.key]) },
-  { id: 'caminho',    nome: 'Caminho',    render: renderCaminho,   valido: () => !!P.caminho },
+  { id: 'caminho',    nome: 'Caminho',    render: renderCaminho,   valido: () => !!P.caminho && !(typeof constel !== 'undefined' && constel.spinning) },
   { id: 'raca',       nome: 'Raça & Origem', render: renderRaca,   valido: () => !!(P.raca && P.origem) },
   { id: 'destino',    nome: 'Destino',    render: renderDestino,   valido: () => P.traco != null && P.artefato != null },
   { id: 'ficha',      nome: 'Ficha',      render: renderFicha,     valido: () => true },
 ];
 
+// Ao sair de uma tela: o que estava animando ou sorteando nela é cancelado e callbacks antigos deixam de valer.
+function sairDaTela() {
+  _tela++; cancelarTemporizadores();
+  if (typeof constel !== 'undefined' && constel.svg) pararD22();
+}
 function mostrar(id) {
+  sairDaTela();
   $('#cover').hidden = id !== 'cover';
   $('#wizard').hidden = id !== 'wizard';
 }
 
 function iniciarPasso() {
+  P.step = Math.max(0, Math.min(STEPS.length - 1, P.step | 0));
   mostrar('wizard');
   renderStepper();
   const s = STEPS[P.step];
   const body = $('#step-body');
   body.innerHTML = '';
-  s.render(body);
+  try { s.render(body); } catch (e) { console.error(e); recuperar(e); return; }
   body.classList.toggle('ficha-on', s.id === 'ficha');
   body.classList.remove('entra'); void body.offsetWidth; body.classList.add('entra');
   $('#btn-prev').disabled = P.step === 0;
@@ -31,7 +38,7 @@ function iniciarPasso() {
   $('#btn-next').disabled = !s.valido();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-function atualizarNext() { $('#btn-next').disabled = !STEPS[P.step].valido(); }
+function atualizarNext() { const b = $('#btn-next'); if (b && STEPS[P.step]) b.disabled = !STEPS[P.step].valido(); }
 
 function renderStepper() {
   const ol = $('#stepper');
@@ -231,7 +238,9 @@ function renderCaminho(body) {
       </div>
     </div>`;
   const mostrarInfo = id => { $('#caminho-info').innerHTML = infoCaminho(id); };
+  const minhaTela = _tela;                     // se a tela mudou, este resultado já não vale
   const escolher = (id, idx, manual) => {
+    if (minhaTela !== _tela || !$('#caminho-info')) return;
     P.caminho = id; salvar(); mostrarInfo(id); atualizarNext(); tocarCaminho(id);
     if (manual) centralizarNo(idx);
   };
@@ -244,7 +253,8 @@ function renderCaminho(body) {
   }
   $('#btn-d22').addEventListener('click', () => {
     $('#btn-d22').disabled = true;
-    girarD22((id, idx) => { escolher(id, idx, false); $('#btn-d22').disabled = false; });
+    girarD22((id, idx) => { if (minhaTela !== _tela) return; escolher(id, idx, false); const b = $('#btn-d22'); if (b) b.disabled = false; });
+    atualizarNext();                           // enquanto gira, "Avançar" fica travado
   });
 }
 
@@ -312,6 +322,7 @@ function renderDestino(body) {
   document.querySelectorAll('.dcard').forEach(inclinavel);
   const mostrar = (tipo, idx, animar) => {
     const c = $('#dc-' + tipo), f = $('#df-' + tipo), emb = CAMINHOS[(tipo === 'traco' ? 0 : 12) + idx];
+    if (!c || !f) return;
     const topo = `<div class="df-top"><span>${tipo === 'traco' ? 'Traço · d12' : 'Artefato selado · d10'}</span><b>${idx + 1}</b></div><div class="df-art">${medalhao(emb, 96)}</div>`;
     if (tipo === 'traco') { const t = TRACOS[idx]; f.innerHTML = `${topo}<h4>${t.t}</h4><div class="df-sep">◆</div><p class="df-txt">${t.d}</p><div class="df-shine"></div>`; }
     else { const a = ARTEFATOS[idx]; f.innerHTML = `${topo}<h4>${a.n}</h4><div class="df-sep">◆</div><p class="df-dad"><b>Dádiva</b>${a.dadiva}</p><p class="df-mal"><b>Maldição</b>${a.maldicao}</p><div class="df-shine"></div>`; }
@@ -326,11 +337,11 @@ function renderDestino(body) {
     btn.disabled = true;
     const n = $('#dn-' + tipo);
     let i = 0;
-    const iv = setInterval(() => { n.textContent = d(lista.length); if (++i > 18) { clearInterval(iv); fim(); } }, 70);
+    const iv = repetir(() => { n.textContent = d(lista.length); if (++i > 18) { clearInterval(iv); fim(); } }, 70);
     const fim = () => {
       P[chave] = d(lista.length) - 1; salvar();
       n.textContent = P[chave] + 1;
-      setTimeout(() => { mostrar(tipo, P[chave], true); atualizarNext(); }, 350);
+      agendar(() => { mostrar(tipo, P[chave], true); atualizarNext(); }, 350);
     };
   };
   $('#btn-traco').addEventListener('click', () => tirar('traco', TRACOS, 'traco'));
@@ -456,9 +467,12 @@ function janela(titulo, corpo, botoes) {
   return new Promise(res => {
     const m = document.createElement('div'); m.className = 'asc risco on';
     m.innerHTML = `<div class="asc-core"><h2 class="asc-nome">${titulo}</h2><div class="modal-corpo">${corpo}</div><div class="cover-btns"></div></div>`;
-    const caixa = m.querySelector('.cover-btns');
-    botoes.forEach(b => { const e = el('button', b.cls || 'ghost', b.label); if (b.ic) e.dataset.ic = b.ic; e.addEventListener('click', () => { const r = b.fn ? b.fn(m, e) : undefined; if (r !== false) { m.remove(); res(b.valor); } }); caixa.appendChild(e); });
+    const caixa = m.querySelector('.cover-btns'); let devolver = () => {};
+    const encerrar = valor => { m.remove(); devolver(); res(valor); };
+    botoes.forEach(b => { const e = el('button', b.cls || 'ghost', b.label); if (b.ic) e.dataset.ic = b.ic; e.addEventListener('click', () => { const r = b.fn ? b.fn(m, e) : undefined; if (r !== false) encerrar(b.valor); }); caixa.appendChild(e); });
     document.body.appendChild(m);
+    if (typeof decorarTudo === 'function') decorarTudo();
+    devolver = prenderFoco(m, () => encerrar(botoes[botoes.length - 1].valor));   // Esc = o último botão (Cancelar/Fechar)
   });
 }
 const perguntar = (titulo, texto) => janela(titulo, `<p class="modal-txt">${texto}</p>`, [{ label: 'Confirmar', cls: 'primary', valor: true }, { label: 'Cancelar', valor: false }]);
@@ -471,6 +485,21 @@ function exportarJSON() {
     [{ label: 'Copiar', cls: 'primary', ic: 'baixar', fn: (m, b) => { const t = m.querySelector('#json-out'); t.select(); (navigator.clipboard ? navigator.clipboard.writeText(json) : Promise.reject()).then(() => { b.lastChild.textContent = 'Copiado!'; }).catch(() => { document.execCommand && document.execCommand('copy'); }); return false; } },
      { label: 'Fechar', valor: true }]).then(() => {});
   setTimeout(() => { const t = $('#json-out'); if (t) t.value = json; }, 0);
+}
+
+/* ---------- Rede de segurança ---------- */
+// Se algo ainda falhar ao abrir a ficha salva, o jogador não fica preso: pode copiar os dados e recomeçar.
+let _recuperando = false;
+function recuperar(erro) {
+  if (_recuperando) return; _recuperando = true;
+  let bruto = ''; try { bruto = localStorage.getItem(STORE_KEY) || ''; } catch (e) {}
+  janela('Não consegui abrir esta ficha', `<p class="modal-txt">Os dados salvos neste navegador parecem estar com algum problema. Você pode copiar o texto abaixo como cópia de segurança e começar uma ficha nova.</p>
+    <textarea id="json-bruto" class="json-out" readonly></textarea>`,
+    [{ label: 'Começar de novo', cls: 'primary', valor: 'novo' }, { label: 'Fechar', valor: 'fechar' }]).then(r => {
+      _recuperando = false;
+      if (r === 'novo') { try { localStorage.removeItem(STORE_KEY); localStorage.removeItem(RET_KEY); } catch (e) {} P = novoPersonagem(); _retSalvo = undefined; voltarCapa(); }
+    });
+  const t = $('#json-bruto'); if (t) t.value = bruto || String(erro && erro.message || erro);
 }
 
 /* ---------- Pôster ---------- */
@@ -487,6 +516,7 @@ async function abrirPoster() {
     <div class="poster-btns"><button type="button" class="primary" id="pt-pdf" data-ic="baixar" disabled>Baixar PDF</button><button type="button" class="ghost" id="pt-png" data-ic="baixar" disabled>Baixar PNG</button><button type="button" class="ghost" id="pt-fechar">Fechar</button></div>
     <p class="hint crop-dica" id="pt-dica">O PDF sai em A4. Se o download não começar, toque e segure (ou clique com o botão direito) na imagem e escolha salvar.</p></div>`;
   document.body.appendChild(m);
+  const sair = () => { m.remove(); devolver(); }, devolver = prenderFoco(m, sair);
   let arq = null, ocupado = false;
   const gerar = async () => {
     if (ocupado) return; ocupado = true; $('#pt-pdf').disabled = $('#pt-png').disabled = true;
@@ -497,8 +527,7 @@ async function abrirPoster() {
     ocupado = false;
   };
   m.querySelector('#pt-terror').addEventListener('change', gerar);
-  m.querySelector('#pt-fechar').addEventListener('click', () => m.remove());
-  m.addEventListener('keydown', e => { if (e.key === 'Escape') m.remove(); });
+  m.querySelector('#pt-fechar').addEventListener('click', sair);
   m.querySelector('#pt-pdf').addEventListener('click', () => { if (arq && Poster.baixar(`${nomeArq}_poster.pdf`, arq.pdf, 'application/pdf')) $('#pt-dica').textContent = 'PDF gerado. Confira a pasta de downloads.'; });
   m.querySelector('#pt-png').addEventListener('click', () => { if (arq && Poster.baixar(`${nomeArq}_poster.png`, arq.png)) $('#pt-dica').textContent = 'Imagem gerada. Confira a pasta de downloads.'; });
   await gerar(); setTimeout(() => m.querySelector('#pt-pdf').focus(), 50);
@@ -508,7 +537,11 @@ async function abrirPoster() {
 $('#btn-next').addEventListener('click', () => { if (P.step < STEPS.length - 1) { P.step++; salvar(); iniciarPasso(); } });
 $('#btn-prev').addEventListener('click', () => { if (P.step > 0) { P.step--; salvar(); iniciarPasso(); } });
 $('#btn-start').addEventListener('click', () => { P = novoPersonagem(); salvar(); iniciarPasso(); });
-$('#btn-continue').addEventListener('click', () => { P = carregar(); iniciarPasso(); });
+$('#btn-continue').addEventListener('click', () => {
+  const salvo = carregar();
+  if (!salvo) { avisar('Não consegui abrir a ficha salva', 'Os dados guardados neste navegador estão ilegíveis. Você pode começar uma nova ficha.'); return; }
+  P = salvo; iniciarPasso();
+});
 $('#btn-new').addEventListener('click', () => {
   perguntar('Novo personagem', 'Criar um novo personagem? O personagem salvo neste navegador será substituído.').then(ok => { if (ok) { P = novoPersonagem(); salvar(); iniciarPasso(); } });
 });
@@ -519,7 +552,10 @@ $('#file-import').addEventListener('change', e => {
   e.target.value = '';
 });
 
-function voltarCapa() { montarCapa(); mostrar('cover'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+function voltarCapa() {
+  try { montarCapa(); } catch (e) { console.error(e); recuperar(e); }
+  mostrar('cover'); window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 $('#logo').addEventListener('click', voltarCapa);
 $('#logo').style.cursor = 'pointer';
 
