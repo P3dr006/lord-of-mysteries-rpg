@@ -960,3 +960,14 @@ input:focus-visible,textarea:focus-visible{outline-offset:1px}
   .asc .r2,.asc .r3{animation-delay:0s!important}
   .stars,.nevoa,.estrela-cad{display:none}
 }
+
+
+/* painel de ajustes de som */
+.painel-som{position:fixed;z-index:80;width:min(280px,calc(100vw - 24px));padding:14px 16px 12px;border-radius:14px;border:1px solid var(--gold);background:linear-gradient(180deg,#1b1742,#0e0c22);box-shadow:0 18px 50px #000c,0 0 30px #7a5cff33;animation:entra .2s both}
+body.terror .painel-som{border-color:#a01020;background:linear-gradient(180deg,#240810,#0c0508)}
+.ps-linha{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 6px;letter-spacing:.14em}
+.ps-linha output{color:var(--gold2);font-size:1.15rem;letter-spacing:0;font-variant-numeric:tabular-nums}
+.painel-som input[type=range]{width:100%;accent-color:#d9b86a;min-height:34px;margin:0 0 8px;cursor:pointer}
+.ps-chk{display:flex;align-items:center;gap:10px;margin:0;padding:8px 0;font-size:.85rem;letter-spacing:.04em;text-transform:none;color:var(--text);cursor:pointer;min-height:40px}
+.ps-chk input{width:20px;height:20px;accent-color:#d9b86a;flex:none}
+.ps-nota{margin:6px 0 0;color:var(--muted);font-size:.72rem;line-height:1.4}
