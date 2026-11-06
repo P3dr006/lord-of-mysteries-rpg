@@ -214,17 +214,17 @@ function renderRaca(body) {
     $('#g-raca-wrap').insertAdjacentHTML('beforeend', `<h4 class="sub">Raça · ${g}</h4><div class="cards" data-g="${g}"></div>`);
     const box = $('#g-raca-wrap').lastElementChild;
     RACAS.filter(r => r.grupo === g).forEach(r => {
-      const e = el('button', 'opt', `<span class="ic">${r.icone}</span><b>${r.nome}</b><small>${r.desc}</small>
+      const e = el('button', 'opt', `<span class="ic">${medalhao(r, 76)}</span><b>${r.nome}</b><small>${r.desc}</small>
         <span class="bn">${fmtBonus(r.bonus)}</span><em>${r.traco}</em>`);
-      e.dataset.id = r.id;
+      e.dataset.id = r.id; e.style.setProperty('--c', r.cor);
       e.addEventListener('click', () => { P.raca = r.id; salvar(); marcar(); });
       box.appendChild(e);
     });
   });
   ORIGENS.forEach(o => {
-    const e = el('button', 'opt', `<span class="ic">${o.icone}</span><b>${o.nome}</b>
+    const e = el('button', 'opt', `<span class="ic">${medalhao(o, 76)}</span><b>${o.nome}</b>
       <small>${o.itens.join(' · ')}</small><span class="bn">£ ${o.libras}</span><em>${o.perk}</em>`);
-    e.dataset.id = o.id;
+    e.dataset.id = o.id; e.style.setProperty('--c', o.cor);
     e.addEventListener('click', () => { P.origem = o.id; salvar(); marcar(); });
     $('#g-origem').appendChild(e);
   });
@@ -299,7 +299,7 @@ function renderFicha(body) {
       </div>
     </div>
     ${(() => { const r = racaPorId(P.raca), o = origemPorId(P.origem); return `
-      <p class="hint">${r.icone} <b>${r.nome}</b> (${fmtBonus(r.bonus)}) · ${o.icone} <b>${o.nome}</b></p>
+      <div class="emblems">${medalhao(r, 56)}<div><b>${r.nome}</b><div class="hint">${fmtBonus(r.bonus)}</div></div>${medalhao(o, 56)}<div><b>${o.nome}</b><div class="hint">£ ${o.libras}</div></div></div>
       <p class="note">${r.traco}<br>${o.perk}</p>`; })()}
     <h3>Atributos</h3>
     <div class="stat-grid">${attrs}</div>
