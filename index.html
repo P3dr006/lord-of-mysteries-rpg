@@ -7,11 +7,14 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<div id="terror-frame" aria-hidden="true"></div>
 <div class="stars" aria-hidden="true"></div>
 
 <header class="topbar">
   <h1 class="logo" id="logo" title="Voltar à capa">✦ Lord of the Mysteries <small>RPG</small></h1>
   <nav class="topnav">
+    <button id="btn-terror" class="ghost icon" title="Modo Terror" aria-pressed="false"></button>
+    <button id="btn-som" class="ghost icon" title="Som" aria-pressed="true"></button>
     <button id="btn-new" class="ghost" data-ic="novo">Novo personagem</button>
     <button id="btn-import" class="ghost" data-ic="subir">Importar JSON</button>
     <input id="file-import" type="file" accept="application/json" hidden>
@@ -50,6 +53,8 @@
 <script src="js/caminhos.js"></script>
 <script src="js/mundo.js"></script>
 <script src="js/emblemas.js"></script>
+<script src="js/som.js"></script>
+<script src="js/efeitos.js"></script>
 <script src="js/state.js"></script>
 <script src="js/dice.js"></script>
 <script src="js/constelacao.js"></script>
