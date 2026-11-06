@@ -16,6 +16,13 @@ function novoPersonagem() {
   };
 }
 
+// Remove referências a raças/origens que não existem mais (saves antigos)
+function sanear(p) {
+  if (p.raca && !racaPorId(p.raca)) { p.raca = null; p.step = Math.min(p.step, 3); }
+  if (p.origem && !origemPorId(p.origem)) { p.origem = null; p.step = Math.min(p.step, 3); }
+  return p;
+}
+
 let P = novoPersonagem();
 
 function salvar() {
@@ -25,7 +32,7 @@ function carregar() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return null;
-    return Object.assign(novoPersonagem(), JSON.parse(raw));
+    return sanear(Object.assign(novoPersonagem(), JSON.parse(raw)));
   } catch (e) { return null; }
 }
 function exportarJSON() {
@@ -39,7 +46,7 @@ function exportarJSON() {
 function importarJSON(file, cb) {
   const r = new FileReader();
   r.onload = () => {
-    try { P = Object.assign(novoPersonagem(), JSON.parse(r.result)); salvar(); cb(true); }
+    try { P = sanear(Object.assign(novoPersonagem(), JSON.parse(r.result))); salvar(); cb(true); }
     catch (e) { cb(false); }
   };
   r.readAsText(file);

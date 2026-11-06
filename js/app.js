@@ -203,19 +203,23 @@ function renderRaca(body) {
     <h3>Raça & Origem</h3>
     <div class="toolbar"><button id="btn-sortear" class="primary">🎲 Sortear raça e origem</button>
       <span class="hint">ou escolha clicando nas cartas</span></div>
-    <h4 class="sub">Raça</h4><div class="cards" id="g-raca"></div>
+    <div id="g-raca-wrap"></div>
     <h4 class="sub">Origem social</h4><div class="cards" id="g-origem"></div>`;
   const marcar = () => {
-    document.querySelectorAll('#g-raca .opt').forEach(e => e.classList.toggle('sel', e.dataset.id === P.raca));
+    document.querySelectorAll('#g-raca-wrap .opt').forEach(e => e.classList.toggle('sel', e.dataset.id === P.raca));
     document.querySelectorAll('#g-origem .opt').forEach(e => e.classList.toggle('sel', e.dataset.id === P.origem));
     atualizarNext();
   };
-  RACAS.forEach(r => {
-    const e = el('button', 'opt', `<span class="ic">${r.icone}</span><b>${r.nome}</b><small>${r.desc}</small>
-      <span class="bn">${fmtBonus(r.bonus)}</span><em>${r.traco}</em>`);
-    e.dataset.id = r.id;
-    e.addEventListener('click', () => { P.raca = r.id; salvar(); marcar(); });
-    $('#g-raca').appendChild(e);
+  [...new Set(RACAS.map(r => r.grupo))].forEach(g => {
+    $('#g-raca-wrap').insertAdjacentHTML('beforeend', `<h4 class="sub">Raça · ${g}</h4><div class="cards" data-g="${g}"></div>`);
+    const box = $('#g-raca-wrap').lastElementChild;
+    RACAS.filter(r => r.grupo === g).forEach(r => {
+      const e = el('button', 'opt', `<span class="ic">${r.icone}</span><b>${r.nome}</b><small>${r.desc}</small>
+        <span class="bn">${fmtBonus(r.bonus)}</span><em>${r.traco}</em>`);
+      e.dataset.id = r.id;
+      e.addEventListener('click', () => { P.raca = r.id; salvar(); marcar(); });
+      box.appendChild(e);
+    });
   });
   ORIGENS.forEach(o => {
     const e = el('button', 'opt', `<span class="ic">${o.icone}</span><b>${o.nome}</b>
