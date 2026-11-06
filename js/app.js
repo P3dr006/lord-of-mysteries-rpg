@@ -24,6 +24,7 @@ function iniciarPasso() {
   const body = $('#step-body');
   body.innerHTML = '';
   s.render(body);
+  body.classList.toggle('ficha-on', s.id === 'ficha');
   body.classList.remove('entra'); void body.offsetWidth; body.classList.add('entra');
   $('#btn-prev').disabled = P.step === 0;
   $('#btn-next').hidden = P.step === STEPS.length - 1;
@@ -252,16 +253,16 @@ function renderRaca(body) {
     $('#g-raca-wrap').insertAdjacentHTML('beforeend', `<h4 class="sub">Raça · ${g}</h4><div class="cards" data-g="${g}"></div>`);
     const box = $('#g-raca-wrap').lastElementChild;
     RACAS.filter(r => r.grupo === g).forEach(r => {
-      const e = el('button', 'opt', `<span class="ic">${medalhao(r, 76)}</span><b>${r.nome}</b><small>${r.desc}</small>
-        <span class="bn">${fmtBonus(r.bonus)}</span><em>${r.traco}</em>`);
+      const e = el('button', 'opt', `<span class="ic">${medalhao(r, 76)}</span><span class="txt"><b>${r.nome}</b><small>${r.desc}</small>
+        <span class="bn">${fmtBonus(r.bonus)}</span><em>${r.traco}</em></span>`);
       e.dataset.id = r.id; e.style.setProperty('--c', r.cor);
       e.addEventListener('click', () => { P.raca = r.id; salvar(); marcar(); });
       box.appendChild(e);
     });
   });
   ORIGENS.forEach(o => {
-    const e = el('button', 'opt', `<span class="ic">${medalhao(o, 76)}</span><b>${o.nome}</b>
-      <small>${o.itens.join(' · ')}</small><span class="bn">£ ${o.libras}</span><em>${o.perk}</em>`);
+    const e = el('button', 'opt', `<span class="ic">${medalhao(o, 76)}</span><span class="txt"><b>${o.nome}</b>
+      <small>${o.itens.join(' · ')}</small><span class="bn">£ ${o.libras}</span><em>${o.perk}</em></span>`);
     e.dataset.id = o.id; e.style.setProperty('--c', o.cor);
     e.addEventListener('click', () => { P.origem = o.id; salvar(); marcar(); });
     $('#g-origem').appendChild(e);
@@ -301,6 +302,7 @@ function renderDestino(body) {
     if (tipo === 'traco') { const t = TRACOS[idx]; f.innerHTML = `${topo}<h4>${t.t}</h4><div class="df-sep">◆</div><p class="df-txt">${t.d}</p><div class="df-shine"></div>`; }
     else { const a = ARTEFATOS[idx]; f.innerHTML = `${topo}<h4>${a.n}</h4><div class="df-sep">◆</div><p class="df-dad"><b>Dádiva</b>${a.dadiva}</p><p class="df-mal"><b>Maldição</b>${a.maldicao}</p><div class="df-shine"></div>`; }
     f.style.setProperty('--cc', emb.cor);
+    { const card = f.closest('.dcard'), need = f.scrollHeight; if (need > card.clientHeight) card.style.height = (need + 6) + 'px'; }
     if (!animar) c.querySelector('.dc-inner').style.transition = 'none'; else Som.carta();
     c.classList.add('flip');
     $('#btn-' + (tipo === 'traco' ? 'traco' : 'art')).disabled = true;
