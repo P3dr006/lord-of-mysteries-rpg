@@ -66,7 +66,7 @@ function renderAtributos(body) {
     <p class="hint">Cada atributo é 4d6 descartando o dado mais baixo (que fica apagado). Você pode usar uma única
     <b>Relance do Destino</b> para refazer um atributo.</p>
     <div class="toolbar">
-      <button id="btn-roll-all" class="primary">🎲 Rolar todos</button>
+      <button id="btn-roll-all" class="primary" data-ic="dado">Rolar todos</button>
       <span class="hint" id="reroll-info"></span>
     </div>
     <div class="attr-list" id="attr-list"></div>`;
@@ -110,7 +110,7 @@ function desenharAtributo(key, animar) {
   const fim = Promise.all(dados).then(() => {
     tot.innerHTML = `${r.total}<small>mod ${mod(r.total) >= 0 ? '+' : ''}${mod(r.total)}</small>`;
     if (!P.relanceUsado) {
-      const b = el('button', 'ghost', '↺ Relance');
+      const b = el('button', 'ghost', 'Relance'); b.dataset.ic = 'relance';
       b.title = 'Usa a Relance do Destino (uma vez)';
       b.addEventListener('click', () => relancer(key));
       tray.appendChild(b);
@@ -120,7 +120,7 @@ function desenharAtributo(key, animar) {
 }
 
 function botaoRolar(key) {
-  const b = el('button', '', '🎲 Rolar 4d6');
+  const b = el('button', '', 'Rolar 4d6'); b.dataset.ic = 'dado';
   b.addEventListener('click', () => rolarAtributo(key));
   return b;
 }
@@ -173,7 +173,7 @@ function renderCaminho(body) {
     <div class="caminho-wrap">
       <div id="constel"></div>
       <div>
-        <div class="toolbar"><button id="btn-d22" class="primary">🎲 Girar o d22</button></div>
+        <div class="toolbar"><button id="btn-d22" class="primary" data-ic="dado">Girar o d22</button></div>
         <div class="caminho-info" id="caminho-info"><p class="vazio">Nenhum Caminho escolhido.</p></div>
       </div>
     </div>`;
@@ -201,7 +201,7 @@ const fmtBonus = b => Object.entries(b).map(([k, v]) => `${v > 0 ? '+' : ''}${v}
 function renderRaca(body) {
   body.innerHTML = `
     <h3>Raça & Origem</h3>
-    <div class="toolbar"><button id="btn-sortear" class="primary">🎲 Sortear raça e origem</button>
+    <div class="toolbar"><button id="btn-sortear" class="primary" data-ic="dado">Sortear raça e origem</button>
       <span class="hint">ou escolha clicando nas cartas</span></div>
     <div id="g-raca-wrap"></div>
     <h4 class="sub">Origem social</h4><div class="cards" id="g-origem"></div>`;
@@ -249,8 +249,8 @@ function renderDestino(body) {
     <h3>Cartas de Destino</h3>
     <p class="hint">Cada carta é tirada uma única vez. O traço é um dom (ou fardo); o artefato selado traz dádiva e maldição.</p>
     <div class="dcards">
-      <div>${carta('traco', 'd12 · Traço')}<button id="btn-traco" class="primary">Tirar traço</button></div>
-      <div>${carta('art', 'd10 · Artefato')}<button id="btn-art" class="primary">Tirar artefato</button></div>
+      <div>${carta('traco', 'd12 · Traço')}<button id="btn-traco" class="primary" data-ic="carta">Tirar traço</button></div>
+      <div>${carta('art', 'd10 · Artefato')}<button id="btn-art" class="primary" data-ic="carta">Tirar artefato</button></div>
     </div>`;
   const mostrar = (tipo, idx, animar) => {
     const c = $('#dc-' + tipo), f = $('#df-' + tipo);
@@ -322,7 +322,7 @@ function renderFicha(body) {
     <h3>Notas de sessão</h3>
     <textarea id="f-notas" placeholder="Anotações da campanha...">${esc(P.notas)}</textarea>
     <div class="sheet-actions">
-      <button id="btn-export" class="primary">⬇ Exportar JSON</button>
+      <button id="btn-export" class="primary" data-ic="baixar">Exportar JSON</button>
     </div>`;
   body.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => {
     const k = b.dataset.c, delta = +b.dataset.d, max = k === 'pv' ? pvMax() : sanMax();
