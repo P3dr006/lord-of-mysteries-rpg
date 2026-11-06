@@ -42,7 +42,14 @@ function montarConstelacao(host, onPick) {
     g.setAttribute('class', 'node');
     g.setAttribute('transform', `translate(${p.x} ${p.y})`);
     g.innerHTML = `<g class="up"><circle r="22" class="halo"/><circle r="20" class="disc"/>
-      <svg x="-13" y="-13" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="${c.cor}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${c.g}</svg></g>`;
+      <image href="img/sigilos/${c.id}.png" x="-17" y="-17" width="34" height="34"/></g>`;
+    g.querySelector('image').addEventListener('error', e => {
+      const ns = 'http://www.w3.org/2000/svg', s = document.createElementNS(ns, 'svg');
+      s.setAttribute('x', -13); s.setAttribute('y', -13); s.setAttribute('width', 26); s.setAttribute('height', 26);
+      s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', c.cor);
+      s.setAttribute('stroke-width', 1.5); s.setAttribute('stroke-linecap', 'round'); s.innerHTML = c.g;
+      e.target.replaceWith(s);
+    });
     g.addEventListener('click', () => { if (!constel.spinning) onPick(c.id, i, true); });
     const t = document.createElementNS(NS, 'title'); t.textContent = c.nome; g.appendChild(t);
     nodesG.appendChild(g);

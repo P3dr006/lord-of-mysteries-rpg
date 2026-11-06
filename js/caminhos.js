@@ -91,5 +91,8 @@ const CAMINHOS = [
     g:'<path d="M12 3v18M6 21h12M4 7h16M4 7l-3 7a3 3 0 006 0zM20 7l-3 7a3 3 0 006 0z"/>' },
 ];
 const caminhoPorId = id => CAMINHOS.find(c => c.id === id);
-const sigilo = (c, tam = 28) =>
+const svgGlifo = (c, tam) =>
   `<svg viewBox="0 0 24 24" width="${tam}" height="${tam}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="color:${c.cor}">${c.g}</svg>`;
+// Sigilo oficial (img/sigilos/<id>.png); se faltar, cai no desenho SVG.
+const sigilo = (c, tam = 28) =>
+  `<img class="sigilo" src="img/sigilos/${c.id}.png" width="${tam}" height="${tam}" alt="${c.nome}" onerror="this.outerHTML=svgGlifo(caminhoPorId('${c.id}'),${tam})">`;
