@@ -371,10 +371,15 @@ function radarSVG(cor) {
     ${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="3.6" fill="${cor}"/>`).join('')}${rotulos}</svg>`;
 }
 
+// Medidor de PV/Sanidade: barra, valor que se pode digitar, e botões de −10 a +10
+const PASSOS_VITAL = [-10, -5, -1, 1, 5, 10];
 function medidor(k, nome, v, max, cor) {
-  return `<div class="gauge" data-k="${k}" style="--gc:${cor}"><div class="g-top"><span>${nome}</span><b><i id="cv-${k}">${v}</i> / ${max}</b></div>
-    <div class="g-bar"><div class="g-fill" id="gf-${k}" style="width:${max ? v / max * 100 : 0}%"></div></div>
-    <div class="counter"><button data-c="${k}" data-d="-1">−</button><button data-c="${k}" data-d="1">+</button></div></div>`;
+  const btn = d => `<button type="button" class="adj ${d < 0 ? 'neg' : 'pos'}" data-c="${k}" data-d="${d}" aria-label="${d < 0 ? 'Perder' : 'Recuperar'} ${Math.abs(d)} de ${nome}">${d < 0 ? '−' : '+'}${Math.abs(d)}</button>`;
+  return `<div class="gauge vital" data-k="${k}" style="--gc:${cor}">
+    <div class="g-top"><span>${nome} <em class="g-st" id="gs-${k}"></em></span>
+      <label class="g-val"><input type="text" inputmode="numeric" pattern="[0-9]*" class="g-in" id="iv-${k}" value="${v}" aria-label="${nome}: valor atual" autocomplete="off"><i>/ ${max}</i></label></div>
+    <div class="g-barwrap"><div class="g-bar"><div class="g-fill" id="gf-${k}" style="width:${max ? v / max * 100 : 0}%"></div></div><span class="g-delta" id="gd-${k}" aria-hidden="true"></span></div>
+    <div class="g-btns" role="group" aria-label="Ajustar ${nome}">${PASSOS_VITAL.slice(0, 3).map(btn).join('')}<button type="button" class="adj max" data-c="${k}" data-max="1" aria-label="Restaurar ${nome} ao máximo" title="Máximo">máx</button>${PASSOS_VITAL.slice(3).map(btn).join('')}</div></div>`;
 }
 
 function renderFicha(body) {
@@ -406,6 +411,15 @@ function renderFicha(body) {
         <div class="gauge fixo" style="--gc:#b08cff"><div class="g-top"><span>Espiritualidade</span><b>${espMax()}</b></div><div class="g-bar"><div class="g-fill" style="width:100%"></div></div></div>
         <p class="san-msg" id="san-msg"></p></section>
     </div>
+
+    <section class="blk habs" style="--pc:${c.cor}"><h3>Habilidades</h3>
+      <div class="hab-caminho">${sigilo(c, 52)}<div><b>Caminho ${c.nome}</b><small>Sequência 9 · ${esc(c.seq9)}</small><p>${c.desc}</p></div></div>
+      <ul class="hab-lista" id="hab-lista"></ul>
+      <form class="hab-form" id="hab-form" autocomplete="off"><h4 class="sub" id="hab-tt">Anotar uma habilidade</h4>
+        <input type="text" id="hab-nome" maxlength="60" placeholder="Nome da habilidade" aria-label="Nome da habilidade">
+        <textarea id="hab-desc" rows="2" maxlength="600" placeholder="O que ela faz, alcance, custo… (opcional)" aria-label="Descrição da habilidade"></textarea>
+        <div class="hab-btns"><button type="submit" class="primary" id="hab-ok" data-ic="mais">Adicionar</button><button type="button" class="ghost" id="hab-cancela" hidden>Cancelar edição</button></div></form>
+    </section>
 
     <section class="blk poder">
       <h3>Escada de Poder</h3>
@@ -443,13 +457,46 @@ function renderFicha(body) {
 
   // vitais
   const instab = () => { const f = $('#ficha'), r = P.san / sanMax(); f.classList.toggle('san-baixa', r <= .3 && P.san > 0); f.classList.toggle('san-zero', P.san === 0);
-    $('#san-msg').textContent = P.san === 0 ? 'Perda de controle — a mente se rompeu.' : r <= .3 ? 'Sua mente vacila. Sussurros se misturam aos pensamentos…' : ''; };
+    $('#san-msg').textContent = P.san === 0 ? 'Perda de controle — a mente se rompeu.' : r <= .3 ? 'Sua mente vacila. Sussurros se misturam aos pensamentos…' : '';
+    $('#gs-pv').textContent = P.pv === 0 ? 'caído' : ''; $('#gs-san').textContent = ''; };
+  const mostrarDelta = (k, d) => { const e = $('#gd-' + k); e.textContent = (d > 0 ? '+' : '−') + Math.abs(d); e.className = 'g-delta ' + (d > 0 ? 'ganho' : 'perda'); void e.offsetWidth; e.classList.add('mostra'); };
+  const aplicarVital = (k, novo) => {
+    const max = k === 'pv' ? pvMax() : sanMax(); novo = Math.max(0, Math.min(max, Math.round(Number(novo) || 0))); const ant = P[k];
+    $('#iv-' + k).value = novo; if (novo === ant) return;
+    P[k] = novo; salvar(); $('#gf-' + k).style.width = (novo / max * 100) + '%'; mostrarDelta(k, novo - ant); instab();
+  };
   body.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => {
-    const kk = b.dataset.c, max = kk === 'pv' ? pvMax() : sanMax();
-    P[kk] = Math.max(0, Math.min(max, P[kk] + +b.dataset.d)); salvar();
-    $('#cv-' + kk).textContent = P[kk]; $('#gf-' + kk).style.width = (P[kk] / max * 100) + '%'; instab();
+    const k = b.dataset.c; aplicarVital(k, b.dataset.max ? (k === 'pv' ? pvMax() : sanMax()) : P[k] + +b.dataset.d);
   }));
+  body.querySelectorAll('.g-in').forEach(inp => {
+    const k = inp.id.slice(3);
+    inp.addEventListener('focus', () => inp.select());
+    inp.addEventListener('change', () => aplicarVital(k, parseInt(inp.value.replace(/\D/g, ''), 10)));
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+      else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); aplicarVital(k, P[k] + (e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 5 : 1)); }
+    });
+  });
   instab();
+  // habilidades anotadas pelo jogador (as do Caminho vêm do cadastro)
+  let editando = -1;
+  const desenharHabs = () => {
+    $('#hab-lista').innerHTML = c.hab.map(h => `<li class="base"><div><b>${esc(h)}</b></div><em>Caminho</em></li>`).join('') +
+      P.habilidades.map((h, i) => `<li data-i="${i}"><div><b>${esc(h.nome)}</b>${h.desc ? `<p>${esc(h.desc)}</p>` : ''}</div>
+        <span class="hab-ac"><button type="button" class="mini hab-ed" data-i="${i}" aria-label="Editar ${esc(h.nome)}" title="Editar">✎</button><button type="button" class="mini hab-rm" data-i="${i}" aria-label="Remover ${esc(h.nome)}" title="Remover">×</button></span></li>`).join('');
+    $('#hab-lista').querySelectorAll('.hab-rm').forEach(b => b.addEventListener('click', () => { const i = +b.dataset.i; P.habilidades.splice(i, 1); if (editando === i) fimEdicao(); salvar(); desenharHabs(); }));
+    $('#hab-lista').querySelectorAll('.hab-ed').forEach(b => b.addEventListener('click', () => { const i = +b.dataset.i, h = P.habilidades[i]; editando = i; $('#hab-nome').value = h.nome; $('#hab-desc').value = h.desc;
+      $('#hab-tt').textContent = 'Editar habilidade'; $('#hab-ok').lastChild.textContent = 'Salvar'; $('#hab-cancela').hidden = false; $('#hab-nome').focus(); }));
+  };
+  const fimEdicao = () => { editando = -1; $('#hab-nome').value = ''; $('#hab-desc').value = ''; $('#hab-tt').textContent = 'Anotar uma habilidade'; $('#hab-ok').lastChild.textContent = 'Adicionar'; $('#hab-cancela').hidden = true; };
+  $('#hab-cancela').addEventListener('click', fimEdicao);
+  $('#hab-form').addEventListener('submit', e => {
+    e.preventDefault(); const nome = $('#hab-nome').value.trim(), desc = $('#hab-desc').value.trim();
+    if (!nome) { $('#hab-nome').focus(); return; }
+    if (editando >= 0) P.habilidades[editando] = { nome, desc }; else if (P.habilidades.length < 40) P.habilidades.push({ nome, desc });
+    salvar(); fimEdicao(); desenharHabs(); if (editando < 0) Som.carta();
+  });
+  desenharHabs();
   // digestão
   body.querySelectorAll('.pip-d').forEach(b => b.addEventListener('click', () => {
     const i = +b.dataset.i, novo = P.digestao === i ? i - 1 : i; P.digestao = novo; salvar(); if (novo > 0) Som.digerir(novo - 1);
@@ -492,14 +539,64 @@ function exportarJSON() {
 let _recuperando = false;
 function recuperar(erro) {
   if (_recuperando) return; _recuperando = true;
-  let bruto = ''; try { bruto = localStorage.getItem(STORE_KEY) || ''; } catch (e) {}
-  janela('Não consegui abrir esta ficha', `<p class="modal-txt">Os dados salvos neste navegador parecem estar com algum problema. Você pode copiar o texto abaixo como cópia de segurança e começar uma ficha nova.</p>
+  const id = idAtual(); let bruto = '';
+  try { bruto = (id && localStorage.getItem(K_P + id)) || localStorage.getItem(STORE_KEY) || ''; } catch (e) {}
+  janela('Não consegui abrir esta ficha', `<p class="modal-txt">Os dados desta ficha parecem estar com algum problema. Copie o texto abaixo como cópia de segurança. Seus outros personagens não são afetados.</p>
     <textarea id="json-bruto" class="json-out" readonly></textarea>`,
-    [{ label: 'Começar de novo', cls: 'primary', valor: 'novo' }, { label: 'Fechar', valor: 'fechar' }]).then(r => {
+    [{ label: id ? 'Excluir esta ficha' : 'Começar de novo', cls: 'primary', valor: 'novo' }, { label: 'Fechar', valor: 'fechar' }]).then(r => {
       _recuperando = false;
-      if (r === 'novo') { try { localStorage.removeItem(STORE_KEY); localStorage.removeItem(RET_KEY); } catch (e) {} P = novoPersonagem(); _retSalvo = undefined; voltarCapa(); }
+      if (r === 'novo') { if (id) excluirPersonagem(id); else try { localStorage.removeItem(STORE_KEY); localStorage.removeItem(RET_KEY); } catch (e) {} novoSlot(); voltarCapa(); }
     });
   const t = $('#json-bruto'); if (t) t.value = bruto || String(erro && erro.message || erro);
+}
+
+/* ---------- Biblioteca de personagens ---------- */
+function avatarLista(p) {
+  const c = p.caminho && caminhoPorId(p.caminho);
+  if (p.retrato) return `<img class="lib-av" src="${p.retrato}" alt="">`;
+  if (c) return `<span class="lib-av sig">${sigilo(c, 34)}</span>`;
+  return `<span class="lib-av mono">${esc((p.nome || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
+}
+function metaLista(p) {
+  if (p.step < STEPS.length - 1) return `Em criação · passo ${p.step + 1}: ${STEPS[p.step].nome}`;
+  const c = caminhoPorId(p.caminho), pat = patamarDe(p.sequencia);
+  return `Caminho ${c.nome} · Sequência ${p.sequencia} · ${pat.nome}`;
+}
+function abrirBiblioteca() {
+  if (document.querySelector('.lib')) return;
+  const m = document.createElement('div'); m.className = 'asc risco on lib';
+  m.innerHTML = `<div class="asc-core lib-core"><p class="asc-eyebrow">SEUS PERSONAGENS</p><h2 class="asc-nome" id="lib-tt">Biblioteca</h2>
+    <ul class="lib-lista" id="lib-lista"></ul>
+    <div class="cover-btns"><button type="button" class="primary" id="lib-novo" data-ic="mais">Novo personagem</button><button type="button" class="ghost" id="lib-fechar">Fechar</button></div></div>`;
+  document.body.appendChild(m);
+  const sair = () => { m.remove(); devolver(); }, devolver = prenderFoco(m, sair);
+  const desenhar = () => {
+    const itens = listarPersonagens(), ul = m.querySelector('#lib-lista'), ativo = idAtual();
+    $('#lib-tt').textContent = itens.length === 1 ? '1 personagem' : `${itens.length} personagens`;
+    if (!itens.length) { ul.innerHTML = '<li class="lib-vazio">Nenhum personagem salvo ainda. Crie o primeiro.</li>'; return; }
+    ul.innerHTML = itens.map(({ id, p }) => `<li class="lib-item ${id === ativo ? 'ativo' : ''}" data-id="${id}">
+      <button type="button" class="lib-abrir" aria-label="Abrir ${esc(p.nome || 'personagem sem nome')}">${avatarLista(p)}<span class="lib-info"><b>${esc(p.nome.trim() || 'Sem nome')}</b><small>${esc(metaLista(p))}</small></span></button>
+      <div class="lib-acoes"><button type="button" class="mini lib-dup" aria-label="Duplicar ${esc(p.nome || 'personagem')}" title="Duplicar">${svgBtn('copia')}</button>
+      <button type="button" class="mini lib-del" aria-label="Excluir ${esc(p.nome || 'personagem')}" title="Excluir">${svgBtn('lixo')}</button></div></li>`).join('');
+    ul.querySelectorAll('.lib-item').forEach(li => {
+      const id = li.dataset.id;
+      li.querySelector('.lib-abrir').addEventListener('click', () => {
+        const p = abrirPersonagem(id); if (!p) return avisar('Não consegui abrir', 'Os dados desse personagem estão ilegíveis.');
+        P = p; sair(); iniciarPasso(); Som.confirmar();
+      });
+      li.querySelector('.lib-dup').addEventListener('click', () => { duplicarPersonagem(id); desenhar(); Som.carta(); });
+      const del = li.querySelector('.lib-del'); let timer;
+      del.addEventListener('click', () => {                         // exclusão em dois toques, sem diálogo do navegador
+        if (del.dataset.pronto) { clearTimeout(timer); const eraAtivo = id === idAtual(); excluirPersonagem(id); if (eraAtivo) { novoSlot(); } desenhar(); montarCapa(); return; }
+        del.dataset.pronto = '1'; del.classList.add('confirmar'); del.innerHTML = 'Excluir?'; del.setAttribute('aria-label', 'Confirmar exclusão');
+        timer = setTimeout(() => { delete del.dataset.pronto; del.classList.remove('confirmar'); del.innerHTML = svgBtn('lixo'); del.setAttribute('aria-label', 'Excluir'); }, 3500);
+      });
+    });
+  };
+  m.querySelector('#lib-fechar').addEventListener('click', sair);
+  m.querySelector('#lib-novo').addEventListener('click', () => { sair(); novoSlot(); iniciarPasso(); });
+  desenhar();
+  if (typeof decorarTudo === 'function') decorarTudo();
 }
 
 /* ---------- Pôster ---------- */
@@ -536,19 +633,18 @@ async function abrirPoster() {
 /* ---------- Navegação e inicialização ---------- */
 $('#btn-next').addEventListener('click', () => { if (P.step < STEPS.length - 1) { P.step++; salvar(); iniciarPasso(); } });
 $('#btn-prev').addEventListener('click', () => { if (P.step > 0) { P.step--; salvar(); iniciarPasso(); } });
-$('#btn-start').addEventListener('click', () => { P = novoPersonagem(); salvar(); iniciarPasso(); });
+$('#btn-start').addEventListener('click', () => { novoSlot(); iniciarPasso(); });   // uma ficha nova; as outras ficam guardadas
 $('#btn-continue').addEventListener('click', () => {
-  const salvo = carregar();
-  if (!salvo) { avisar('Não consegui abrir a ficha salva', 'Os dados guardados neste navegador estão ilegíveis. Você pode começar uma nova ficha.'); return; }
-  P = salvo; iniciarPasso();
+  const id = idAtivoSalvo(), p = id && abrirPersonagem(id);
+  if (!p) { avisar('Não consegui abrir a ficha salva', 'Os dados guardados neste navegador estão ilegíveis. Você pode começar uma nova ficha.'); return; }
+  P = p; iniciarPasso();
 });
-$('#btn-new').addEventListener('click', () => {
-  perguntar('Novo personagem', 'Criar um novo personagem? O personagem salvo neste navegador será substituído.').then(ok => { if (ok) { P = novoPersonagem(); salvar(); iniciarPasso(); } });
-});
+$('#btn-pers').addEventListener('click', abrirBiblioteca);
+$('#btn-lib').addEventListener('click', abrirBiblioteca);
 $('#btn-import').addEventListener('click', () => $('#file-import').click());
 $('#file-import').addEventListener('change', e => {
   const f = e.target.files[0];
-  if (f) importarJSON(f, ok => ok ? iniciarPasso() : avisar('Arquivo inválido', 'Não consegui ler esse arquivo. Use um JSON exportado por esta ficha.'));
+  if (f) importarJSON(f, obj => { if (!obj) return avisar('Arquivo inválido', 'Não consegui ler esse arquivo. Use um JSON exportado por esta ficha.'); adicionarPersonagem(obj); iniciarPasso(); });   // entra como um personagem novo
   e.target.value = '';
 });
 

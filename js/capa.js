@@ -1,7 +1,7 @@
 // Capa: 22 sigilos orbitando o botão; o Caminho do personagem salvo brilha.
 function montarCapa() {
   const orbit = document.querySelector('#orbit');
-  const salvo = carregar();
+  const salvo = idAtivoSalvo() ? carregar() : null;
   const ativo = salvo && salvo.nome && salvo.caminho ? salvo.caminho : null;
   orbit.innerHTML = '';
   CAMINHOS.forEach((c, i) => {
@@ -26,5 +26,9 @@ function montarCapa() {
     info.innerHTML = `${salvo.retrato ? `<img class="mini-ret" src="${salvo.retrato}" alt="">` : ''}<span><b>${salvo.nome.replace(/[&<>"]/g, '')}</b> · Caminho ${c.nome} · ${c.seq9}</span>`;
     info.style.setProperty('--c', c.cor);
   } else info.hidden = true;
-  document.querySelector('#btn-continue').hidden = !(salvo && salvo.nome);
+  const temNome = !!(salvo && salvo.nome), n = _lista().length;
+  document.querySelector('#btn-continue').hidden = !temNome;
+  if (temNome) document.querySelector('#continue-txt').textContent = 'Continuar: ' + salvo.nome;
+  const lib = document.querySelector('#btn-lib'); lib.hidden = n < 2;
+  if (n >= 2) document.querySelector('#lib-txt').textContent = `Meus personagens (${n})`;
 }

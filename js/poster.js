@@ -29,6 +29,8 @@ const Poster = (() => {
     // palavra maior que a largura (sem espaços) é quebrada em pedaços que cabem
     const pal = []; String(t).split(/\s+/).forEach(w => { while (c.measureText(w).width > larg && w.length > 1) { let n = w.length - 1; while (n > 1 && c.measureText(w.slice(0, n)).width > larg) n--; pal.push(w.slice(0, n)); w = w.slice(n); } pal.push(w); });
     const out = []; let l = ''; pal.forEach(p => { const x = l ? l + ' ' + p : p; if (c.measureText(x).width > larg && l) { out.push(l); l = p; } else l = x; }); if (l) out.push(l); c.restore(); return out; }
+  // corta o texto com reticências para caber em uma linha
+  function umaLinha(c, t, larg, tam) { c.save(); c.font = `normal ${tam}px ${FONTE}`; let x = String(t); if (c.measureText(x).width > larg) { while (x.length > 1 && c.measureText(x + '…').width > larg) x = x.slice(0, -1); x = x.trimEnd() + '…'; } c.restore(); return x; }
   function paragrafo(c, t, x, y, larg, tam, ent, cor, maxL) { let ls = linhas(c, t, larg, tam); if (maxL && ls.length > maxL) { ls = ls.slice(0, maxL); ls[maxL - 1] = ls[maxL - 1].replace(/\s*\S*$/, '') + '…'; } ls.forEach((l, i) => texto(c, l, x, y + i * ent, { tam, cor })); return ls.length; }
   function brilho(c, x, y, r, cor, a) { const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, rgba(cor, a)); g.addColorStop(1, rgba(cor, 0)); c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = g; c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); c.restore(); }
 
@@ -179,11 +181,17 @@ const Poster = (() => {
     painel(c, 80, T0, 410, 148, cor); texto(c, `TRAÇO · d12 → ${P.traco + 1}`, 100, T0 + 28, { tam: 13, cor: '#a8a2c8', esp: 3 }); texto(c, tr.t, 100, T0 + 62, { tam: 28, cor: brilhoT, max: 370 }); paragrafo(c, tr.d, 100, T0 + 92, 370, 17, 23, '#d8d2ee', 2);
     painel(c, 510, T0, 410, 148, cor); texto(c, `ARTEFATO SELADO · d10 → ${P.artefato + 1}`, 530, T0 + 28, { tam: 13, cor: '#a8a2c8', esp: 3 }); texto(c, ar.n, 530, T0 + 62, { tam: 28, cor: brilhoT, max: 370 });
     let l1 = paragrafo(c, ar.dadiva, 530, T0 + 90, 370, 16, 20, '#a8f0a8', 2); paragrafo(c, ar.maldicao, 530, T0 + 90 + l1 * 20 + 8, 370, 16, 20, '#ff9a9a', 2);
-    // equipamento e história
-    texto(c, 'EQUIPAMENTO', 122, 1294, { tam: 13, cor, esp: 3 }); texto(c, orig.itens.join('  ·  '), 262, 1294, { tam: 17, cor: '#e8e4f5', max: 616 });
-    const hist = (P.historia || P.aparencia || '').trim(); if (hist) { texto(c, P.historia ? 'HISTÓRIA' : 'APARÊNCIA', 122, 1322, { tam: 13, cor, esp: 3 }); paragrafo(c, hist, 262, 1322, 616, 16, 22, '#c8c2e0', 1); }
+    // habilidades, equipamento e história
+    const habs = [...cam.hab, ...(P.habilidades || []).map(h => h.nome)].join('  ·  ');
+    texto(c, 'HABILIDADES', 122, 1286, { tam: 13, cor, esp: 3 }); texto(c, umaLinha(c, habs, 616, 17), 262, 1286, { tam: 17, cor: '#e8e4f5' });
+    texto(c, 'EQUIPAMENTO', 122, 1310, { tam: 13, cor, esp: 3 }); texto(c, umaLinha(c, orig.itens.join('  ·  '), 616, 17), 262, 1310, { tam: 17, cor: '#e8e4f5' });
+    const hist = (P.historia || P.aparencia || '').trim(); if (hist) { texto(c, P.historia ? 'HISTÓRIA' : 'APARÊNCIA', 122, 1334, { tam: 13, cor, esp: 3 }); paragrafo(c, hist, 262, 1334, 616, 16, 22, '#c8c2e0', 1); }
     // rodapé
-    texto(c, `REGISTRO Nº ${numeroRegistro(P.nome || 'x')}  ·  ${raca.traco.split(':')[0].toUpperCase()}`, W / 2, 1352, { tam: 13, cor: rgba(ouro, .9), al: 'center', esp: 4 });
+    // numa pequena placa escura: legível mesmo sobre molduras profundas (escamas, espinhos, pedra)
+    const rod = `REGISTRO Nº ${numeroRegistro(P.nome || 'x')}  ·  ${raca.traco.split(':')[0].toUpperCase()}`;
+    c.save(); c.font = `normal 12px ${FONTE}`; if ('letterSpacing' in c) c.letterSpacing = '4px'; const lw = c.measureText(rod).width + 40; c.restore();
+    c.fillStyle = 'rgba(8,6,24,.92)'; c.beginPath(); c.roundRect(W / 2 - lw / 2, 1341, lw, 22, 11); c.fill(); c.strokeStyle = rgba(ouro, .7); c.lineWidth = 1.4; c.stroke();
+    texto(c, rod, W / 2 + 2, 1357, { tam: 12, cor: rgba(ouro, .95), al: 'center', esp: 4 });
     return cv;
   }
 

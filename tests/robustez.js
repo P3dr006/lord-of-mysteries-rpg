@@ -88,11 +88,11 @@ async function pagina(browser, save, opts = {}) {
 
   console.log('\n5) Janelas: Esc fecha e o foco fica dentro');
   { const p = await pagina(browser, OK); await p.click('#btn-continue'); await p.waitForTimeout(500);
-    for (const [sel, nome] of [['#btn-new', 'Novo personagem'], ['#btn-export', 'Exportar JSON'], ['#btn-poster', 'Pôster']]) {
+    for (const [sel, nome] of [['#btn-pers', 'Meus personagens'], ['#btn-export', 'Exportar JSON'], ['#btn-poster', 'Pôster']]) {
       await p.click(sel); await p.waitForTimeout(500); await p.keyboard.press('Escape'); await p.waitForTimeout(300);
       resultado('Esc fecha "' + nome + '"', await p.evaluate(() => !document.querySelector('.asc.risco, .crop-modal, .poster-modal'))); await p.evaluate(() => document.querySelectorAll('.asc.risco,.crop-modal').forEach(e => e.remove()));
     }
-    await p.click('#btn-new'); await p.waitForTimeout(300); let escapou = false;
+    await p.click('#btn-pers'); await p.waitForTimeout(300); let escapou = false;
     for (let i = 0; i < 8; i++) { await p.keyboard.press('Tab'); if (!await p.evaluate(() => !!document.activeElement.closest('.asc.risco'))) { escapou = true; break; } }
     resultado('Tab não sai da janela', !escapou); await p.ctx.close(); }
 

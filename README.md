@@ -14,7 +14,8 @@ texto longo, janelas e teclado) ficam em `tests/` e usam o Playwright:
 ```
 npm install
 npx playwright install chromium
-npm test
+npm test            # robustez + ficha
+npm run test:ficha  # só a ficha útil (vários personagens, PV/Sanidade, habilidades)
 ```
 
 Cada teste reproduz um defeito já encontrado; se algum voltar, o teste falha.

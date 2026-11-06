@@ -1,5 +1,3 @@
-const STORE_KEY = 'lotm-rpg-personagem';
-
 function novoPersonagem() {
   return {
     versao: 1,
@@ -14,6 +12,7 @@ function novoPersonagem() {
     raca: null, origem: null,
     traco: null, artefato: null,
     pv: null, san: null,
+    habilidades: [],          // [{nome, desc}] anotadas pelo jogador (as do Caminho vêm de CAMINHOS)
     notas: ''
   };
 }
@@ -60,6 +59,8 @@ function sanear(bruto) {
   });
   p.pv = Number.isFinite(Number(r.pv)) && r.pv !== null && r.pv !== '' && typeof r.pv !== 'boolean' ? Math.max(0, Math.round(Number(r.pv))) : null;
   p.san = Number.isFinite(Number(r.san)) && r.san !== null && r.san !== '' && typeof r.san !== 'boolean' ? Math.max(0, Math.round(Number(r.san))) : null;
+  if (Array.isArray(r.habilidades)) p.habilidades = r.habilidades.filter(_objeto).slice(0, 40)
+    .map(h => ({ nome: _texto(h.nome, 60).trim(), desc: _texto(h.desc, 600).trim() })).filter(h => h.nome);
   p.retrato = typeof r.retrato === 'string' && r.retrato.length < 4e6 && /^data:image\/(jpeg|png|webp|gif);base64,/.test(r.retrato) ? r.retrato : null;
   p.retratoEstilo = typeof ESTILOS_RET !== 'undefined' && ESTILOS_RET.some(e => e.id === r.retratoEstilo) ? r.retratoEstilo : 'natural';
   if (_objeto(r.nomesSeq)) for (let i = 0; i <= 9; i++) { const t = _texto(r.nomesSeq[i], 60).trim(); if (t) p.nomesSeq[i] = t; }
@@ -78,32 +79,98 @@ function sanear(bruto) {
 
 let P = novoPersonagem();
 
-// O retrato (imagem em base64, dezenas de KB) fica numa chave própria e só é regravado quando muda.
-// Assim, cada tecla digitada regrava só o JSON pequeno da ficha.
-const RET_KEY = 'lotm-rpg-retrato';
-let _retSalvo = undefined;            // último valor do retrato que está no armazenamento
-function salvar() {
-  try {
-    const { retrato, ...resto } = P;
-    localStorage.setItem(STORE_KEY, JSON.stringify(resto));
-    const r = retrato || null;
-    if (r !== _retSalvo) {
-      if (r) localStorage.setItem(RET_KEY, r); else localStorage.removeItem(RET_KEY);
-      _retSalvo = r;
-    }
-    return true;
-  } catch (e) { return false; }
+// ---------- Armazenamento: vários personagens ----------
+// lotm-rpg-lista       -> [{id, atualizado}]            (ordem e datas)
+// lotm-rpg-ativo       -> id do personagem aberto por último ("Continuar")
+// lotm-rpg-p-<id>      -> JSON da ficha, sem o retrato
+// lotm-rpg-r-<id>      -> retrato (base64), gravado à parte e só quando muda
+// Versões antigas guardavam uma ficha só em lotm-rpg-personagem: ela é migrada sozinha para a lista.
+const STORE_KEY = 'lotm-rpg-personagem', RET_KEY = 'lotm-rpg-retrato';          // legado (uma ficha só)
+const K_LISTA = 'lotm-rpg-lista', K_ATIVO = 'lotm-rpg-ativo', K_P = 'lotm-rpg-p-', K_R = 'lotm-rpg-r-';
+let _idAtivo = null, _retCache = { id: null, v: undefined }, _migrado = false;
+
+const _ler = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const novoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+function _lista() {
+  try { const l = JSON.parse(_ler(K_LISTA) || '[]'); return Array.isArray(l) ? l.filter(x => _objeto(x) && typeof x.id === 'string') : []; }
+  catch (e) { return []; }
 }
-function carregar() {
+function _lerSlot(id) {
   try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) return null;
-    const obj = JSON.parse(raw), guardado = localStorage.getItem(RET_KEY) || null;
-    _retSalvo = guardado;
-    if (!obj.retrato) obj.retrato = guardado;   // fichas antigas traziam o retrato dentro do JSON; a próxima gravação o move
+    const raw = _ler(K_P + id); if (raw === null) return null;
+    const obj = JSON.parse(raw); if (!_objeto(obj)) return null;
+    obj.retrato = _ler(K_R + id) || obj.retrato || null;
     return sanear(obj);
   } catch (e) { return null; }
 }
+// grava a ficha de um id (e a registra na lista). `ativar` = vira o personagem aberto por último.
+function _gravarSlot(id, p, ativar = true) {
+  const { retrato, ...resto } = p;
+  localStorage.setItem(K_P + id, JSON.stringify(resto));
+  const r = retrato || null;
+  if (_retCache.id !== id || _retCache.v !== r) {            // o retrato (dezenas de KB) só é regravado quando muda
+    if (r) localStorage.setItem(K_R + id, r); else localStorage.removeItem(K_R + id);
+    _retCache = { id, v: r };
+  }
+  const lista = _lista(), e = lista.find(x => x.id === id), agora = Date.now();
+  if (e) e.atualizado = agora; else lista.push({ id, atualizado: agora });
+  localStorage.setItem(K_LISTA, JSON.stringify(lista));
+  if (ativar) localStorage.setItem(K_ATIVO, id);
+}
+function _migrar() {
+  if (_migrado) return; _migrado = true;
+  try {
+    const raw = localStorage.getItem(STORE_KEY); if (raw === null) return;
+    let obj; try { obj = JSON.parse(raw); } catch (e) { return; }          // ilegível: não mexe (a janela de recuperação mostra o texto)
+    if (_objeto(obj)) { if (!obj.retrato) obj.retrato = localStorage.getItem(RET_KEY) || null; _gravarSlot(novoId(), sanear(obj)); }
+    localStorage.removeItem(STORE_KEY); localStorage.removeItem(RET_KEY);
+  } catch (e) {}
+}
+
+function salvar() {
+  try {
+    _migrar();
+    if (!_idAtivo) { if (!P.nome.trim()) return true; _idAtivo = novoId(); }   // a ficha só entra na lista quando ganha um nome
+    _gravarSlot(_idAtivo, P);
+    return true;
+  } catch (e) { return false; }
+}
+// ficha do personagem aberto por último (ou null); não altera o personagem em tela
+function carregar() { _migrar(); const id = _ler(K_ATIVO); return id ? _lerSlot(id) : null; }
+function idAtivoSalvo() { _migrar(); const id = _ler(K_ATIVO); return id && _lista().some(x => x.id === id) ? id : null; }
+function idAtual() { return _idAtivo; }
+// abre um personagem da lista: devolve a ficha validada, ou null se não puder ser lida
+function abrirPersonagem(id) {
+  _migrar(); const p = _lerSlot(id); if (!p) return null;
+  _idAtivo = id; _retCache = { id, v: p.retrato || null };
+  try { localStorage.setItem(K_ATIVO, id); } catch (e) {}
+  return p;
+}
+// começa uma ficha em branco, que só será guardada quando tiver nome (o personagem anterior fica intacto)
+function novoSlot() { _idAtivo = null; _retCache = { id: null, v: undefined }; P = novoPersonagem(); }
+// guarda uma ficha já pronta (ex.: importada) como um personagem novo e a deixa aberta
+function adicionarPersonagem(p) {
+  _migrar(); const id = novoId(); _gravarSlot(id, p); _idAtivo = id; P = p; return id;
+}
+function listarPersonagens() {
+  _migrar();
+  return _lista().map(e => { const p = _lerSlot(e.id); return p ? { id: e.id, atualizado: e.atualizado || 0, p } : null; })
+    .filter(Boolean).sort((a, b) => b.atualizado - a.atualizado);
+}
+function duplicarPersonagem(id) {
+  const p = _lerSlot(id); if (!p) return null;
+  p.nome = (p.nome.trim() + ' (cópia)').slice(0, 80);
+  const novo = novoId(); _gravarSlot(novo, p, false); return novo;
+}
+function excluirPersonagem(id) {
+  try {
+    localStorage.removeItem(K_P + id); localStorage.removeItem(K_R + id);
+    const lista = _lista().filter(x => x.id !== id); localStorage.setItem(K_LISTA, JSON.stringify(lista));
+    if (_ler(K_ATIVO) === id) { const rec = lista.sort((a, b) => (b.atualizado || 0) - (a.atualizado || 0))[0]; if (rec) localStorage.setItem(K_ATIVO, rec.id); else localStorage.removeItem(K_ATIVO); }
+    if (_idAtivo === id) { _idAtivo = null; _retCache = { id: null, v: undefined }; }
+  } catch (e) {}
+}
+
 function importarJSON(file, cb) {
   const r = new FileReader();
   r.onerror = () => cb(false);
@@ -111,7 +178,7 @@ function importarJSON(file, cb) {
     try {
       const obj = JSON.parse(r.result);
       if (!_objeto(obj)) return cb(false);                     // lista, texto, número ou null não são uma ficha
-      P = sanear(obj); salvar(); cb(true);
+      cb(sanear(obj));                                         // quem chama decide onde guardar (como um personagem novo)
     } catch (e) { cb(false); }
   };
   r.readAsText(file.slice(0, 8 * 1024 * 1024));
