@@ -1,0 +1,7 @@
+{
+  "name": "lord-of-mysteries-rpg",
+  "private": true,
+  "description": "Criador de personagem de RPG inspirado em Lord of the Mysteries (sem build: abra index.html).",
+  "scripts": { "test": "node tests/robustez.js" },
+  "devDependencies": { "playwright": "^1.40.0" }
+}

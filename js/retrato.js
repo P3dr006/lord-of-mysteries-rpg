@@ -91,6 +91,7 @@ async function abrirRecorte(file, onChange) {
     <p class="hint crop-dica">Arraste para posicionar. Role o mouse, use o controle ou faça pinça para aproximar.</p>
     <div class="cover-btns"><button type="button" class="primary" id="cr-ok" data-ic="estrela">Selar retrato</button><button type="button" class="ghost" id="cr-no">Cancelar</button></div></div>`;
   document.body.appendChild(m);
+  const sair = () => { m.remove(); devolver(); }, devolver = prenderFoco(m, sair);
   const cv = m.querySelector('#cc'), ctx = cv.getContext('2d');
 
   const dims = () => (rot % 2 ? [ih, iw] : [iw, ih]);
@@ -112,14 +113,13 @@ async function abrirRecorte(file, onChange) {
   m.querySelector('#cr-zoom').addEventListener('input', e => { zoom = +e.target.value; desenhar(); });
   m.querySelector('#cr-rot').addEventListener('click', () => { rot = (rot + 1) % 4; ox = oy = 0; desenhar(); });
   m.querySelectorAll('#cr-estilos .chip-e').forEach(b => b.addEventListener('click', () => { estilo = b.dataset.e; st.className = `crop-stage rt-${estilo}`; m.querySelectorAll('#cr-estilos .chip-e').forEach(x => x.classList.toggle('on', x === b)); }));
-  m.querySelector('#cr-no').addEventListener('click', () => m.remove());
-  m.addEventListener('keydown', e => { if (e.key === 'Escape') m.remove(); });
+  m.querySelector('#cr-no').addEventListener('click', sair);
   m.querySelector('#cr-ok').addEventListener('click', () => {
     const out = document.createElement('canvas'); out.width = out.height = 512; const c2 = out.getContext('2d'), k = 512 / D;
     c2.fillStyle = '#05030f'; c2.fillRect(0, 0, 512, 512); c2.save(); c2.translate(256 + ox * k, 256 + oy * k); c2.rotate(rot * Math.PI / 2); const sc = base() * zoom * k; c2.scale(sc, sc); c2.drawImage(img, -iw / 2, -ih / 2); c2.restore();
     P.retrato = out.toDataURL('image/jpeg', 0.88); P.retratoEstilo = estilo;
     if (!salvar()) avisar('Não coube na memória do navegador', 'O retrato aparece nesta sessão, mas pode não ser guardado. Exporte a ficha em JSON para não perdê-lo.');
-    m.remove(); Som.selar(); onChange(true);
+    sair(); Som.selar(); onChange(true);
   });
   setTimeout(() => m.querySelector('#cr-ok').focus(), 50);
 }

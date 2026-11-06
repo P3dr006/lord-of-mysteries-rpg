@@ -25,7 +25,10 @@ const Poster = (() => {
     if (o.max) { while (c.measureText(t).width > o.max && (o.tam || 24) > 12) { o.tam = (o.tam || 24) - 2; c.font = `${o.peso || 'normal'} ${o.tam}px ${FONTE}`; } }
     c.fillText(t, x, y); c.restore();
   }
-  function linhas(c, t, larg, tam) { c.save(); c.font = `normal ${tam}px ${FONTE}`; const pal = String(t).split(/\s+/), out = []; let l = ''; pal.forEach(p => { const x = l ? l + ' ' + p : p; if (c.measureText(x).width > larg && l) { out.push(l); l = p; } else l = x; }); if (l) out.push(l); c.restore(); return out; }
+  function linhas(c, t, larg, tam) { c.save(); c.font = `normal ${tam}px ${FONTE}`;
+    // palavra maior que a largura (sem espaços) é quebrada em pedaços que cabem
+    const pal = []; String(t).split(/\s+/).forEach(w => { while (c.measureText(w).width > larg && w.length > 1) { let n = w.length - 1; while (n > 1 && c.measureText(w.slice(0, n)).width > larg) n--; pal.push(w.slice(0, n)); w = w.slice(n); } pal.push(w); });
+    const out = []; let l = ''; pal.forEach(p => { const x = l ? l + ' ' + p : p; if (c.measureText(x).width > larg && l) { out.push(l); l = p; } else l = x; }); if (l) out.push(l); c.restore(); return out; }
   function paragrafo(c, t, x, y, larg, tam, ent, cor, maxL) { let ls = linhas(c, t, larg, tam); if (maxL && ls.length > maxL) { ls = ls.slice(0, maxL); ls[maxL - 1] = ls[maxL - 1].replace(/\s*\S*$/, '') + '…'; } ls.forEach((l, i) => texto(c, l, x, y + i * ent, { tam, cor })); return ls.length; }
   function brilho(c, x, y, r, cor, a) { const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, rgba(cor, a)); g.addColorStop(1, rgba(cor, 0)); c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = g; c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); c.restore(); }
 

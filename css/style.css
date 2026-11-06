@@ -4,6 +4,7 @@
   --danger:#c0392b;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0}
 html{background:var(--bg)}
 body{
@@ -878,3 +879,10 @@ body.terror .mesa{border-color:#a01020;background:linear-gradient(180deg,#240810
 .poster-btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .poster-btns button{flex:1 1 140px}
 @media(max-width:560px){.poster-prev{width:min(100%,300px)}.poster-btns button{flex:1 1 100%}}
+
+/* ---- texto do usuário nunca estica a página (nome, jogador, história, aparência…) ---- */
+body{overflow-wrap:break-word}
+.hero h2,.hero-seq,.hero-info .hint,.note,.id-nome,.id-card dd,.cover-saved span,.asc-nome,.tarot p,.hist .h-r,.chip{overflow-wrap:anywhere}
+.hero>*,.id-wrap>*,.cover-core{min-width:0}
+.hero-info{min-width:min(240px,100%)}
+.cover-saved span{min-width:0;text-align:center}

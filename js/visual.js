@@ -24,3 +24,29 @@ const PASSO_ICONE = {
   destino: ICONES.carta, ficha: ICONES.livro,
 };
 const PRESAGIOS = [[0, 'Um destino difícil — mas é na adversidade que Beyonders se forjam.'], [60, 'Um começo comum: nada de extraordinário, nada de condenado.'], [72, 'Um destino promissor. Os mistérios o notaram.'], [84, 'Um presságio raro — algo antigo se interessa por você.']];
+
+// Janela modal acessível: leva o foco para dentro, mantém o Tab dentro dela, fecha com Esc e devolve o foco a quem a abriu.
+// `fechar` é chamada no Esc (ou null para uma janela que não deve fechar assim). Retorna a função que devolve o foco.
+function prenderFoco(m, fechar) {
+  const anterior = document.activeElement;
+  m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+  const focaveis = () => [...m.querySelectorAll('button:not([disabled]),input:not([hidden]):not([disabled]),textarea:not([disabled]),[href],[tabindex]:not([tabindex="-1"])')].filter(e => e.offsetParent !== null || e === document.activeElement);
+  m.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && fechar) { e.preventDefault(); e.stopPropagation(); fechar(); return; }
+    if (e.key !== 'Tab') return;
+    const l = focaveis(); if (!l.length) { e.preventDefault(); return; }
+    const a = l[0], z = l[l.length - 1];
+    if (!m.contains(document.activeElement)) { e.preventDefault(); a.focus(); }
+    else if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
+    else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+  });
+  if (!m.contains(document.activeElement)) { const l = focaveis(); (l[0] || m).focus && (l[0] || (m.tabIndex = -1, m)).focus(); }
+  return () => { if (anterior && anterior.isConnected && anterior.focus) anterior.focus(); };
+}
+
+// Temporizadores ligados à tela atual: ao trocar de passo todos são cancelados (nada roda "no vazio" em tela que já saiu).
+const _tempo = { ids: [], raf: [] };
+const agendar = (fn, ms) => { const id = setTimeout(fn, ms); _tempo.ids.push(id); return id; };
+const repetir = (fn, ms) => { const id = setInterval(fn, ms); _tempo.ids.push(id); return id; };
+function cancelarTemporizadores() { _tempo.ids.forEach(id => { clearTimeout(id); clearInterval(id); }); _tempo.ids = []; }
+let _tela = 0;                         // muda a cada troca de tela; callbacks assíncronos comparam para saber se ainda valem

@@ -62,6 +62,7 @@ function atributosSnapshot() { const o = {}; ATTRS.forEach(a => o[a.key] = total
 
 function ascender(forcado, perda) {
   if (P.sequencia <= 0) return;
+  if (document.querySelector('[data-asc]')) return;        // já existe uma ascensão em andamento: cliques e Enter repetidos não valem
   const antes = atributosSnapshot(), pvA = pvMax(), espA = espMax(), velho = P.sequencia, patVelho = patamarDe(velho);
   P.sequencia--; P.digestao = 0;
   const novo = P.sequencia, pat = patamarDe(novo), mudou = pat.id !== patVelho.id, depois = atributosSnapshot();
@@ -76,7 +77,7 @@ function ascender(forcado, perda) {
 function mostrarAscensao(o) {
   const c = caminhoPorId(P.caminho), k = idxPatamar(o.novo), terror = Som.terror || o.forcado;
   const el0 = document.createElement('div');
-  el0.className = 'asc' + (terror ? ' terror' : '') + (o.mudou ? ' patamar' : '');
+  el0.className = 'asc' + (terror ? ' terror' : '') + (o.mudou ? ' patamar' : ''); el0.dataset.asc = '1';
   el0.style.cssText = `--pc:${terror ? '#e0283a' : c.cor};--pt:${terror ? '#ff4a5a' : o.pat.cor};--k:${k + 1}`;
   el0.innerHTML = `<div class="asc-rays"></div><div class="asc-ring r1"></div><div class="asc-ring r2"></div><div class="asc-ring r3"></div>
     <div class="asc-core">
@@ -89,23 +90,29 @@ function mostrarAscensao(o) {
       ${o.forcado ? `<p class="asc-aviso">A poção não estava digerida. A mente cobra o preço: <b>−${o.perda} Sanidade</b>${o.fim ? ' — <b>PERDA DE CONTROLE</b>' : ''}.</p>` : ''}
       <button class="primary" id="asc-ok">Continuar</button></div>`;
   document.body.appendChild(el0);
+  const btnOk = el0.querySelector('#asc-ok'); btnOk.disabled = true;     // o botão só vale quando aparece na animação (evita Enter repetido pular a cerimônia)
+  const devolver = prenderFoco(el0, null);
+  el0.tabIndex = -1; el0.focus();
+  setTimeout(() => { btnOk.disabled = false; btnOk.focus(); }, 4300);
   requestAnimationFrame(() => el0.classList.add('on'));
   Som.ascender(k, terror); Efeitos.tocar(c.id, terror);
-  const fechar = () => { el0.classList.remove('on'); setTimeout(() => { el0.remove(); renderFicha($('#step-body')); window.scrollTo({ top: 0, behavior: 'smooth' }); }, 500); };
+  const fechar = () => { el0.classList.remove('on'); setTimeout(() => { el0.remove(); devolver(); renderFicha($('#step-body')); window.scrollTo({ top: 0, behavior: 'smooth' }); }, 500); };
   el0.querySelector('#asc-ok').addEventListener('click', fechar);
 }
 
 // Modal de risco ao tentar subir sem digerir a poção
 function ascensaoArriscada() {
+  if (document.querySelector('.asc')) return;
   const m = document.createElement('div'); m.className = 'asc risco on';
   m.innerHTML = `<div class="asc-core"><p class="asc-eyebrow">ATENÇÃO</p><h2 class="asc-nome">A poção ainda não foi digerida</h2>
     <p class="asc-aviso">Ascender agora é possível, mas a mente paga: role <b>2d6</b> e perca essa quantidade de Sanidade. Se ela chegar a zero, é <b>perda de controle</b>.</p>
     <div class="risco-dados"></div>
     <div class="cover-btns"><button id="rk-sim" class="primary" data-ic="dado">Arriscar e rolar</button><button id="rk-nao" class="ghost">Voltar e digerir</button></div></div>`;
   document.body.appendChild(m);
-  m.querySelector('#rk-nao').addEventListener('click', () => m.remove());
+  const sair = () => { m.remove(); devolver(); }, devolver = prenderFoco(m, () => { if (!m.dataset.travado) sair(); });   // depois de rolar, não dá mais para desistir
+  m.querySelector('#rk-nao').addEventListener('click', sair);
   m.querySelector('#rk-sim').addEventListener('click', async () => {
-    const btn = m.querySelector('#rk-sim'); btn.disabled = true; Som.dado();
+    const btn = m.querySelector('#rk-sim'); btn.disabled = true; m.dataset.travado = '1'; m.querySelector('#rk-nao').disabled = true; Som.dado();
     const v = [d(6), d(6)], tray = m.querySelector('.risco-dados'); tray.innerHTML = '';
     await Promise.all(v.map(x => { const dd = criarDado(); tray.appendChild(dd); return mostrarFace(dd, x, true); }));
     tray.insertAdjacentHTML('beforeend', `<b class="rk-total">= ${v[0] + v[1]}</b>`);

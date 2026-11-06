@@ -100,6 +100,9 @@ function girarD22(onStop) {
   constel.raf = requestAnimationFrame(passo);
 }
 
+// Interrompe o giro do d22 (ao sair da tela): nenhum resultado é aplicado
+function pararD22() { cancelAnimationFrame(constel.raf); constel.spinning = false; }
+
 // Leva um nó escolhido manualmente até o ponteiro
 function centralizarNo(idx) {
   const a = constel.nodes[idx].a;
@@ -107,6 +110,7 @@ function centralizarNo(idx) {
   const delta = (((-a - r0 + 180) % 360) + 360) % 360 - 180;
   const t0 = performance.now(), dur = 700;
   const passo = now => {
+    if (!constel.svg || !constel.svg.isConnected) return;
     const t = Math.min(1, (now - t0) / dur);
     aplicarRot(r0 + delta * (1 - Math.pow(1 - t, 3)));
     if (t < 1) requestAnimationFrame(passo);
