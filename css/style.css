@@ -220,3 +220,28 @@ textarea{min-height:90px;resize:vertical}
 @media(max-width:560px){.cover-core .lead{display:none}.cover-btns .big{padding:12px 22px;font-size:.85rem}}
 @media(prefers-reduced-motion:reduce){.orbit,.sg .in,.orbit-stage::before{animation:none}}
 .logo:hover{filter:brightness(1.3)}
+
+/* Botões de ícone (som / terror) */
+button.icon{padding:9px 11px;margin-right:6px}
+button.icon.on{--edge:linear-gradient(135deg,#ff6a6a,#a01020);color:#ff8a8a}
+.topnav{display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+
+/* MODO TERROR — borda vermelha pulsante, paleta sombria */
+#terror-frame{position:fixed;inset:0;z-index:55;pointer-events:none;opacity:0;transition:opacity .8s;
+  box-shadow:inset 0 0 90px 12px rgba(190,10,25,.55),inset 0 0 200px 40px rgba(40,0,6,.7)}
+body.terror #terror-frame{opacity:1;animation:batida 1.7s ease-in-out infinite}
+@keyframes batida{0%,100%{box-shadow:inset 0 0 70px 6px rgba(170,8,22,.4),inset 0 0 180px 30px rgba(30,0,5,.7)}
+  12%{box-shadow:inset 0 0 120px 26px rgba(230,15,30,.8),inset 0 0 220px 50px rgba(50,0,8,.8)}
+  26%{box-shadow:inset 0 0 80px 10px rgba(170,8,22,.45),inset 0 0 190px 34px rgba(30,0,5,.7)}
+  38%{box-shadow:inset 0 0 105px 20px rgba(220,12,28,.7),inset 0 0 210px 44px rgba(45,0,7,.78)}}
+body.terror{--violet:#c0182b;--gold:#c89a5a;--gold2:#e8c9a0;--line:#4a1a26;--muted:#a58f96;
+  background:radial-gradient(ellipse at 50% -10%,#3a0a14 0%,#08030a 62%) fixed}
+body.terror html,html:has(body.terror){background:#08030a}
+body.terror .panel{background:#1a0a12cc;border-color:#4a1a26}
+body.terror .title,body.terror .logo{animation:tremor 4s steps(1) infinite}
+@keyframes tremor{0%,92%,100%{transform:none;text-shadow:none}93%{transform:translate(1px,0);text-shadow:-2px 0 #f00,2px 0 #0ff}95%{transform:translate(-2px,1px)}97%{transform:translate(1px,-1px);text-shadow:2px 0 #f00}}
+body.terror .orbit-stage::after{background:radial-gradient(circle,#4a0a1a 0,#1a050c88 55%,transparent 72%)}
+body.terror .eyebrow{color:#e0243a}
+body.terror.t-flash::before{content:'';position:fixed;inset:0;z-index:70;background:#000;animation:susto .9s ease-out forwards;pointer-events:none}
+@keyframes susto{0%{opacity:1;background:#fff}8%{opacity:1;background:#c00}40%{opacity:.7;background:#000}100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){body.terror #terror-frame{animation:none}body.terror .title,body.terror .logo{animation:none}}

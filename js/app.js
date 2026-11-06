@@ -127,7 +127,7 @@ function botaoRolar(key) {
 
 async function rolarAtributo(key) {
   if (rolando) return;
-  rolando = true;
+  rolando = true; Som.dado();
   P.attrs[key] = rolar4d6();
   salvar();
   await desenharAtributo(key, true);
@@ -137,7 +137,7 @@ async function rolarAtributo(key) {
 
 async function rolarTodos() {
   if (rolando) return;
-  rolando = true;
+  rolando = true; Som.dado();
   const pend = ATTRS.filter(a => !P.attrs[a.key]);
   pend.forEach(a => { P.attrs[a.key] = rolar4d6(); });
   salvar();
@@ -148,7 +148,7 @@ async function rolarTodos() {
 
 async function relancer(key) {
   if (rolando || P.relanceUsado) return;
-  rolando = true;
+  rolando = true; Som.dado();
   P.relanceUsado = true;
   P.attrs[key] = rolar4d6();
   salvar();
@@ -179,7 +179,7 @@ function renderCaminho(body) {
     </div>`;
   const mostrarInfo = id => { $('#caminho-info').innerHTML = infoCaminho(id); };
   const escolher = (id, idx, manual) => {
-    P.caminho = id; salvar(); mostrarInfo(id); atualizarNext();
+    P.caminho = id; salvar(); mostrarInfo(id); atualizarNext(); tocarCaminho(id);
     if (manual) centralizarNo(idx);
   };
   montarConstelacao($('#constel'), escolher);
@@ -256,7 +256,7 @@ function renderDestino(body) {
     const c = $('#dc-' + tipo), f = $('#df-' + tipo);
     if (tipo === 'traco') { const t = TRACOS[idx]; f.innerHTML = `<div class="dc-n">${idx + 1}</div><h4>${t.t}</h4><p>${t.d}</p>`; }
     else { const a = ARTEFATOS[idx]; f.innerHTML = `<div class="dc-n">${idx + 1}</div><h4>${a.n}</h4><p><b class="ok">Dádiva:</b> ${a.dadiva}</p><p><b class="bad">Maldição:</b> ${a.maldicao}</p>`; }
-    if (!animar) c.style.transition = 'none';
+    if (!animar) c.style.transition = 'none'; else Som.carta();
     c.classList.add('flip');
     $('#btn-' + (tipo === 'traco' ? 'traco' : 'art')).disabled = true;
   };
@@ -359,4 +359,27 @@ function voltarCapa() { montarCapa(); mostrar('cover'); window.scrollTo({ top: 0
 $('#logo').addEventListener('click', voltarCapa);
 $('#logo').style.cursor = 'pointer';
 
+/* ---------- Som e modo Terror ---------- */
+const svgBtn = n => `<svg class="bi" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONES[n]}</svg>`;
+function atualizarToggles() {
+  $('#btn-som').innerHTML = svgBtn(Som.mudo ? 'mudo' : 'som');
+  $('#btn-som').setAttribute('aria-pressed', String(!Som.mudo));
+  $('#btn-som').title = Som.mudo ? 'Ativar som' : 'Silenciar tudo';
+  $('#btn-terror').innerHTML = svgBtn('olho');
+  $('#btn-terror').setAttribute('aria-pressed', String(Som.terror));
+  $('#btn-terror').title = Som.terror ? 'Desativar Modo Terror' : 'Ativar Modo Terror';
+  $('#btn-terror').classList.toggle('on', Som.terror);
+  document.body.classList.toggle('terror', Som.terror);
+}
+$('#btn-som').addEventListener('click', () => { Som.setMudo(!Som.mudo); atualizarToggles(); if (!Som.mudo) Som.confirmar(); });
+$('#btn-terror').addEventListener('click', () => {
+  Som.setTerror(!Som.terror); atualizarToggles();
+  if (Som.terror) { document.body.classList.add('t-flash'); setTimeout(() => document.body.classList.remove('t-flash'), 900); }
+});
+window.onTick = () => Som.tick();
+// primeiro toque libera o áudio do navegador; todo botão faz um clique sonoro
+document.addEventListener('pointerdown', () => { Som.init(); if (Som.terror) Som.ambienteTerror(true); }, { once: true });
+document.addEventListener('click', e => { if (e.target.closest('button') && !e.target.closest('#btn-som')) Som.click(); });
+
+atualizarToggles();
 (function init() { voltarCapa(); })();
