@@ -3,7 +3,7 @@ const Mesa = (() => {
   const LADOS = [4, 6, 8, 10, 12, 20, 22, 100];
   const soma = v => v.reduce((a, b) => a + b, 0);
   const sinal = n => (n >= 0 ? '+' : '−') + Math.abs(n);
-  const PADRAO = { lados: 20, qtd: 1, mod: 0, modo: 'normal', cd: 0 };
+  const PADRAO = { lados: 20, qtd: 1, mod: 0, modo: 'normal' };
   const cfg = () => { if (!P.mesa || typeof P.mesa !== 'object') P.mesa = {}; for (const k in PADRAO) if (P.mesa[k] === undefined) P.mesa[k] = PADRAO[k]; return P.mesa; };
   let aberta = false, rolando = false, aba = 'livre', ultimo = null;
 
@@ -79,20 +79,17 @@ const Mesa = (() => {
     } else if (aba === 'testes') {
       const tem = ATTRS.every(a => P.attrs && P.attrs[a.key]);
       c.innerHTML = `
-        <div class="lbl">Dificuldade (CD)</div>
-        <div class="cds">${[[0, 'Sem CD'], [10, 'Fácil · 10'], [14, 'Média · 14'], [18, 'Difícil · 18'], [22, 'Heroica · 22']].map(([v, n]) => `<button type="button" class="chip-e ${k.cd === v ? 'on' : ''}" data-cd="${v}">${n}</button>`).join('')}</div>
         <div class="lbl">Teste de atributo <i>d20 + modificador${k.mod ? ` ${sinal(k.mod)}` : ''}</i></div>
         ${tem ? '' : '<p class="hint">Role os atributos do personagem para liberar os testes.</p>'}
         <div class="attrs-mesa">${ATTRS.map(a => `<button type="button" class="attr-b" data-a="${a.key}" style="--ac:${a.cor}" ${tem ? '' : 'disabled'}>${iconeAttr(a, 22)}<span>${a.nome}</span><b>${tem ? sinal(mod(total(a.key))) : '—'}</b></button>`).join('')}</div>
-        <div class="lbl">Efeito da mente</div>
-        <div class="san-teste"><div><b>Teste de Sanidade</b><small>d20 + Presença contra a CD. Se falhar, você perde <b>1d4</b> de Sanidade${tem ? ` (atual ${P.san ?? sanMax()}/${sanMax()})` : ''}.</small></div><button type="button" class="primary" id="t-san" ${tem ? '' : 'disabled'} data-ic="olho">Testar</button></div>`;
-      c.querySelectorAll('[data-cd]').forEach(b => b.addEventListener('click', () => { k.cd = +b.dataset.cd; salvar(); c.querySelectorAll('[data-cd]').forEach(x => x.classList.toggle('on', x === b)); Som.tick(); }));
-      c.querySelectorAll('.attr-b').forEach(b => b.addEventListener('click', () => { const a = ATTRS.find(x => x.key === b.dataset.a); rolar({ lados: 20, qtd: 1, mod: mod(total(a.key)) + k.mod, rotulo: `Teste de ${a.nome}`, cd: k.cd || 0, nota: `${a.nome} ${sinal(mod(total(a.key)))}${k.mod ? ` ${sinal(k.mod)} situacional` : ''}` }); }));
+        <div class="lbl">Mente</div>
+        <div class="san-teste"><div><b>Teste de Sanidade</b><small>d20 + Presença. A dificuldade e o que acontece com sua Sanidade quem decide é o mestre.</small></div><button type="button" class="primary" id="t-san" ${tem ? '' : 'disabled'} data-ic="olho">Rolar</button></div>
+        <p class="hint">O mestre define a dificuldade e o resultado. Em breve ele poderá pedir testes direto para você.</p>`;
       const ts = $('#t-san'); if (ts) ts.addEventListener('click', testeSanidade);
     } else {
       const h = P.historico || [];
       c.innerHTML = `<div class="lbl">Últimas rolagens ${h.length ? `<button type="button" class="link-remover" id="h-limpar">Limpar</button>` : ''}</div>` +
-        (h.length ? `<ol class="hist">${h.map(r => `<li class="${r.res || ''}"><span class="h-t">${r.hora}</span><span class="h-r">${esc(r.rotulo)}<small>${esc(r.detalhe)}</small></span><b>${r.total}</b>${r.res ? `<em>${{ crit: 'Crítico', fumble: 'Falha crítica', ok: 'Sucesso', falha: 'Falha' }[r.res]}</em>` : ''}</li>`).join('')}</ol>` : '<p class="hint">Nenhuma rolagem ainda. Os dados que você rolar aparecem aqui.</p>');
+        (h.length ? `<ol class="hist">${h.map(r => `<li class="${r.res || ''}"><span class="h-t">${r.hora}</span><span class="h-r">${esc(r.rotulo)}<small>${esc(r.detalhe)}</small></span><b>${r.total}</b>${r.res ? `<em>${{ crit: '20 natural', fumble: '1 natural' }[r.res]}</em>` : ''}</li>`).join('')}</ol>` : '<p class="hint">Nenhuma rolagem ainda. Os dados que você rolar aparecem aqui.</p>');
       const l = $('#h-limpar'); if (l) l.addEventListener('click', () => { P.historico = []; salvar(); corpo(); });
     }
     if (typeof decorarTudo === 'function') decorarTudo();
@@ -107,7 +104,7 @@ const Mesa = (() => {
     let esc2 = 0; if (B) { const sa = soma(A), sb = soma(B); esc2 = modo === 'vantagem' ? (sb > sa ? 1 : 0) : (sb < sa ? 1 : 0); if (sa === sb) esc2 = 0; }
     const grupos = B ? [A, B] : [A], sel = grupos[esc2], sm = soma(sel), total = sm + o.mod;
     const nat = o.lados === 20 && o.qtd === 1 ? sel[0] : null, crit = nat === 20, fumble = nat === 1;
-    let res = null; if (o.cd) res = crit || (!fumble && total >= o.cd) ? 'ok' : 'falha'; if (crit) res = 'crit'; if (fumble) res = 'fumble';
+    let res = null; if (crit) res = 'crit'; else if (fumble) res = 'fumble';
     // mesa
     const mesa = $('#dados-mesa'), rz = $('#resultado'); rz.hidden = true; $('#feltro').classList.remove('crit', 'fumble', 'com-res'); mesa.innerHTML = '';
     const tam = (o.qtd > 6 ? 46 : o.qtd > 3 ? 56 : 70) * (B ? .78 : 1), els = [];
@@ -122,8 +119,8 @@ const Mesa = (() => {
     const det = grupos.map((g, gi) => `[${g.join(', ')}]${B ? (gi === esc2 ? ' ✓' : ' ✗') : ''}`).join(' ou ');
     const rotulo = o.rotulo, tipo = res;
     rz.className = 'resultado ' + (tipo || ''); rz.hidden = false;
-    const txtRes = { crit: 'CRÍTICO!', fumble: 'FALHA CRÍTICA', ok: 'SUCESSO', falha: 'FALHA' }[tipo] || '';
-    const margem = o.cd ? ` <small>${total >= o.cd ? `+${total - o.cd}` : `−${o.cd - total}`} da CD ${o.cd}</small>` : '';
+    const txtRes = { crit: '20 NATURAL', fumble: '1 NATURAL' }[tipo] || '';
+    const margem = '';
     rz.innerHTML = `<b class="rz-n">${total}</b><div class="rz-info"><small class="rz-r">${esc(rotulo)}</small><span class="rz-t">${txtRes}${margem}</span><small class="rz-d">${det}${o.mod ? ` ${sinal(o.mod)}` : ''}${o.nota ? ` · ${esc(o.nota)}` : ''}</small></div>`;
     $('#feltro').classList.add('com-res');
     if (crit) { $('#feltro').classList.add('crit'); Som.critico(); } else if (fumble) { $('#feltro').classList.add('fumble'); Som.falha(); const m = $('#mesa'); m.classList.add('treme'); setTimeout(() => m.classList.remove('treme'), 600); } else Som.resultado();
@@ -133,14 +130,8 @@ const Mesa = (() => {
     rolando = false; return { total, res: tipo };
   }
 
-  // Teste de Sanidade: se falhar, rola 1d4 e aplica na ficha
-  async function testeSanidade() {
-    const k = cfg(), r = await rolar({ lados: 20, qtd: 1, mod: mod(total('pres')) + k.mod, rotulo: 'Teste de Sanidade', cd: k.cd || 12, nota: `Presença ${sinal(mod(total('pres')))}` });
-    if (!r || (r.res !== 'falha' && r.res !== 'fumble')) return;
-    const rz = $('#resultado'), perda = d(4) + (r.res === 'fumble' ? 1 : 0);
-    rz.querySelector('.rz-info').insertAdjacentHTML('beforeend', `<button type="button" class="primary" id="ap-san">Aplicar −${perda} de Sanidade</button>`);
-    $('#ap-san').addEventListener('click', () => { P.san = Math.max(0, (P.san ?? sanMax()) - perda); salvar(); $('#ap-san').outerHTML = `<small class="rz-d">Sanidade agora ${P.san}/${sanMax()}.${P.san === 0 ? ' Perda de controle.' : ''}</small>`; if (STEPS[P.step].id === 'ficha') renderFicha($('#step-body')); corpo(); });
-  }
+  // Teste de Sanidade: apenas rola d20 + Presença. O mestre decide a dificuldade e a perda.
+  function testeSanidade() { const k = cfg(); return rolar({ lados: 20, qtd: 1, mod: mod(total('pres')) + k.mod, rotulo: 'Teste de Sanidade', nota: `Presença ${sinal(mod(total('pres')))}` }); }
   return { montar, alternar, rolar };
 })();
 document.addEventListener('DOMContentLoaded', () => Mesa.montar());
