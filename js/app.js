@@ -669,7 +669,7 @@ function atualizarToggles() {
   $('#btn-som').innerHTML = svgBtn(Som.mudo ? 'mudo' : 'som');
   $('#btn-som').setAttribute('aria-pressed', String(!Som.mudo));
   $('#btn-som').title = Som.mudo ? 'Ativar som' : 'Silenciar tudo'; $('#btn-som').setAttribute('aria-label', 'Som');
-  $('#btn-terror').innerHTML = svgBtn('olho');
+  $('#btn-terror').innerHTML = svgBtn('olho'); $('#btn-vol').innerHTML = svgBtn('ajuste'); if (window.sincronizarPainelSom) window.sincronizarPainelSom();
   $('#btn-terror').setAttribute('aria-pressed', String(Som.terror));
   $('#btn-terror').title = Som.terror ? 'Desativar Modo Terror' : 'Ativar Modo Terror'; $('#btn-terror').setAttribute('aria-label', 'Modo Terror');
   $('#btn-terror').classList.toggle('on', Som.terror);
@@ -680,6 +680,33 @@ $('#btn-terror').addEventListener('click', () => {
   Som.setTerror(!Som.terror); atualizarToggles();
   if (Som.terror) { document.body.classList.add('t-flash'); setTimeout(() => document.body.classList.remove('t-flash'), 900); }
 });
+/* ---------- Painel de ajustes de som ---------- */
+(function painelSom() {
+  const p = document.createElement('div'); p.id = 'painel-som'; p.className = 'painel-som'; p.hidden = true; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Ajustes de som');
+  p.innerHTML = `<label class="ps-linha" for="ps-vol"><span>Volume</span><output id="ps-vol-v" for="ps-vol"></output></label>
+    <input type="range" id="ps-vol" min="0" max="100" step="1">
+    <label class="ps-chk"><input type="checkbox" id="ps-mudo"><span>Silenciar tudo</span></label>
+    <label class="ps-chk"><input type="checkbox" id="ps-ui"><span>Sons dos botões</span></label>
+    <p class="ps-nota">Cada Caminho tem o mesmo volume. O controle ajusta o conjunto.</p>`;
+  document.body.appendChild(p);
+  const btn = $('#btn-vol'), vol = $('#ps-vol'), saida = $('#ps-vol-v');
+  const sincronizar = () => { const v = Math.round(Som.volume * 100); vol.value = v; saida.textContent = v + '%'; vol.setAttribute('aria-valuetext', v + ' por cento'); $('#ps-mudo').checked = Som.mudo; $('#ps-ui').checked = Som.uiSons; vol.disabled = Som.mudo; };
+  const posicionar = () => {                                   // abaixo do botão, sempre inteiro dentro da tela
+    const r = btn.getBoundingClientRect(), larg = p.offsetWidth || 280;
+    p.style.top = (r.bottom + 8) + 'px'; p.style.right = 'auto';
+    p.style.left = Math.max(12, Math.min(r.right - larg, innerWidth - larg - 12)) + 'px';
+  };
+  const abrir = v => { p.hidden = !v; btn.setAttribute('aria-expanded', String(v)); if (v) { sincronizar(); posicionar(); vol.focus(); } };   // (posicionar depois de mostrar, para medir a largura)
+  btn.addEventListener('click', () => abrir(p.hidden));
+  p.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); abrir(false); btn.focus(); } });
+  document.addEventListener('pointerdown', e => { if (!p.hidden && !p.contains(e.target) && !btn.contains(e.target)) abrir(false); });
+  addEventListener('resize', () => { if (!p.hidden) posicionar(); });
+  vol.addEventListener('input', () => { Som.setVolume(vol.value / 100); saida.textContent = vol.value + '%'; vol.setAttribute('aria-valuetext', vol.value + ' por cento'); });
+  vol.addEventListener('change', () => Som.confirmar());                       // amostra: o jogador ouve o nível escolhido
+  $('#ps-mudo').addEventListener('change', e => { Som.setMudo(e.target.checked); atualizarToggles(); sincronizar(); });
+  $('#ps-ui').addEventListener('change', e => Som.setUi(e.target.checked));
+  window.sincronizarPainelSom = sincronizar;
+})();
 window.onTick = () => Som.tick();
 // primeiro toque libera o áudio do navegador; todo botão faz um clique sonoro
 document.addEventListener('pointerdown', () => { Som.init(); if (Som.terror) Som.ambienteTerror(true); }, { once: true });
