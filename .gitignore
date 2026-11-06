@@ -1,2 +1,31 @@
+# dependências e medições locais
 node_modules
 tools/.ultima-medicao.json
+
+# segredos e configurações locais (nunca vão ao GitHub)
+.env
+.env.*
+*.local.js
+*.local.json
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+secrets*
+credentials*
+service-account*.json
+.npmrc
+.netrc
+
+# Supabase local
+supabase/.temp/
+supabase/.branches/
+
+# lixo do sistema e de editores
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/

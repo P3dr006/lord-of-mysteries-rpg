@@ -1,0 +1,7 @@
+#!/bin/sh
+# Última barreira antes de enviar ao GitHub: confere todos os arquivos versionados.
+if ! command -v node >/dev/null 2>&1; then
+  echo "AVISO: o Node.js não está instalado; a verificação de segredos foi PULADA." >&2
+  exit 0
+fi
+exec node "$(git rev-parse --show-toplevel)/tools/verificar-segredos.js" --tudo
