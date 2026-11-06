@@ -427,7 +427,7 @@ function renderFicha(body) {
     </div>
     ${P.aparencia || P.historia ? `<section class="blk"><h3>Quem é</h3>${P.aparencia ? `<h4 class="sub">Aparência</h4><p class="note">${esc(P.aparencia)}</p>` : ''}${P.historia ? `<h4 class="sub">História</h4><p class="note">${esc(P.historia)}</p>` : ''}</section>` : ''}
     <section class="blk"><h3>Notas de sessão</h3><textarea id="f-notas" placeholder="Anotações da campanha...">${esc(P.notas)}</textarea>
-      <div class="sheet-actions"><button id="btn-export" class="primary" data-ic="baixar">Exportar JSON</button></div></section>
+      <div class="sheet-actions"><button id="btn-poster" class="primary" data-ic="estrela">Gerar pôster</button><button id="btn-export" class="ghost" data-ic="baixar">Exportar JSON</button></div></section>
   </div>`;
 
   // vitais
@@ -448,6 +448,7 @@ function renderFicha(body) {
   if ($('#btn-asc')) $('#btn-asc').addEventListener('click', () => pronto ? ascender(false, 0) : ascensaoArriscada());
   $('#f-notas').addEventListener('input', e => { P.notas = e.target.value; salvar(); });
   $('#btn-export').addEventListener('click', exportarJSON);
+  $('#btn-poster').addEventListener('click', abrirPoster);
 }
 
 /* ---------- Janelas do próprio site (sem alert/confirm, que o navegador embutido bloqueia) ---------- */
@@ -470,6 +471,34 @@ function exportarJSON() {
     [{ label: 'Copiar', cls: 'primary', ic: 'baixar', fn: (m, b) => { const t = m.querySelector('#json-out'); t.select(); (navigator.clipboard ? navigator.clipboard.writeText(json) : Promise.reject()).then(() => { b.lastChild.textContent = 'Copiado!'; }).catch(() => { document.execCommand && document.execCommand('copy'); }); return false; } },
      { label: 'Fechar', valor: true }]).then(() => {});
   setTimeout(() => { const t = $('#json-out'); if (t) t.value = json; }, 0);
+}
+
+/* ---------- Pôster ---------- */
+async function abrirPoster() {
+  const m = document.createElement('div'); m.className = 'crop-modal poster-modal';
+  const nomeArq = (P.nome || 'beyonder').replace(/[^\w]+/g, '_');
+  m.innerHTML = `<div class="crop-box poster-box" style="--pc:${caminhoPorId(P.caminho).cor}">
+    <p class="asc-eyebrow" style="opacity:1">PÔSTER DO BEYONDER</p><h3 class="crop-t">Sua ficha como cartaz</h3>
+    <div class="poster-prev" id="poster-prev"><div class="poster-load"><span></span>Desenhando o pôster…</div></div>
+    <label class="poster-terror"><input type="checkbox" id="pt-terror" ${Som.terror ? 'checked' : ''}> Versão Terror</label>
+    <div class="poster-btns"><button type="button" class="primary" id="pt-pdf" data-ic="baixar" disabled>Baixar PDF</button><button type="button" class="ghost" id="pt-png" data-ic="baixar" disabled>Baixar PNG</button><button type="button" class="ghost" id="pt-fechar">Fechar</button></div>
+    <p class="hint crop-dica" id="pt-dica">O PDF sai em A4. Se o download não começar, toque e segure (ou clique com o botão direito) na imagem e escolha salvar.</p></div>`;
+  document.body.appendChild(m);
+  let arq = null, ocupado = false;
+  const gerar = async () => {
+    if (ocupado) return; ocupado = true; $('#pt-pdf').disabled = $('#pt-png').disabled = true;
+    $('#poster-prev').innerHTML = '<div class="poster-load"><span></span>Desenhando o pôster…</div>';
+    try { const cv = await Poster.desenhar({ terror: $('#pt-terror').checked }); arq = await Poster.gerarArquivos(cv);
+      $('#poster-prev').innerHTML = `<img src="${arq.jpg}" alt="Pôster de ${esc(P.nome)}">`; $('#pt-pdf').disabled = $('#pt-png').disabled = false; Som.selar(); }
+    catch (e) { $('#poster-prev').innerHTML = '<div class="poster-load">Não consegui desenhar o pôster. Tente de novo.</div>'; console.error(e); }
+    ocupado = false;
+  };
+  m.querySelector('#pt-terror').addEventListener('change', gerar);
+  m.querySelector('#pt-fechar').addEventListener('click', () => m.remove());
+  m.addEventListener('keydown', e => { if (e.key === 'Escape') m.remove(); });
+  m.querySelector('#pt-pdf').addEventListener('click', () => { if (arq && Poster.baixar(`${nomeArq}_poster.pdf`, arq.pdf, 'application/pdf')) $('#pt-dica').textContent = 'PDF gerado. Confira a pasta de downloads.'; });
+  m.querySelector('#pt-png').addEventListener('click', () => { if (arq && Poster.baixar(`${nomeArq}_poster.png`, arq.png)) $('#pt-dica').textContent = 'Imagem gerada. Confira a pasta de downloads.'; });
+  await gerar(); setTimeout(() => m.querySelector('#pt-pdf').focus(), 50);
 }
 
 /* ---------- Navegação e inicialização ---------- */

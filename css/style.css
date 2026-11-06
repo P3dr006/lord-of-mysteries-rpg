@@ -862,3 +862,15 @@ body.terror .mesa{border-color:#a01020;background:linear-gradient(180deg,#240810
 .resultado .primary{position:static;margin-top:6px;min-height:36px;padding:7px 14px;font-size:.7rem}
 .resultado .rz-info{flex:1}
 @media(max-width:560px){.feltro{height:270px}}
+
+/* pôster */
+.poster-box{width:min(100%,560px)}
+.poster-prev{margin:0 auto 12px;width:min(100%,360px);aspect-ratio:1654/2339;border-radius:6px;overflow:hidden;background:#0b0920;box-shadow:0 12px 40px #000c,0 0 30px color-mix(in srgb,var(--pc) 30%,transparent);display:grid;place-items:center}
+.poster-prev img{width:100%;height:100%;object-fit:contain;display:block;-webkit-touch-callout:default;user-select:auto}
+.poster-load{color:var(--muted);text-align:center;padding:20px;font-size:.9rem;display:flex;flex-direction:column;align-items:center;gap:12px}
+.poster-load span{width:34px;height:34px;border-radius:50%;border:3px solid #3b3566;border-top-color:#d9b86a;animation:giro .9s linear infinite}
+.poster-terror{display:inline-flex;align-items:center;gap:8px;margin:2px 0 12px;font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);cursor:pointer;min-height:36px}
+.poster-terror input{accent-color:#c0182b;width:18px;height:18px}
+.poster-btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.poster-btns button{flex:1 1 140px}
+@media(max-width:560px){.poster-prev{width:min(100%,300px)}.poster-btns button{flex:1 1 100%}}
