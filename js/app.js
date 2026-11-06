@@ -355,8 +355,8 @@ $('#file-import').addEventListener('change', e => {
   e.target.value = '';
 });
 
-(function init() {
-  const salvo = carregar();
-  if (salvo && salvo.nome) $('#btn-continue').hidden = false;
-  mostrar('cover');
-})();
+function voltarCapa() { montarCapa(); mostrar('cover'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+$('#logo').addEventListener('click', voltarCapa);
+$('#logo').style.cursor = 'pointer';
+
+(function init() { voltarCapa(); })();
