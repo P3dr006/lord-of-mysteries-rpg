@@ -6,6 +6,7 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '
 const STEPS = [
   { id: 'identidade', nome: 'Identidade', render: renderIdentidade, valido: () => P.nome.trim().length > 0 },
   { id: 'atributos',  nome: 'Atributos',  render: renderAtributos, valido: () => ATTRS.every(a => P.attrs[a.key]) },
+  { id: 'caminho',    nome: 'Caminho',    render: renderCaminho,   valido: () => !!P.caminho },
   { id: 'ficha',      nome: 'Ficha',      render: renderFicha,     valido: () => true },
 ];
 
@@ -155,6 +156,43 @@ async function relancer(key) {
   atualizarRelance(); atualizarNext();
 }
 
+/* ---------- Passo 3: Caminho ---------- */
+function infoCaminho(id) {
+  const c = caminhoPorId(id), at = ATTRS.find(a => a.key === c.attr);
+  return `<div class="sig">${sigilo(c, 56)}<div><h4>${c.nome}</h4><span class="badge">Sequência 9 · ${c.seq9}</span></div></div>
+    <p>${c.desc}</p><ul>${c.hab.map(h => `<li>${h}</li>`).join('')}</ul>
+    <p class="bonus">Bônus do Caminho: +2 em ${at.nome}</p>`;
+}
+
+function renderCaminho(body) {
+  body.innerHTML = `
+    <h3>Seu Caminho — a constelação decide</h3>
+    <p class="hint">Gire o d22 para o destino escolher, ou clique em um sigilo para escolher você mesmo.</p>
+    <div class="caminho-wrap">
+      <div id="constel"></div>
+      <div>
+        <div class="toolbar"><button id="btn-d22" class="primary">🎲 Girar o d22</button></div>
+        <div class="caminho-info" id="caminho-info"><p class="vazio">Nenhum Caminho escolhido.</p></div>
+      </div>
+    </div>`;
+  const mostrarInfo = id => { $('#caminho-info').innerHTML = infoCaminho(id); };
+  const escolher = (id, idx, manual) => {
+    P.caminho = id; salvar(); mostrarInfo(id); atualizarNext();
+    if (manual) centralizarNo(idx);
+  };
+  montarConstelacao($('#constel'), escolher);
+  if (P.caminho) {
+    const i = CAMINHOS.findIndex(c => c.id === P.caminho);
+    mostrarInfo(P.caminho); marcarNo(i);
+    constel.svg.querySelector('#hub-num').textContent = i + 1;
+    aplicarRot(-constel.nodes[i].a);
+  }
+  $('#btn-d22').addEventListener('click', () => {
+    $('#btn-d22').disabled = true;
+    girarD22((id, idx) => { escolher(id, idx, false); $('#btn-d22').disabled = false; });
+  });
+}
+
 /* ---------- Ficha ---------- */
 function ensureVitais() {
   if (P.pv == null) P.pv = pvMax();
@@ -171,7 +209,7 @@ function renderFicha(body) {
     <div class="sheet-head">
       <div>
         <h2>${esc(P.nome)}</h2>
-        <span class="badge">Sequência ${P.sequencia} · ${SEQ_NAMES[P.sequencia]}</span>
+        ${P.caminho ? `<span class="badge">${sigilo(caminhoPorId(P.caminho), 14)} ${caminhoPorId(P.caminho).nome}</span> ` : ''}<span class="badge">Sequência ${P.sequencia} · ${SEQ_NAMES[P.sequencia]}${P.caminho ? ' · ' + caminhoPorId(P.caminho).seq9 : ''}</span>
         <div class="hint">${[P.jogador && 'Jogador: ' + esc(P.jogador), P.idade && esc(P.idade) + ' anos', esc(P.genero)].filter(Boolean).join(' · ')}</div>
       </div>
     </div>

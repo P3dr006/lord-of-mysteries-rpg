@@ -8,6 +8,7 @@ function novoPersonagem() {
     attrs: {},            // { key: { dados:[4], total } }
     relanceUsado: false,
     sequencia: 9,
+    caminho: null,
     pv: null, san: null,
     notas: ''
   };
@@ -44,7 +45,8 @@ function importarJSON(file, cb) {
 
 // Cálculos derivados
 const mod = v => Math.floor((v - 10) / 2);
-const total = k => (P.attrs[k] ? P.attrs[k].total : null);
+const bonusCaminho = k => { const c = P.caminho && caminhoPorId(P.caminho); return c && c.attr === k ? 2 : 0; };
+const total = k => (P.attrs[k] ? P.attrs[k].total + bonusCaminho(k) : null);
 function pvMax() { const v = total('vigor'); return v == null ? 0 : 10 + mod(v) * 2 + (9 - P.sequencia) * 3; }
 function espMax() { const v = total('espir'); return v == null ? 0 : 10 + mod(v) * 2 + (9 - P.sequencia) * 2; }
 function sanMax() { const v = total('pres'); return v == null ? 0 : 10 + mod(v) * 2 + 5; }
