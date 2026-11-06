@@ -24,6 +24,7 @@ function iniciarPasso() {
   const body = $('#step-body');
   body.innerHTML = '';
   s.render(body);
+  body.classList.remove('entra'); void body.offsetWidth; body.classList.add('entra');
   $('#btn-prev').disabled = P.step === 0;
   $('#btn-next').hidden = P.step === STEPS.length - 1;
   $('#btn-next').disabled = !s.valido();
@@ -33,28 +34,53 @@ function atualizarNext() { $('#btn-next').disabled = !STEPS[P.step].valido(); }
 
 function renderStepper() {
   const ol = $('#stepper');
-  ol.innerHTML = '';
-  STEPS.forEach((s, i) => {
-    const li = el('li', i === P.step ? 'on' : i < P.step ? 'done' : '', `${i + 1}. ${s.nome}`);
-    ol.appendChild(li);
-  });
+  ol.style.setProperty('--n', STEPS.length); ol.style.setProperty('--prog', P.step / (STEPS.length - 1));
+  ol.innerHTML = STEPS.map((s, i) => `<li class="${i === P.step ? 'on' : i < P.step ? 'done' : ''}" data-i="${i}">
+    <span class="no"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${i < P.step ? '<path d="M5 12l5 5 9-10"/>' : PASSO_ICONE[s.id]}</svg></span>
+    <span class="lbl">${s.nome}</span></li>`).join('');
+  ol.querySelectorAll('li.done').forEach(li => li.addEventListener('click', () => { P.step = +li.dataset.i; salvar(); iniciarPasso(); }));
 }
 
 /* ---------- Passo 1: Identidade ---------- */
 function renderIdentidade(body) {
   body.innerHTML = `
     <h3>Quem é o seu Beyonder?</h3>
-    <div class="grid2">
-      <div class="field"><label>Nome do personagem *</label><input type="text" id="f-nome" value="${esc(P.nome)}" placeholder="Ex.: Klein Moretti"></div>
-      <div class="field"><label>Jogador</label><input type="text" id="f-jogador" value="${esc(P.jogador)}"></div>
-      <div class="field"><label>Idade</label><input type="text" id="f-idade" value="${esc(P.idade)}"></div>
-      <div class="field"><label>Gênero</label><input type="text" id="f-genero" value="${esc(P.genero)}"></div>
-    </div>
-    <div class="field"><label>Aparência</label><textarea id="f-aparencia">${esc(P.aparencia)}</textarea></div>
-    <div class="field"><label>História</label><textarea id="f-historia">${esc(P.historia)}</textarea></div>`;
-  const bind = (id, key) => $(id).addEventListener('input', e => { P[key] = e.target.value; salvar(); atualizarNext(); });
+    <div class="id-wrap">
+      <div class="id-form">
+        <div class="field"><label>Nome do personagem *</label>
+          <div class="inp-row"><input type="text" id="f-nome" value="${esc(P.nome)}" placeholder="Ex.: Alistair Ashcombe" autocomplete="off">
+          <button id="btn-nome" class="icon" title="Sortear um nome" data-ic="dado"></button></div></div>
+        <div class="grid2">
+          <div class="field"><label>Jogador</label><input type="text" id="f-jogador" value="${esc(P.jogador)}"></div>
+          <div class="field"><label>Idade</label><input type="text" id="f-idade" value="${esc(P.idade)}"></div>
+        </div>
+        <div class="field"><label>Gênero</label><input type="text" id="f-genero" value="${esc(P.genero)}"></div>
+        <div class="field"><label>Aparência</label><textarea id="f-aparencia" placeholder="Olhar, cicatrizes, o que as pessoas notam primeiro…">${esc(P.aparencia)}</textarea></div>
+        <div class="field"><label>História</label><textarea id="f-historia" placeholder="De onde veio, o que perdeu e o que o levou a beber a poção…">${esc(P.historia)}</textarea></div>
+      </div>
+      <aside class="id-card" aria-label="Pré-visualização do registro">
+        <div class="id-sel">Registro do Beyonder</div>
+        <svg class="id-emb" viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="54" fill="none" stroke="#d9b86a" stroke-width="1.2"/>
+          <g class="spin"><circle cx="60" cy="60" r="47" fill="none" stroke="#d9b86a" stroke-opacity=".6" stroke-dasharray="2 5"/></g>
+          <path d="M60 18l7 28 28 7-28 7-7 28-7-28-28-7 28-7z" fill="#d9b86a" fill-opacity=".18" stroke="#d9b86a" stroke-width="1.6" stroke-linejoin="round"/><circle cx="60" cy="60" r="5" fill="#d9b86a"/></svg>
+        <div class="id-nome" id="pv-nome"></div><div class="id-linha"></div>
+        <dl><dt>Jogador</dt><dd id="pv-jog"></dd><dt>Idade</dt><dd id="pv-idade"></dd><dt>Gênero</dt><dd id="pv-gen"></dd></dl>
+        <div class="id-reg">Nº <span id="pv-num"></span></div><div class="id-carimbo" id="pv-carimbo"></div>
+      </aside>
+    </div>`;
+  const prev = () => {
+    $('#pv-nome').textContent = P.nome.trim() || '— sem nome —'; $('#pv-nome').classList.toggle('vazio', !P.nome.trim());
+    $('#pv-jog').textContent = P.jogador || '—'; $('#pv-idade').textContent = P.idade || '—'; $('#pv-gen').textContent = P.genero || '—';
+    $('#pv-num').textContent = numeroRegistro(P.nome.trim() || 'x');
+    const c = $('#pv-carimbo'), ok = P.nome.trim().length > 0, antes = c.dataset.ok;
+    c.dataset.ok = ok ? '1' : '0'; c.textContent = ok ? 'REGISTRADO' : 'PENDENTE'; c.classList.toggle('ok', ok);
+    if (ok && antes === '0') { c.classList.remove('bate'); void c.offsetWidth; c.classList.add('bate'); }
+  };
+  const bind = (id, key) => $(id).addEventListener('input', e => { P[key] = e.target.value; salvar(); atualizarNext(); prev(); });
   bind('#f-nome', 'nome'); bind('#f-jogador', 'jogador'); bind('#f-idade', 'idade');
   bind('#f-genero', 'genero'); bind('#f-aparencia', 'aparencia'); bind('#f-historia', 'historia');
+  $('#btn-nome').addEventListener('click', () => { P.nome = nomeAleatorio(); $('#f-nome').value = P.nome; salvar(); atualizarNext(); prev(); Som.carta(); });
+  $('#pv-carimbo').dataset.ok = P.nome.trim() ? '1' : '0'; prev();
 }
 
 /* ---------- Passo 2: Atributos ---------- */
@@ -69,12 +95,15 @@ function renderAtributos(body) {
       <button id="btn-roll-all" class="primary" data-ic="dado">Rolar todos</button>
       <span class="hint" id="reroll-info"></span>
     </div>
-    <div class="attr-list" id="attr-list"></div>`;
+    <div class="attr-list" id="attr-list"></div>
+    <div class="presagio" id="presagio" hidden></div>`;
   const list = $('#attr-list');
+  setTimeout(() => presagio(), 0);
   ATTRS.forEach(a => {
     const row = el('div', 'attr-row');
-    row.id = 'row-' + a.key;
+    row.id = 'row-' + a.key; row.style.setProperty('--ac', a.cor);
     row.innerHTML = `
+      <div class="ar-ic">${iconeAttr(a, 26)}</div>
       <div class="attr-name"><b>${a.nome}</b><span>${a.desc}</span></div>
       <div class="dice-tray"></div>
       <div class="attr-total"></div>`;
@@ -106,9 +135,11 @@ function desenharAtributo(key, animar) {
     tray.appendChild(dd);
     return mostrarFace(dd, v, animar);
   });
-  tot.innerHTML = animar ? '…' : `${r.total}<small>mod ${mod(r.total) >= 0 ? '+' : ''}${mod(r.total)}</small>`;
+  const totalHTML = n => `<span class="tn">${n}</span><small>mod ${mod(r.total) >= 0 ? '+' : ''}${mod(r.total)}</small><div class="ar-bar"><i style="width:${animar ? 0 : Math.min(100, r.total / 20 * 100)}%"></i></div>`;
+  tot.innerHTML = totalHTML(animar ? '…' : r.total);
   const fim = Promise.all(dados).then(() => {
-    tot.innerHTML = `${r.total}<small>mod ${mod(r.total) >= 0 ? '+' : ''}${mod(r.total)}</small>`;
+    if (animar) { tot.innerHTML = totalHTML(3); contar(tot.querySelector('.tn'), r.total); requestAnimationFrame(() => requestAnimationFrame(() => { tot.querySelector('.ar-bar i').style.width = Math.min(100, r.total / 20 * 100) + '%'; })); row.classList.add('rolou'); setTimeout(() => row.classList.remove('rolou'), 1200); }
+    presagio();
     if (!P.relanceUsado) {
       const b = el('button', 'ghost', 'Relance'); b.dataset.ic = 'relance';
       b.title = 'Usa a Relance do Destino (uma vez)';
@@ -117,6 +148,13 @@ function desenharAtributo(key, animar) {
     }
   });
   return fim;
+}
+
+function presagio() {
+  const box = $('#presagio'); if (!box) return;
+  if (!ATTRS.every(a => P.attrs[a.key])) { box.hidden = true; return; }
+  const soma = ATTRS.reduce((n, a) => n + P.attrs[a.key].total, 0), txt = [...PRESAGIOS].reverse().find(x => soma >= x[0])[1];
+  box.hidden = false; box.innerHTML = `<span class="pz-n">${soma}</span><div><small>Soma dos atributos · média ${(soma / 6).toFixed(1)}</small><b>${txt}</b></div>`;
 }
 
 function botaoRolar(key) {
@@ -161,9 +199,9 @@ async function relancer(key) {
 /* ---------- Passo 3: Caminho ---------- */
 function infoCaminho(id) {
   const c = caminhoPorId(id), at = ATTRS.find(a => a.key === c.attr);
-  return `<div class="sig">${sigilo(c, 56)}<div><h4>${c.nome}</h4><span class="badge">Sequência 9 · ${c.seq9}</span></div></div>
-    <p>${c.desc}</p><ul>${c.hab.map(h => `<li>${h}</li>`).join('')}</ul>
-    <p class="bonus">Bônus do Caminho: +2 em ${at.nome}</p>`;
+  return `<div class="cardcam" style="--pc:${c.cor}"><div class="cc-head">${sigilo(c, 84)}<div><h4>${c.nome}</h4><span class="badge">Sequência 9 · ${c.seq9}</span></div></div>
+    <p>${c.desc}</p><h5>Habilidades iniciais</h5><ul class="cc-hab">${c.hab.map(h => `<li>${h}</li>`).join('')}</ul>
+    <div class="cc-bonus">${iconeAttr(at, 18)} <span>+2 em <b>${at.nome}</b></span></div></div>`;
 }
 
 function renderCaminho(body) {
@@ -238,10 +276,14 @@ function renderRaca(body) {
 }
 
 /* ---------- Passo 5: Cartas de Destino ---------- */
+const ORNAM = `<svg class="dc-ornam" viewBox="0 0 200 300" aria-hidden="true"><rect x="8" y="8" width="184" height="284" rx="10" fill="none" stroke="#d9b86a" stroke-width="1.4"/><rect x="16" y="16" width="168" height="268" rx="6" fill="none" stroke="#d9b86a" stroke-opacity=".45"/>
+  <g transform="translate(100 150)"><circle r="62" fill="none" stroke="#d9b86a" stroke-opacity=".5"/><g class="spin"><circle r="52" fill="none" stroke="#d9b86a" stroke-opacity=".6" stroke-dasharray="2 6"/></g>
+  <path d="M0-44l9 35 35 9-35 9-9 35-9-35-35-9 35-9z" fill="#d9b86a" fill-opacity=".14" stroke="#d9b86a" stroke-width="1.5" stroke-linejoin="round"/><circle r="6" fill="#d9b86a"/></g>
+  <g fill="#d9b86a"><path d="M100 28l5 6-5 6-5-6z"/><path d="M100 260l5 6-5 6-5-6z"/><path d="M28 150l6-5 6 5-6 5z"/><path d="M160 150l6-5 6 5-6 5z"/></g></svg>`;
 function carta(tipo, titulo) {
-  return `<div class="dcard" id="dc-${tipo}"><div class="dc-inner">
-    <div class="dc-face dc-back"><div class="dc-sym">✦</div><div class="dc-t">${titulo}</div><div class="dc-n" id="dn-${tipo}">?</div></div>
-    <div class="dc-face dc-front" id="df-${tipo}"></div></div></div>`;
+  return `<div class="dcard" id="dc-${tipo}"><div class="dc-tilt"><div class="dc-inner">
+    <div class="dc-face dc-back">${ORNAM}<div class="dc-t">${titulo}</div><div class="dc-n" id="dn-${tipo}">?</div></div>
+    <div class="dc-face dc-front" id="df-${tipo}"></div></div></div></div>`;
 }
 
 function renderDestino(body) {
@@ -252,11 +294,14 @@ function renderDestino(body) {
       <div>${carta('traco', 'd12 · Traço')}<button id="btn-traco" class="primary" data-ic="carta">Tirar traço</button></div>
       <div>${carta('art', 'd10 · Artefato')}<button id="btn-art" class="primary" data-ic="carta">Tirar artefato</button></div>
     </div>`;
+  document.querySelectorAll('.dcard').forEach(inclinavel);
   const mostrar = (tipo, idx, animar) => {
-    const c = $('#dc-' + tipo), f = $('#df-' + tipo);
-    if (tipo === 'traco') { const t = TRACOS[idx]; f.innerHTML = `<div class="dc-n">${idx + 1}</div><h4>${t.t}</h4><p>${t.d}</p>`; }
-    else { const a = ARTEFATOS[idx]; f.innerHTML = `<div class="dc-n">${idx + 1}</div><h4>${a.n}</h4><p><b class="ok">Dádiva:</b> ${a.dadiva}</p><p><b class="bad">Maldição:</b> ${a.maldicao}</p>`; }
-    if (!animar) c.style.transition = 'none'; else Som.carta();
+    const c = $('#dc-' + tipo), f = $('#df-' + tipo), emb = CAMINHOS[(tipo === 'traco' ? 0 : 12) + idx];
+    const topo = `<div class="df-top"><span>${tipo === 'traco' ? 'Traço · d12' : 'Artefato selado · d10'}</span><b>${idx + 1}</b></div><div class="df-art">${medalhao(emb, 96)}</div>`;
+    if (tipo === 'traco') { const t = TRACOS[idx]; f.innerHTML = `${topo}<h4>${t.t}</h4><div class="df-sep">◆</div><p class="df-txt">${t.d}</p><div class="df-shine"></div>`; }
+    else { const a = ARTEFATOS[idx]; f.innerHTML = `${topo}<h4>${a.n}</h4><div class="df-sep">◆</div><p class="df-dad"><b>Dádiva</b>${a.dadiva}</p><p class="df-mal"><b>Maldição</b>${a.maldicao}</p><div class="df-shine"></div>`; }
+    f.style.setProperty('--cc', emb.cor);
+    if (!animar) c.querySelector('.dc-inner').style.transition = 'none'; else Som.carta();
     c.classList.add('flip');
     $('#btn-' + (tipo === 'traco' ? 'traco' : 'art')).disabled = true;
   };
@@ -327,7 +372,7 @@ function renderFicha(body) {
     <div class="ficha-grid">
       <section class="blk"><h3>Atributos</h3>
         <div class="attr-wrap">${radarSVG(c.cor)}
-          <ul class="attr-lista">${ATTRS.map(a => `<li><span>${a.nome}</span><b>${total(a.key)}</b><em>mod ${mod(total(a.key)) >= 0 ? '+' : ''}${mod(total(a.key))}</em>${partes(a)}</li>`).join('')}</ul></div></section>
+          <ul class="attr-lista">${ATTRS.map(a => `<li style="--ac:${a.cor}"><span class="ai">${iconeAttr(a, 18)}</span><span>${a.nome}</span><b>${total(a.key)}</b><em>mod ${mod(total(a.key)) >= 0 ? '+' : ''}${mod(total(a.key))}</em>${partes(a)}</li>`).join('')}</ul></div></section>
       <section class="blk"><h3>Vitais</h3>
         ${medidor('pv', 'Pontos de Vida', P.pv, pvMax(), '#e05a6a')}
         ${medidor('san', 'Sanidade', P.san, sanMax(), '#6fb4ff')}
@@ -360,8 +405,8 @@ function renderFicha(body) {
         <div class="emblems">${medalhao(o, 56)}<div><b>${o.nome}</b><div class="hint">£ ${o.libras}</div></div></div><p class="note">${o.perk}</p>
         <h4 class="sub">Equipamento</h4><p class="note">${o.itens.map(esc).join(' · ')}</p></section>
       <section class="blk"><h3>Destino</h3>
-        <div class="tarot"><div class="tarot-n">${P.traco + 1}</div><small>Traço · d12</small><b>${TRACOS[P.traco].t}</b><p>${TRACOS[P.traco].d}</p></div>
-        <div class="tarot art"><div class="tarot-n">${P.artefato + 1}</div><small>Artefato selado · d10</small><b>${ARTEFATOS[P.artefato].n}</b>
+        <div class="tarot"><div class="tarot-n">${medalhao(CAMINHOS[P.traco], 44)}</div><small>Traço · d12</small><b>${TRACOS[P.traco].t}</b><p>${TRACOS[P.traco].d}</p></div>
+        <div class="tarot art"><div class="tarot-n">${medalhao(CAMINHOS[12 + P.artefato], 44)}</div><small>Artefato selado · d10</small><b>${ARTEFATOS[P.artefato].n}</b>
           <p><span class="ok">Dádiva:</span> ${ARTEFATOS[P.artefato].dadiva}</p><p><span class="bad">Maldição:</span> ${ARTEFATOS[P.artefato].maldicao}</p></div></section>
     </div>
     ${P.aparencia || P.historia ? `<section class="blk"><h3>Quem é</h3>${P.aparencia ? `<h4 class="sub">Aparência</h4><p class="note">${esc(P.aparencia)}</p>` : ''}${P.historia ? `<h4 class="sub">História</h4><p class="note">${esc(P.historia)}</p>` : ''}</section>` : ''}
