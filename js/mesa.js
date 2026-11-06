@@ -67,7 +67,7 @@ const Mesa = (() => {
     if (aba === 'livre') {
       c.innerHTML = `
         <div class="lbl">Dado</div>
-        <div class="tipos">${LADOS.map(l => `<button type="button" class="tipo ${k.lados === l ? 'on' : ''}" data-l="${l}" aria-label="d${l}"${l === 22 ? ' title="O dado da constelação"' : ''}>${dadoSVG(l, '', 34)}<span>d${l === 100 ? '%' : l}</span></button>`).join('')}</div>
+        <div class="tipos">${LADOS.map(l => `<button type="button" class="tipo ${k.lados === l ? 'on' : ''}" data-l="${l}" aria-label="${l === 100 ? 'd% (d100)' : 'd' + l}"${l === 22 ? ' title="O dado da constelação"' : ''}>${dadoSVG(l, '', 34)}<span>d${l === 100 ? '%' : l}</span></button>`).join('')}</div>
         <div class="steppers">
           <div class="step"><span>Quantidade</span><div><button type="button" class="mini" data-s="qtd" data-d="-1" aria-label="Menos dados">−</button><b id="v-qtd">${k.qtd}</b><button type="button" class="mini" data-s="qtd" data-d="1" aria-label="Mais dados">+</button></div></div>
           <div class="step"><span>Modificador</span><div><button type="button" class="mini" data-s="mod" data-d="-1" aria-label="Diminuir modificador">−</button><b id="v-mod">${sinal(k.mod)}</b><button type="button" class="mini" data-s="mod" data-d="1" aria-label="Aumentar modificador">+</button></div></div>

@@ -28,8 +28,8 @@ function seloHTML() {
     <svg class="selo-anel" viewBox="0 0 220 220" aria-hidden="true"><circle cx="110" cy="110" r="84" fill="none" class="s-c1"/></svg>
     <svg class="selo-anel s-r2" viewBox="0 0 220 220" aria-hidden="true"><circle cx="110" cy="110" r="78" fill="none" class="s-c2"/></svg>
     <svg class="selo-anel s-r3" viewBox="0 0 220 220" aria-hidden="true" fill="currentColor"><path d="M110 4l3 5-3 5-3-5z"/><path d="M110 206l3 5-3 5-3-5z"/><path d="M4 110l5-3 5 3-5 3z"/><path d="M206 110l5-3 5 3-5 3z"/></svg>
-    <button type="button" class="selo-zona" id="selo-btn" aria-label="${cheio ? 'Trocar retrato' : 'Escolher retrato da alma'}">
-      ${cheio ? retratoCirculo(140, 'selo-img') : `<span class="selo-vazio"><b>${esc(inicial())}</b><i>Arraste uma imagem<br>ou toque para escolher</i></span>`}
+    <button type="button" class="selo-zona" id="selo-btn" aria-label="${cheio ? 'Trocar retrato' : 'Arraste uma imagem ou toque para escolher o retrato da alma'}">
+      ${cheio ? retratoCirculo(140, 'selo-img') : `<span class="selo-vazio"><b aria-hidden="true" data-ini="${esc(inicial())}"></b><i>Arraste uma imagem<br>ou toque para escolher</i></span>`}
     </button>
     <div class="selo-onda" aria-hidden="true"></div>
     <input type="file" id="selo-file" accept="image/*" hidden>
