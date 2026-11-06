@@ -7,6 +7,8 @@ const STEPS = [
   { id: 'identidade', nome: 'Identidade', render: renderIdentidade, valido: () => P.nome.trim().length > 0 },
   { id: 'atributos',  nome: 'Atributos',  render: renderAtributos, valido: () => ATTRS.every(a => P.attrs[a.key]) },
   { id: 'caminho',    nome: 'Caminho',    render: renderCaminho,   valido: () => !!P.caminho },
+  { id: 'raca',       nome: 'Raça & Origem', render: renderRaca,   valido: () => !!(P.raca && P.origem) },
+  { id: 'destino',    nome: 'Destino',    render: renderDestino,   valido: () => P.traco != null && P.artefato != null },
   { id: 'ficha',      nome: 'Ficha',      render: renderFicha,     valido: () => true },
 ];
 
@@ -193,6 +195,85 @@ function renderCaminho(body) {
   });
 }
 
+/* ---------- Passo 4: Raça e Origem ---------- */
+const fmtBonus = b => Object.entries(b).map(([k, v]) => `${v > 0 ? '+' : ''}${v} ${ATTRS.find(a => a.key === k).nome}`).join(', ');
+
+function renderRaca(body) {
+  body.innerHTML = `
+    <h3>Raça & Origem</h3>
+    <div class="toolbar"><button id="btn-sortear" class="primary">🎲 Sortear raça e origem</button>
+      <span class="hint">ou escolha clicando nas cartas</span></div>
+    <h4 class="sub">Raça</h4><div class="cards" id="g-raca"></div>
+    <h4 class="sub">Origem social</h4><div class="cards" id="g-origem"></div>`;
+  const marcar = () => {
+    document.querySelectorAll('#g-raca .opt').forEach(e => e.classList.toggle('sel', e.dataset.id === P.raca));
+    document.querySelectorAll('#g-origem .opt').forEach(e => e.classList.toggle('sel', e.dataset.id === P.origem));
+    atualizarNext();
+  };
+  RACAS.forEach(r => {
+    const e = el('button', 'opt', `<span class="ic">${r.icone}</span><b>${r.nome}</b><small>${r.desc}</small>
+      <span class="bn">${fmtBonus(r.bonus)}</span><em>${r.traco}</em>`);
+    e.dataset.id = r.id;
+    e.addEventListener('click', () => { P.raca = r.id; salvar(); marcar(); });
+    $('#g-raca').appendChild(e);
+  });
+  ORIGENS.forEach(o => {
+    const e = el('button', 'opt', `<span class="ic">${o.icone}</span><b>${o.nome}</b>
+      <small>${o.itens.join(' · ')}</small><span class="bn">£ ${o.libras}</span><em>${o.perk}</em>`);
+    e.dataset.id = o.id;
+    e.addEventListener('click', () => { P.origem = o.id; salvar(); marcar(); });
+    $('#g-origem').appendChild(e);
+  });
+  $('#btn-sortear').addEventListener('click', () => {
+    P.raca = RACAS[d(RACAS.length) - 1].id;
+    P.origem = ORIGENS[d(ORIGENS.length) - 1].id;
+    salvar(); marcar();
+    document.querySelectorAll('.opt.sel').forEach(e => { e.classList.add('flash'); e.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); });
+  });
+  marcar();
+}
+
+/* ---------- Passo 5: Cartas de Destino ---------- */
+function carta(tipo, titulo) {
+  return `<div class="dcard" id="dc-${tipo}"><div class="dc-inner">
+    <div class="dc-face dc-back"><div class="dc-sym">✦</div><div class="dc-t">${titulo}</div><div class="dc-n" id="dn-${tipo}">?</div></div>
+    <div class="dc-face dc-front" id="df-${tipo}"></div></div></div>`;
+}
+
+function renderDestino(body) {
+  body.innerHTML = `
+    <h3>Cartas de Destino</h3>
+    <p class="hint">Cada carta é tirada uma única vez. O traço é um dom (ou fardo); o artefato selado traz dádiva e maldição.</p>
+    <div class="dcards">
+      <div>${carta('traco', 'd12 · Traço')}<button id="btn-traco" class="primary">Tirar traço</button></div>
+      <div>${carta('art', 'd10 · Artefato')}<button id="btn-art" class="primary">Tirar artefato</button></div>
+    </div>`;
+  const mostrar = (tipo, idx, animar) => {
+    const c = $('#dc-' + tipo), f = $('#df-' + tipo);
+    if (tipo === 'traco') { const t = TRACOS[idx]; f.innerHTML = `<div class="dc-n">${idx + 1}</div><h4>${t.t}</h4><p>${t.d}</p>`; }
+    else { const a = ARTEFATOS[idx]; f.innerHTML = `<div class="dc-n">${idx + 1}</div><h4>${a.n}</h4><p><b class="ok">Dádiva:</b> ${a.dadiva}</p><p><b class="bad">Maldição:</b> ${a.maldicao}</p>`; }
+    if (!animar) c.style.transition = 'none';
+    c.classList.add('flip');
+    $('#btn-' + (tipo === 'traco' ? 'traco' : 'art')).disabled = true;
+  };
+  const tirar = (tipo, lista, chave) => {
+    const btn = $('#btn-' + (tipo === 'traco' ? 'traco' : 'art'));
+    btn.disabled = true;
+    const n = $('#dn-' + tipo);
+    let i = 0;
+    const iv = setInterval(() => { n.textContent = d(lista.length); if (++i > 18) { clearInterval(iv); fim(); } }, 70);
+    const fim = () => {
+      P[chave] = d(lista.length) - 1; salvar();
+      n.textContent = P[chave] + 1;
+      setTimeout(() => { mostrar(tipo, P[chave], true); atualizarNext(); }, 350);
+    };
+  };
+  $('#btn-traco').addEventListener('click', () => tirar('traco', TRACOS, 'traco'));
+  $('#btn-art').addEventListener('click', () => tirar('art', ARTEFATOS, 'artefato'));
+  if (P.traco != null) mostrar('traco', P.traco, false);
+  if (P.artefato != null) mostrar('art', P.artefato, false);
+}
+
 /* ---------- Ficha ---------- */
 function ensureVitais() {
   if (P.pv == null) P.pv = pvMax();
@@ -213,6 +294,9 @@ function renderFicha(body) {
         <div class="hint">${[P.jogador && 'Jogador: ' + esc(P.jogador), P.idade && esc(P.idade) + ' anos', esc(P.genero)].filter(Boolean).join(' · ')}</div>
       </div>
     </div>
+    ${(() => { const r = racaPorId(P.raca), o = origemPorId(P.origem); return `
+      <p class="hint">${r.icone} <b>${r.nome}</b> (${fmtBonus(r.bonus)}) · ${o.icone} <b>${o.nome}</b></p>
+      <p class="note">${r.traco}<br>${o.perk}</p>`; })()}
     <h3>Atributos</h3>
     <div class="stat-grid">${attrs}</div>
     <h3>Vitais</h3>
@@ -220,6 +304,14 @@ function renderFicha(body) {
       ${contador('pv', 'Pontos de Vida', P.pv, pvMax())}
       ${contador('san', 'Sanidade', P.san, sanMax())}
       <div class="stat"><div class="m">Espiritualidade</div><div class="v">${espMax()}</div><div class="m">máx.</div></div>
+    </div>
+    <h3>Equipamento</h3>
+    <p class="note">${origemPorId(P.origem).itens.map(esc).join(' · ')} — £ ${origemPorId(P.origem).libras}</p>
+    <h3>Destino</h3>
+    <div class="grid2">
+      <div class="stat" style="text-align:left"><div class="m">Traço (d12 → ${P.traco + 1})</div><b>${TRACOS[P.traco].t}</b><p class="note">${TRACOS[P.traco].d}</p></div>
+      <div class="stat" style="text-align:left"><div class="m">Artefato selado (d10 → ${P.artefato + 1})</div><b>${ARTEFATOS[P.artefato].n}</b>
+        <p class="note"><b class="ok">Dádiva:</b> ${ARTEFATOS[P.artefato].dadiva}<br><b class="bad">Maldição:</b> ${ARTEFATOS[P.artefato].maldicao}</p></div>
     </div>
     ${P.aparencia ? `<h3>Aparência</h3><p class="note">${esc(P.aparencia)}</p>` : ''}
     ${P.historia ? `<h3>História</h3><p class="note">${esc(P.historia)}</p>` : ''}
