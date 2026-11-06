@@ -116,6 +116,11 @@ const Som = (() => {
     [2, 3, 4, 5, 6].slice(0, 2 + k).forEach((m, i) => sino(base * m, t + 2 + i * 0.2, 0.09, 3));
     if (sombrio) { osc('sawtooth', base * 0.5 * 1.414, t + 1.9, 3, 0.1, { lp: 500 }); for (let i = 0; i < 3; i++) ruido(t + 2 + i * .6, .5, .06, { type: 'bandpass', f: 2400, q: 9, slide: 1500 }); }
     pm = 1; };
+  const selar = () => { if (!ok()) return; pm = terror ? 0.78 : 1; const t = T0();
+    osc('sine', 110, t, 1.2, 0.18, { slide: 330, attack: 0.5 });
+    ruido(t, 0.9, 0.08, { type: 'bandpass', f: 600, slide: 4200, q: 3, attack: 0.5 });
+    [392, 494, 587, 784].forEach((f, i) => sino(f, t + 0.55 + i * 0.09, 0.1, 2.4));
+    bumbo(t + 0.5, 0.35, 90); acorde([196, 294, 392], t + 0.55, 2.2, 0.28, terror ? 'sawtooth' : 'triangle', terror ? { lp: 800 } : {}); pm = 1; };
   const confirmar = () => { if (!ok()) return; const t = T0(); [523, 784].forEach((f, i) => sino(f, t + i * 0.12, 0.1, 1.5)); };
 
   // ambiente do modo Terror: zumbido grave + batimento cardíaco
@@ -142,7 +147,7 @@ const Som = (() => {
     if (v && !mudo && init()) { pm = 0.7; const t = T0(); camadaTerror(t); pm = 1; }
   }
   return {
-    init, caminho, click, tick, dado, carta, confirmar, digerir, ascender, setMudo, setTerror, ambienteTerror,
+    init, caminho, click, tick, dado, carta, confirmar, digerir, ascender, selar, setMudo, setTerror, ambienteTerror,
     get mudo() { return mudo; }, get terror() { return terror; },
     ids: Object.keys(TEMAS),
   };
