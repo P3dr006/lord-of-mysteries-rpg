@@ -434,18 +434,40 @@ function renderFicha(body) {
   $('#btn-export').addEventListener('click', exportarJSON);
 }
 
+/* ---------- Janelas do próprio site (sem alert/confirm, que o navegador embutido bloqueia) ---------- */
+function janela(titulo, corpo, botoes) {
+  return new Promise(res => {
+    const m = document.createElement('div'); m.className = 'asc risco on';
+    m.innerHTML = `<div class="asc-core"><h2 class="asc-nome">${titulo}</h2><div class="modal-corpo">${corpo}</div><div class="cover-btns"></div></div>`;
+    const caixa = m.querySelector('.cover-btns');
+    botoes.forEach(b => { const e = el('button', b.cls || 'ghost', b.label); if (b.ic) e.dataset.ic = b.ic; e.addEventListener('click', () => { const r = b.fn ? b.fn(m, e) : undefined; if (r !== false) { m.remove(); res(b.valor); } }); caixa.appendChild(e); });
+    document.body.appendChild(m);
+  });
+}
+const perguntar = (titulo, texto) => janela(titulo, `<p class="modal-txt">${texto}</p>`, [{ label: 'Confirmar', cls: 'primary', valor: true }, { label: 'Cancelar', valor: false }]);
+const avisar = (titulo, texto) => janela(titulo, `<p class="modal-txt">${texto}</p>`, [{ label: 'Entendi', cls: 'primary', valor: true }]);
+// Exportar: mostra o JSON para copiar (downloads feitos pela página podem ser bloqueados) e tenta baixar também
+function exportarJSON() {
+  const json = JSON.stringify(P, null, 2);
+  try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' })); a.download = (P.nome || 'personagem').replace(/\W+/g, '_') + '.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); } catch (e) {}
+  janela('Sua ficha em JSON', `<p class="modal-txt">Copie e guarde este texto. Para recuperar a ficha depois, salve-o num arquivo .json e use “Importar JSON”.</p><textarea id="json-out" class="json-out" readonly></textarea>`,
+    [{ label: 'Copiar', cls: 'primary', ic: 'baixar', fn: (m, b) => { const t = m.querySelector('#json-out'); t.select(); (navigator.clipboard ? navigator.clipboard.writeText(json) : Promise.reject()).then(() => { b.lastChild.textContent = 'Copiado!'; }).catch(() => { document.execCommand && document.execCommand('copy'); }); return false; } },
+     { label: 'Fechar', valor: true }]).then(() => {});
+  setTimeout(() => { const t = $('#json-out'); if (t) t.value = json; }, 0);
+}
+
 /* ---------- Navegação e inicialização ---------- */
 $('#btn-next').addEventListener('click', () => { if (P.step < STEPS.length - 1) { P.step++; salvar(); iniciarPasso(); } });
 $('#btn-prev').addEventListener('click', () => { if (P.step > 0) { P.step--; salvar(); iniciarPasso(); } });
 $('#btn-start').addEventListener('click', () => { P = novoPersonagem(); salvar(); iniciarPasso(); });
 $('#btn-continue').addEventListener('click', () => { P = carregar(); iniciarPasso(); });
 $('#btn-new').addEventListener('click', () => {
-  if (confirm('Criar um novo personagem? O atual salvo será substituído.')) { P = novoPersonagem(); salvar(); iniciarPasso(); }
+  perguntar('Novo personagem', 'Criar um novo personagem? O personagem salvo neste navegador será substituído.').then(ok => { if (ok) { P = novoPersonagem(); salvar(); iniciarPasso(); } });
 });
 $('#btn-import').addEventListener('click', () => $('#file-import').click());
 $('#file-import').addEventListener('change', e => {
   const f = e.target.files[0];
-  if (f) importarJSON(f, ok => ok ? iniciarPasso() : alert('Arquivo JSON inválido.'));
+  if (f) importarJSON(f, ok => ok ? iniciarPasso() : avisar('Arquivo inválido', 'Não consegui ler esse arquivo. Use um JSON exportado por esta ficha.'));
   e.target.value = '';
 });
 

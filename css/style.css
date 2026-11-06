@@ -553,3 +553,8 @@ body.terror .stepper::after{background:linear-gradient(90deg,#a01020,#e8c9a0)}
   .topnav button.icon{padding:9px 11px}
   .topnav button .bi{width:14px;height:14px}
 }
+
+/* janelas do site */
+.modal-corpo{margin:10px 0 6px}.modal-txt{color:var(--text);margin:0 0 12px;line-height:1.5}
+.json-out{width:100%;min-height:200px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--gold2);resize:vertical}
+.asc.risco .asc-core{max-width:560px;width:100%}
