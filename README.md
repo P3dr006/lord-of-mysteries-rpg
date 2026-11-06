@@ -16,6 +16,7 @@ npm install
 npx playwright install chromium
 npm test            # robustez + ficha
 npm run test:ficha  # só a ficha útil (vários personagens, PV/Sanidade, habilidades)
+npm run test:a11y   # acessibilidade (axe-core, teclado, "reduzir movimento", rótulos, contraste)
 ```
 
 Cada teste reproduz um defeito já encontrado; se algum voltar, o teste falha.

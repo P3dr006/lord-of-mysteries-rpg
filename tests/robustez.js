@@ -96,6 +96,16 @@ async function pagina(browser, save, opts = {}) {
     for (let i = 0; i < 8; i++) { await p.keyboard.press('Tab'); if (!await p.evaluate(() => !!document.activeElement.closest('.asc.risco'))) { escapou = true; break; } }
     resultado('Tab não sai da janela', !escapou); await p.ctx.close(); }
 
+  console.log('\n6) Efeitos de tela: progresso fora de 0–1 não pode quebrar o canvas');
+  { const p = await pagina(browser, OK); await p.waitForTimeout(200);
+    const r = await p.evaluate(() => { const ruins = []; const cv = document.createElement('canvas'); cv.width = 800; cv.height = 600; const c = cv.getContext('2d');
+      Efeitos.ids.forEach(id => [false, true].forEach(T => { const fx = FX[id](800, 600, T); [0, 0.0001, 1].forEach(k => { try { c.save(); fx.draw(c, Math.max(0, Math.min(1, k))); c.restore(); } catch (e) { ruins.push(id + (T ? ' T' : '') + ': ' + e.message.slice(0, 50)); } }); }));
+      return ruins; });
+    resultado('efeitos nos extremos', r.length === 0, r.slice(0, 2).join(' | '));
+    // o motor, quando o relógio do quadro vem antes do início
+    const e = await p.evaluate(async () => { const orig = window.requestAnimationFrame; let falhas = []; window.addEventListener('error', ev => falhas.push(ev.message + ' @' + String(ev.filename).split('/').pop() + ':' + ev.lineno)); window.requestAnimationFrame = f => orig(t => f(t - 50)); try { await Promise.race([Efeitos.tocar('visionario', false), new Promise(r => setTimeout(r, 600))]); } catch (x) { falhas.push(x.message); } window.requestAnimationFrame = orig; return falhas; });
+    resultado('motor com relógio adiantado', e.length === 0 && p.erros.length === 0, (e[0] || p.erros[0] || '')); await p.ctx.close(); }
+
   await browser.close();
   console.log(`\n${total - falhas} de ${total} testes passaram${falhas ? ` — ${falhas} FALHARAM` : ''}`);
   process.exit(falhas ? 1 : 0);

@@ -6,7 +6,10 @@ const nomeAleatorio = () => NOMES[d(NOMES.length) - 1] + ' ' + SOBRENOMES[d(SOBR
 const numeroRegistro = nome => { let h = 7; for (const ch of nome) h = (h * 31 + ch.charCodeAt(0)) % 9973; return String(h).padStart(4, '0'); };
 
 // número que sobe até o valor final
+// o jogador pediu menos movimento no sistema (também vale para animações feitas em JavaScript)
+const reduzido = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 function contar(elm, ate, dur = 700) {
+  if (reduzido()) { elm.textContent = ate; return; }
   const t0 = performance.now();
   const passo = n => { const p = Math.min(1, (n - t0) / dur); elm.textContent = Math.round(3 + (ate - 3) * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(passo); };
   requestAnimationFrame(passo);
@@ -30,6 +33,8 @@ const PRESAGIOS = [[0, 'Um destino difícil — mas é na adversidade que Beyond
 function prenderFoco(m, fechar) {
   const anterior = document.activeElement;
   m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+  const tit = m.querySelector('.asc-nome, .crop-t, h2, h3');                 // o título da janela é o nome dela para leitores de tela
+  if (tit) { if (!tit.id) tit.id = 'dlg-' + Math.random().toString(36).slice(2, 7); m.setAttribute('aria-labelledby', tit.id); }
   const focaveis = () => [...m.querySelectorAll('button:not([disabled]),input:not([hidden]):not([disabled]),textarea:not([disabled]),[href],[tabindex]:not([tabindex="-1"])')].filter(e => e.offsetParent !== null || e === document.activeElement);
   m.addEventListener('keydown', e => {
     if (e.key === 'Escape' && fechar) { e.preventDefault(); e.stopPropagation(); fechar(); return; }
@@ -50,3 +55,9 @@ const agendar = (fn, ms) => { const id = setTimeout(fn, ms); _tempo.ids.push(id)
 const repetir = (fn, ms) => { const id = setInterval(fn, ms); _tempo.ids.push(id); return id; };
 function cancelarTemporizadores() { _tempo.ids.forEach(id => { clearTimeout(id); clearInterval(id); }); _tempo.ids = []; }
 let _tela = 0;                         // muda a cada troca de tela; callbacks assíncronos comparam para saber se ainda valem
+
+// Anuncia um texto para leitores de tela sem mostrá-lo (região viva global)
+function anunciar(txt) {
+  let r = document.querySelector('#anuncio'); if (!r) return;
+  r.textContent = ''; setTimeout(() => { r.textContent = txt; }, 30);
+}

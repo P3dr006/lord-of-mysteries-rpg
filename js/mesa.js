@@ -37,12 +37,12 @@ const Mesa = (() => {
     const m = document.createElement('section');
     m.id = 'mesa'; m.className = 'mesa'; m.hidden = true; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Mesa do Destino');
     m.innerHTML = `
-      <header class="mesa-h"><div class="mesa-tt"><small>Mesa do</small><b>Destino</b></div>
+      <div class="mesa-h"><div class="mesa-tt"><small>Mesa do</small><b>Destino</b></div>
         <div class="modo" role="group" aria-label="Modo da rolagem">${[['normal', 'Normal'], ['vantagem', 'Vantagem'], ['desvantagem', 'Desvantagem']].map(([k, n]) => `<button type="button" class="seg" data-modo="${k}">${n}</button>`).join('')}</div>
-        <button type="button" class="icon mesa-x" id="mesa-x" aria-label="Fechar a mesa"><svg class="bi" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+        <button type="button" class="icon mesa-x" id="mesa-x" aria-label="Fechar a mesa"><svg class="bi" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       <div class="feltro" id="feltro"><svg class="f-anel" viewBox="0 0 200 200" aria-hidden="true"><defs><path id="fr" d="M100 100m-86 0a86 86 0 1 1 172 0a86 86 0 1 1-172 0"/></defs><g class="f-g"><text><textPath href="#fr" textLength="530" lengthAdjust="spacing">${RUNAS}</textPath></text></g><circle cx="100" cy="100" r="70" fill="none" stroke="#d9b86a" stroke-opacity=".25"/></svg>
         <div class="dados-mesa" id="dados-mesa"><p class="vazio-mesa">Escolha os dados e role.</p></div>
-        <div class="resultado" id="resultado" hidden></div></div>
+        <div class="resultado" id="resultado" role="status" aria-live="polite" hidden></div></div>
       <nav class="abas" role="tablist"><button type="button" role="tab" class="aba on" data-aba="livre">Dados</button><button type="button" role="tab" class="aba" data-aba="testes">Testes</button><button type="button" role="tab" class="aba" data-aba="registro">Registro</button></nav>
       <div class="mesa-corpo" id="mesa-corpo"></div>`;
     document.body.appendChild(m);
@@ -126,6 +126,7 @@ const Mesa = (() => {
     if (crit) { $('#feltro').classList.add('crit'); Som.critico(); } else if (fumble) { $('#feltro').classList.add('fumble'); Som.falha(); const m = $('#mesa'); m.classList.add('treme'); setTimeout(() => m.classList.remove('treme'), 600); } else Som.resultado();
     // registro e badge
     P.historico = [{ hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), rotulo, detalhe: `${det}${o.mod ? ' ' + sinal(o.mod) : ''}`, total, res: tipo }, ...(P.historico || [])].slice(0, 30); salvar();
+    anunciar(`${rotulo}: ${total}${txtRes ? ', ' + txtRes : ''}`);
     ultimo = total; const n = $('#fab-n'); n.hidden = false; n.textContent = total; n.className = 'fab-n ' + (tipo || '');
     rolando = false; return { total, res: tipo };
   }
