@@ -121,6 +121,9 @@ const Som = (() => {
     ruido(t, 0.9, 0.08, { type: 'bandpass', f: 600, slide: 4200, q: 3, attack: 0.5 });
     [392, 494, 587, 784].forEach((f, i) => sino(f, t + 0.55 + i * 0.09, 0.1, 2.4));
     bumbo(t + 0.5, 0.35, 90); acorde([196, 294, 392], t + 0.55, 2.2, 0.28, terror ? 'sawtooth' : 'triangle', terror ? { lp: 800 } : {}); pm = 1; };
+  const resultado = () => { if (!ok()) return; pm = terror ? 0.8 : 1; const t = T0(); osc('triangle', 784, t, 0.18, 0.12); osc('triangle', 1047, t + 0.09, 0.3, 0.1); pm = 1; };
+  const critico = () => { if (!ok()) return; pm = terror ? 0.8 : 1; const t = T0(); [523, 659, 784, 1047, 1319].forEach((f, i) => sino(f, t + i * 0.08, 0.12, 2.2)); acorde([262, 330, 392], t, 1.6, 0.3); bumbo(t, 0.3, 100); pm = 1; };
+  const falha = () => { if (!ok()) return; pm = 1; const t = T0(); osc('sawtooth', 160, t, 0.9, 0.18, { slide: 45, lp: 700 }); osc('sawtooth', 169, t, 0.9, 0.12, { slide: 48, lp: 700 }); ruido(t, 0.5, 0.2, { f: 700, slide: 80 }); bumbo(t + 0.05, 0.5, 60); ruido(t + 0.3, 0.6, 0.05, { type: 'bandpass', f: 2200, q: 9, slide: 1300 }); };
   const confirmar = () => { if (!ok()) return; const t = T0(); [523, 784].forEach((f, i) => sino(f, t + i * 0.12, 0.1, 1.5)); };
 
   // ambiente do modo Terror: zumbido grave + batimento cardíaco
@@ -147,7 +150,7 @@ const Som = (() => {
     if (v && !mudo && init()) { pm = 0.7; const t = T0(); camadaTerror(t); pm = 1; }
   }
   return {
-    init, caminho, click, tick, dado, carta, confirmar, digerir, ascender, selar, setMudo, setTerror, ambienteTerror,
+    init, caminho, click, tick, dado, carta, confirmar, digerir, ascender, selar, resultado, critico, falha, setMudo, setTerror, ambienteTerror,
     get mudo() { return mudo; }, get terror() { return terror; },
     ids: Object.keys(TEMAS),
   };
