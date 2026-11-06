@@ -14,7 +14,7 @@ function montarConstelacao(host, onPick) {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 600 600');
-  svg.classList.add('constel-svg');
+  svg.classList.add('constel-svg'); svg.setAttribute('role', 'group'); svg.setAttribute('aria-label', 'Constelação dos 22 Caminhos. Use as setas para percorrer e Enter para escolher.');
   const pts = CAMINHOS.map((_, i) => posNo(i));
 
   let linhas = '';
@@ -39,7 +39,8 @@ function montarConstelacao(host, onPick) {
   constel.nodes = CAMINHOS.map((c, i) => {
     const p = pts[i];
     const g = document.createElementNS(NS, 'g');
-    g.setAttribute('class', 'node');
+    g.setAttribute('class', 'node'); g.setAttribute('role', 'button'); g.setAttribute('tabindex', i === 0 ? '0' : '-1');
+    g.setAttribute('aria-pressed', 'false'); g.setAttribute('aria-label', `${c.nome}, Sequência 9: ${c.seq9}`);
     g.setAttribute('transform', `translate(${p.x} ${p.y})`);
     g.innerHTML = `<g class="up"><circle r="30" class="hit"/><g class="esc"><circle r="22" class="halo"/><circle r="20" class="disc"/>
       <image href="img/sigilos/${c.id}.webp" x="-17" y="-17" width="34" height="34"/></g></g>`;
@@ -51,6 +52,12 @@ function montarConstelacao(host, onPick) {
       e.target.replaceWith(s);
     });
     g.addEventListener('click', () => { if (!constel.spinning) onPick(c.id, i, true); });
+    g.addEventListener('keydown', e => {                                    // teclado: Enter/Espaço escolhem; setas percorrem
+      const n = CAMINHOS.length, ir = j => { e.preventDefault(); const alvo = constel.nodes[(j + n) % n]; constel.nodes.forEach(x => x.g.setAttribute('tabindex', '-1')); alvo.g.setAttribute('tabindex', '0'); alvo.g.focus(); };
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!constel.spinning) onPick(c.id, i, true); }
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') ir(i + 1); else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') ir(i - 1);
+      else if (e.key === 'Home') ir(0); else if (e.key === 'End') ir(n - 1);
+    });
     const t = document.createElementNS(NS, 'title'); t.textContent = c.nome; g.appendChild(t);
     nodesG.appendChild(g);
     return { g, up: g.querySelector('.up'), a: p.a };
@@ -67,7 +74,8 @@ function aplicarRot(deg) {
 }
 
 function marcarNo(idx) {
-  constel.nodes.forEach((n, i) => n.g.classList.toggle('sel', i === idx));
+  constel.nodes.forEach((n, i) => { n.g.classList.toggle('sel', i === idx); n.g.setAttribute('aria-pressed', String(i === idx)); });
+  if (idx >= 0) constel.nodes.forEach((n, i) => n.g.setAttribute('tabindex', i === idx ? '0' : '-1'));
 }
 
 // Gira até parar com o nó sorteado sob o ponteiro (topo)
@@ -78,6 +86,9 @@ function girarD22(onStop) {
   const alvo = Math.floor(Math.random() * CAMINHOS.length);
   const a = constel.nodes[alvo].a;
   const r0 = constel.rot;
+  if (reduzido()) {                                  // sem giro: o dado já mostra o resultado
+    aplicarRot(-a); constel.spinning = false; constel.svg.querySelector('#hub-num').textContent = alvo + 1; marcarNo(alvo); onStop(CAMINHOS[alvo].id, alvo); return;
+  }
   const delta = (((-a - r0) % 360) + 360) % 360;
   const total = 360 * 6 + delta;
   const dur = 6200, t0 = performance.now();
@@ -106,6 +117,7 @@ function pararD22() { cancelAnimationFrame(constel.raf); constel.spinning = fals
 // Leva um nó escolhido manualmente até o ponteiro
 function centralizarNo(idx) {
   const a = constel.nodes[idx].a;
+  if (reduzido()) { aplicarRot(-a); marcarNo(idx); constel.svg.querySelector('#hub-num').textContent = idx + 1; return; }
   const r0 = constel.rot;
   const delta = (((-a - r0 + 180) % 360) + 360) % 360 - 180;
   const t0 = performance.now(), dur = 700;

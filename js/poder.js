@@ -52,7 +52,7 @@ function ladderHTML() {
   let h = '';
   for (let s = 9; s >= 0; s--) {
     const pt = patamarDe(s), cl = s === P.sequencia ? 'atual' : s > P.sequencia ? 'passado' : 'futuro';
-    h += `<div class="deg ${cl}" style="--tc:${pt.cor}" title="${pt.nome}"><span class="n">${s}</span><span class="t">${s > P.sequencia ? '✓' : pt.nome.replace(' Sequência', '')}</span></div>`;
+    h += `<div class="deg ${cl}" style="--tc:${pt.cor}" title="${pt.nome}" role="listitem" aria-label="Sequência ${s}, ${pt.nome}${s === P.sequencia ? ', atual' : s > P.sequencia ? ', já alcançada' : ''}" ${s === P.sequencia ? 'aria-current="step"' : ''}><span class="n">${s}</span><span class="t">${s > P.sequencia ? '✓' : pt.nome.replace(' Sequência', '')}</span></div>`;
   }
   return h;
 }
@@ -93,7 +93,7 @@ function mostrarAscensao(o) {
   const btnOk = el0.querySelector('#asc-ok'); btnOk.disabled = true;     // o botão só vale quando aparece na animação (evita Enter repetido pular a cerimônia)
   const devolver = prenderFoco(el0, null);
   el0.tabIndex = -1; el0.focus();
-  setTimeout(() => { btnOk.disabled = false; btnOk.focus(); }, 4300);
+  if (reduzido()) { btnOk.disabled = false; btnOk.focus(); } else setTimeout(() => { btnOk.disabled = false; btnOk.focus(); }, 4300);
   requestAnimationFrame(() => el0.classList.add('on'));
   Som.ascender(k, terror); Efeitos.tocar(c.id, terror);
   const fechar = () => { el0.classList.remove('on'); setTimeout(() => { el0.remove(); devolver(); renderFicha($('#step-body')); window.scrollTo({ top: 0, behavior: 'smooth' }); }, 500); };

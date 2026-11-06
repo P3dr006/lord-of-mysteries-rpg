@@ -338,7 +338,7 @@ const Efeitos = (() => {
     const c = tela(), w = cv.width = innerWidth, h = cv.height = innerHeight, ctx = c.getContext('2d'), fx = fab(w, h, terror), t0 = performance.now();
     return new Promise(res => {
       const passo = now => {
-        const p = Math.min(1, (now - t0) / fx.dur);
+        const p = Math.max(0, Math.min(1, (now - t0) / fx.dur));   // o carimbo do quadro pode vir um pouco antes de t0: sem isso p fica negativo e o canvas recusa raios negativos
         ctx.clearRect(0, 0, w, h); ctx.save(); ctx.globalAlpha = 1; fx.draw(ctx, p); ctx.restore(); ctx.save(); selo(ctx, id, w, h, p, terror); ctx.restore();
         if (fx.page) aplicarPagina(fx.page(p));
         if (p < 1) raf = requestAnimationFrame(passo); else { ctx.clearRect(0, 0, w, h); aplicarPagina(null); res(); }

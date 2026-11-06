@@ -36,40 +36,46 @@ function iniciarPasso() {
   $('#btn-prev').disabled = P.step === 0;
   $('#btn-next').hidden = P.step === STEPS.length - 1;
   $('#btn-next').disabled = !s.valido();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top: 0, behavior: reduzido() ? 'auto' : 'smooth' });
+  // leitores de tela e teclado começam no título da nova etapa
+  const alvoFoco = body.querySelector('h2'); if (alvoFoco) { alvoFoco.tabIndex = -1; alvoFoco.focus({ preventScroll: true }); }
+  anunciar(`Etapa ${P.step + 1} de ${STEPS.length}: ${s.nome}`);
 }
 function atualizarNext() { const b = $('#btn-next'); if (b && STEPS[P.step]) b.disabled = !STEPS[P.step].valido(); }
 
 function renderStepper() {
   const ol = $('#stepper');
   ol.style.setProperty('--n', STEPS.length); ol.style.setProperty('--prog', P.step / (STEPS.length - 1));
-  ol.innerHTML = STEPS.map((s, i) => `<li class="${i === P.step ? 'on' : i < P.step ? 'done' : ''}" data-i="${i}">
-    <span class="no"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${i < P.step ? '<path d="M5 12l5 5 9-10"/>' : PASSO_ICONE[s.id]}</svg></span>
-    <span class="lbl">${s.nome}</span></li>`).join('');
-  ol.querySelectorAll('li.done').forEach(li => li.addEventListener('click', () => { P.step = +li.dataset.i; salvar(); iniciarPasso(); }));
+  ol.setAttribute('aria-label', 'Etapas da criação');
+  const ic = (s, i) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${i < P.step ? '<path d="M5 12l5 5 9-10"/>' : PASSO_ICONE[s.id]}</svg>`;
+  ol.innerHTML = STEPS.map((s, i) => {
+    const estado = i === P.step ? 'on' : i < P.step ? 'done' : '', miolo = `<span class="no">${ic(s, i)}</span><span class="lbl">${s.nome}</span>`;
+    return `<li class="${estado}" data-i="${i}" ${i === P.step ? 'aria-current="step"' : ''}>${i < P.step ? `<button type="button" class="step-b" aria-label="Voltar para a etapa ${i + 1}: ${s.nome} (concluída)">${miolo}</button>` : miolo}</li>`;
+  }).join('');
+  ol.querySelectorAll('li.done .step-b').forEach(b => b.addEventListener('click', () => { P.step = +b.closest('li').dataset.i; salvar(); iniciarPasso(); }));
 }
 
 /* ---------- Passo 1: Identidade ---------- */
 function renderIdentidade(body) {
   body.innerHTML = `
-    <h3>Quem é o seu Beyonder?</h3>
+    <h2>Quem é o seu Beyonder?</h2>
     <div class="id-wrap">
       <div class="id-form">
         <div class="id-top">
           <div class="selo-col" id="selo-col"></div>
           <div class="id-top-campos">
-            <div class="field"><label>Nome do personagem *</label>
+            <div class="field"><label for="f-nome">Nome do personagem *</label>
               <div class="inp-row"><input type="text" id="f-nome" value="${esc(P.nome)}" placeholder="Ex.: Alistair Ashcombe" autocomplete="off">
               <button id="btn-nome" class="icon" title="Sortear um nome" aria-label="Sortear um nome" data-ic="dado"></button></div></div>
             <div class="grid2">
-              <div class="field"><label>Jogador</label><input type="text" id="f-jogador" value="${esc(P.jogador)}"></div>
-              <div class="field"><label>Idade</label><input type="text" id="f-idade" value="${esc(P.idade)}"></div>
+              <div class="field"><label for="f-jogador">Jogador</label><input type="text" id="f-jogador" value="${esc(P.jogador)}"></div>
+              <div class="field"><label for="f-idade">Idade</label><input type="text" id="f-idade" value="${esc(P.idade)}"></div>
             </div>
-            <div class="field"><label>Gênero</label><input type="text" id="f-genero" value="${esc(P.genero)}"></div>
+            <div class="field"><label for="f-genero">Gênero</label><input type="text" id="f-genero" value="${esc(P.genero)}"></div>
           </div>
         </div>
-        <div class="field"><label>Aparência</label><textarea id="f-aparencia" placeholder="Olhar, cicatrizes, o que as pessoas notam primeiro…">${esc(P.aparencia)}</textarea></div>
-        <div class="field"><label>História</label><textarea id="f-historia" placeholder="De onde veio, o que perdeu e o que o levou a beber a poção…">${esc(P.historia)}</textarea></div>
+        <div class="field"><label for="f-aparencia">Aparência</label><textarea id="f-aparencia" placeholder="Olhar, cicatrizes, o que as pessoas notam primeiro…">${esc(P.aparencia)}</textarea></div>
+        <div class="field"><label for="f-historia">História</label><textarea id="f-historia" placeholder="De onde veio, o que perdeu e o que o levou a beber a poção…">${esc(P.historia)}</textarea></div>
       </div>
       <aside class="id-card" aria-label="Pré-visualização do registro">
         <div class="id-sel">Registro do Beyonder</div>
@@ -110,7 +116,7 @@ let rolando = false;
 
 function renderAtributos(body) {
   body.innerHTML = `
-    <h3>Atributos — os dados do destino</h3>
+    <h2>Atributos — os dados do destino</h2>
     <p class="hint">Cada atributo é 4d6 descartando o dado mais baixo (que fica apagado). Você pode usar uma única
     <b>Relance do Destino</b> para refazer um atributo.</p>
     <div class="toolbar">
@@ -221,20 +227,20 @@ async function relancer(key) {
 /* ---------- Passo 3: Caminho ---------- */
 function infoCaminho(id) {
   const c = caminhoPorId(id), at = ATTRS.find(a => a.key === c.attr);
-  return `<div class="cardcam" style="--pc:${c.cor}"><div class="cc-head">${sigilo(c, 84)}<div><h4>${c.nome}</h4><span class="badge">Sequência 9 · ${c.seq9}</span></div></div>
-    <p>${c.desc}</p><h5>Habilidades iniciais</h5><ul class="cc-hab">${c.hab.map(h => `<li>${h}</li>`).join('')}</ul>
+  return `<div class="cardcam" style="--pc:${c.cor}"><div class="cc-head">${sigilo(c, 84)}<div><h3>${c.nome}</h3><span class="badge">Sequência 9 · ${c.seq9}</span></div></div>
+    <p>${c.desc}</p><h4>Habilidades iniciais</h4><ul class="cc-hab">${c.hab.map(h => `<li>${h}</li>`).join('')}</ul>
     <div class="cc-bonus">${iconeAttr(at, 18)} <span>+2 em <b>${at.nome}</b></span></div></div>`;
 }
 
 function renderCaminho(body) {
   body.innerHTML = `
-    <h3>Seu Caminho — a constelação decide</h3>
+    <h2>Seu Caminho — a constelação decide</h2>
     <p class="hint">Gire o d22 para o destino escolher, ou clique em um sigilo para escolher você mesmo.</p>
     <div class="caminho-wrap">
       <div id="constel"></div>
       <div>
         <div class="toolbar"><button id="btn-d22" class="primary" data-ic="dado">Girar o d22</button></div>
-        <div class="caminho-info" id="caminho-info"><p class="vazio">Nenhum Caminho escolhido.</p></div>
+        <div class="caminho-info" id="caminho-info" aria-live="polite"><p class="vazio">Nenhum Caminho escolhido.</p></div>
       </div>
     </div>`;
   const mostrarInfo = id => { $('#caminho-info').innerHTML = infoCaminho(id); };
@@ -263,18 +269,18 @@ const fmtBonus = b => Object.entries(b).map(([k, v]) => `${v > 0 ? '+' : ''}${v}
 
 function renderRaca(body) {
   body.innerHTML = `
-    <h3>Raça & Origem</h3>
+    <h2>Raça & Origem</h2>
     <div class="toolbar"><button id="btn-sortear" class="primary" data-ic="dado">Sortear raça e origem</button>
       <span class="hint">ou escolha clicando nas cartas</span></div>
     <div id="g-raca-wrap"></div>
-    <h4 class="sub">Origem social</h4><div class="cards" id="g-origem"></div>`;
+    <h3 class="sub">Origem social</h3><div class="cards" id="g-origem"></div>`;
   const marcar = () => {
     document.querySelectorAll('#g-raca-wrap .opt').forEach(e => e.classList.toggle('sel', e.dataset.id === P.raca));
     document.querySelectorAll('#g-origem .opt').forEach(e => e.classList.toggle('sel', e.dataset.id === P.origem));
     atualizarNext();
   };
   [...new Set(RACAS.map(r => r.grupo))].forEach(g => {
-    $('#g-raca-wrap').insertAdjacentHTML('beforeend', `<h4 class="sub">Raça · ${g}</h4><div class="cards" data-g="${g}"></div>`);
+    $('#g-raca-wrap').insertAdjacentHTML('beforeend', `<h3 class="sub">Raça · ${g}</h3><div class="cards" data-g="${g}"></div>`);
     const box = $('#g-raca-wrap').lastElementChild;
     RACAS.filter(r => r.grupo === g).forEach(r => {
       const e = el('button', 'opt', `<span class="ic">${medalhao(r, 76)}</span><span class="txt"><b>${r.nome}</b><small>${r.desc}</small>
@@ -313,7 +319,7 @@ function carta(tipo, titulo) {
 
 function renderDestino(body) {
   body.innerHTML = `
-    <h3>Cartas de Destino</h3>
+    <h2>Cartas de Destino</h2>
     <p class="hint">Cada carta é tirada uma única vez. O traço é um dom (ou fardo); o artefato selado traz dádiva e maldição.</p>
     <div class="dcards">
       <div>${carta('traco', 'd12 · Traço')}<button id="btn-traco" class="primary" data-ic="carta">Tirar traço</button></div>
@@ -324,8 +330,8 @@ function renderDestino(body) {
     const c = $('#dc-' + tipo), f = $('#df-' + tipo), emb = CAMINHOS[(tipo === 'traco' ? 0 : 12) + idx];
     if (!c || !f) return;
     const topo = `<div class="df-top"><span>${tipo === 'traco' ? 'Traço · d12' : 'Artefato selado · d10'}</span><b>${idx + 1}</b></div><div class="df-art">${medalhao(emb, 96)}</div>`;
-    if (tipo === 'traco') { const t = TRACOS[idx]; f.innerHTML = `${topo}<h4>${t.t}</h4><div class="df-sep">◆</div><p class="df-txt">${t.d}</p><div class="df-shine"></div>`; }
-    else { const a = ARTEFATOS[idx]; f.innerHTML = `${topo}<h4>${a.n}</h4><div class="df-sep">◆</div><p class="df-dad"><b>Dádiva</b>${a.dadiva}</p><p class="df-mal"><b>Maldição</b>${a.maldicao}</p><div class="df-shine"></div>`; }
+    if (tipo === 'traco') { const t = TRACOS[idx]; f.innerHTML = `${topo}<h3>${t.t}</h3><div class="df-sep">◆</div><p class="df-txt">${t.d}</p><div class="df-shine"></div>`; }
+    else { const a = ARTEFATOS[idx]; f.innerHTML = `${topo}<h3>${a.n}</h3><div class="df-sep">◆</div><p class="df-dad"><b>Dádiva</b>${a.dadiva}</p><p class="df-mal"><b>Maldição</b>${a.maldicao}</p><div class="df-shine"></div>`; }
     f.style.setProperty('--cc', emb.cor);
     { const card = f.closest('.dcard'), need = f.scrollHeight; if (need > card.clientHeight) card.style.height = (need + 6) + 'px'; }
     if (!animar) c.querySelector('.dc-inner').style.transition = 'none'; else Som.carta();
@@ -378,7 +384,7 @@ function medidor(k, nome, v, max, cor) {
   return `<div class="gauge vital" data-k="${k}" style="--gc:${cor}">
     <div class="g-top"><span>${nome} <em class="g-st" id="gs-${k}"></em></span>
       <label class="g-val"><input type="text" inputmode="numeric" pattern="[0-9]*" class="g-in" id="iv-${k}" value="${v}" aria-label="${nome}: valor atual" autocomplete="off"><i>/ ${max}</i></label></div>
-    <div class="g-barwrap"><div class="g-bar"><div class="g-fill" id="gf-${k}" style="width:${max ? v / max * 100 : 0}%"></div></div><span class="g-delta" id="gd-${k}" aria-hidden="true"></span></div>
+    <div class="g-barwrap"><div class="g-bar" role="meter" aria-label="${nome}" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${v}" aria-valuetext="${v} de ${max}"><div class="g-fill" id="gf-${k}" style="width:${max ? v / max * 100 : 0}%"></div></div><span class="g-delta" id="gd-${k}" aria-hidden="true"></span></div>
     <div class="g-btns" role="group" aria-label="Ajustar ${nome}">${PASSOS_VITAL.slice(0, 3).map(btn).join('')}<button type="button" class="adj max" data-c="${k}" data-max="1" aria-label="Restaurar ${nome} ao máximo" title="Máximo">máx</button>${PASSOS_VITAL.slice(3).map(btn).join('')}</div></div>`;
 }
 
@@ -423,7 +429,7 @@ function renderFicha(body) {
 
     <section class="blk poder">
       <h3>Escada de Poder</h3>
-      <div class="ladder">${ladderHTML()}</div>
+      <div class="ladder" role="list" aria-label="Escada de Sequências, da 9 à 0">${ladderHTML()}</div>
       <p class="pat-desc"><b style="color:${pat.cor}">${pat.nome}.</b> ${pat.desc}</p>
       <div class="dig-wrap">
         <div class="dig-frasco ${pronto ? 'pronto' : ''}">${frascoSVG(P.digestao, c.cor)}</div>
@@ -451,7 +457,7 @@ function renderFicha(body) {
           <p><span class="ok">Dádiva:</span> ${ARTEFATOS[P.artefato].dadiva}</p><p><span class="bad">Maldição:</span> ${ARTEFATOS[P.artefato].maldicao}</p></div></section>
     </div>
     ${P.aparencia || P.historia ? `<section class="blk"><h3>Quem é</h3>${P.aparencia ? `<h4 class="sub">Aparência</h4><p class="note">${esc(P.aparencia)}</p>` : ''}${P.historia ? `<h4 class="sub">História</h4><p class="note">${esc(P.historia)}</p>` : ''}</section>` : ''}
-    <section class="blk"><h3>Notas de sessão</h3><textarea id="f-notas" placeholder="Anotações da campanha...">${esc(P.notas)}</textarea>
+    <section class="blk"><h3>Notas de sessão</h3><textarea id="f-notas" aria-label="Notas de sessão" placeholder="Anotações da campanha...">${esc(P.notas)}</textarea>
       <div class="sheet-actions"><button id="btn-poster" class="primary" data-ic="estrela">Gerar pôster</button><button id="btn-export" class="ghost" data-ic="baixar">Exportar JSON</button></div></section>
   </div>`;
 
@@ -464,6 +470,8 @@ function renderFicha(body) {
     const max = k === 'pv' ? pvMax() : sanMax(); novo = Math.max(0, Math.min(max, Math.round(Number(novo) || 0))); const ant = P[k];
     $('#iv-' + k).value = novo; if (novo === ant) return;
     P[k] = novo; salvar(); $('#gf-' + k).style.width = (novo / max * 100) + '%'; mostrarDelta(k, novo - ant); instab();
+    const me = document.querySelector(`.gauge[data-k="${k}"] [role=meter]`); if (me) { me.setAttribute('aria-valuenow', novo); me.setAttribute('aria-valuetext', `${novo} de ${max}`); }
+    anunciar(`${k === 'pv' ? 'Pontos de Vida' : 'Sanidade'}: ${novo} de ${max}`);
   };
   body.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => {
     const k = b.dataset.c; aplicarVital(k, b.dataset.max ? (k === 'pv' ? pvMax() : sanMax()) : P[k] + +b.dataset.d);
@@ -528,7 +536,7 @@ const avisar = (titulo, texto) => janela(titulo, `<p class="modal-txt">${texto}<
 function exportarJSON() {
   const json = JSON.stringify(P, null, 2);
   try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' })); a.download = (P.nome || 'personagem').replace(/\W+/g, '_') + '.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); } catch (e) {}
-  janela('Sua ficha em JSON', `<p class="modal-txt">Copie e guarde este texto. Para recuperar a ficha depois, salve-o num arquivo .json e use “Importar JSON”.</p><textarea id="json-out" class="json-out" readonly></textarea>`,
+  janela('Sua ficha em JSON', `<p class="modal-txt">Copie e guarde este texto. Para recuperar a ficha depois, salve-o num arquivo .json e use “Importar JSON”.</p><textarea id="json-out" class="json-out" aria-label="Texto da ficha em JSON" readonly></textarea>`,
     [{ label: 'Copiar', cls: 'primary', ic: 'baixar', fn: (m, b) => { const t = m.querySelector('#json-out'); t.select(); (navigator.clipboard ? navigator.clipboard.writeText(json) : Promise.reject()).then(() => { b.lastChild.textContent = 'Copiado!'; }).catch(() => { document.execCommand && document.execCommand('copy'); }); return false; } },
      { label: 'Fechar', valor: true }]).then(() => {});
   setTimeout(() => { const t = $('#json-out'); if (t) t.value = json; }, 0);
@@ -542,7 +550,7 @@ function recuperar(erro) {
   const id = idAtual(); let bruto = '';
   try { bruto = (id && localStorage.getItem(K_P + id)) || localStorage.getItem(STORE_KEY) || ''; } catch (e) {}
   janela('Não consegui abrir esta ficha', `<p class="modal-txt">Os dados desta ficha parecem estar com algum problema. Copie o texto abaixo como cópia de segurança. Seus outros personagens não são afetados.</p>
-    <textarea id="json-bruto" class="json-out" readonly></textarea>`,
+    <textarea id="json-bruto" class="json-out" aria-label="Dados salvos, para cópia de segurança" readonly></textarea>`,
     [{ label: id ? 'Excluir esta ficha' : 'Começar de novo', cls: 'primary', valor: 'novo' }, { label: 'Fechar', valor: 'fechar' }]).then(r => {
       _recuperando = false;
       if (r === 'novo') { if (id) excluirPersonagem(id); else try { localStorage.removeItem(STORE_KEY); localStorage.removeItem(RET_KEY); } catch (e) {} novoSlot(); voltarCapa(); }
@@ -607,7 +615,7 @@ async function abrirPoster() {
   const m = document.createElement('div'); m.className = 'crop-modal poster-modal';
   const nomeArq = (P.nome || 'beyonder').replace(/[^\w]+/g, '_');
   m.innerHTML = `<div class="crop-box poster-box" style="--pc:${caminhoPorId(P.caminho).cor}">
-    <p class="asc-eyebrow" style="opacity:1">PÔSTER DO BEYONDER</p><h3 class="crop-t">Sua ficha como cartaz</h3>
+    <p class="asc-eyebrow" style="opacity:1">PÔSTER DO BEYONDER</p><h2 class="crop-t">Sua ficha como cartaz</h2>
     <div class="poster-prev" id="poster-prev"><div class="poster-load"><span></span>Desenhando o pôster…</div></div>
     <label class="poster-terror"><input type="checkbox" id="pt-terror" ${Som.terror ? 'checked' : ''}> Versão Terror</label>
     <div class="poster-btns"><button type="button" class="primary" id="pt-pdf" data-ic="baixar" disabled>Baixar PDF</button><button type="button" class="ghost" id="pt-png" data-ic="baixar" disabled>Baixar PNG</button><button type="button" class="ghost" id="pt-fechar">Fechar</button></div>
@@ -660,10 +668,10 @@ const svgBtn = n => `<svg class="bi" viewBox="0 0 24 24" width="18" height="18" 
 function atualizarToggles() {
   $('#btn-som').innerHTML = svgBtn(Som.mudo ? 'mudo' : 'som');
   $('#btn-som').setAttribute('aria-pressed', String(!Som.mudo));
-  $('#btn-som').title = Som.mudo ? 'Ativar som' : 'Silenciar tudo';
+  $('#btn-som').title = Som.mudo ? 'Ativar som' : 'Silenciar tudo'; $('#btn-som').setAttribute('aria-label', 'Som');
   $('#btn-terror').innerHTML = svgBtn('olho');
   $('#btn-terror').setAttribute('aria-pressed', String(Som.terror));
-  $('#btn-terror').title = Som.terror ? 'Desativar Modo Terror' : 'Ativar Modo Terror';
+  $('#btn-terror').title = Som.terror ? 'Desativar Modo Terror' : 'Ativar Modo Terror'; $('#btn-terror').setAttribute('aria-label', 'Modo Terror');
   $('#btn-terror').classList.toggle('on', Som.terror);
   document.body.classList.toggle('terror', Som.terror);
 }
