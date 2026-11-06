@@ -282,62 +282,111 @@ function renderDestino(body) {
 function ensureVitais() {
   if (P.pv == null) P.pv = pvMax();
   if (P.san == null) P.san = sanMax();
+  P.pv = Math.min(P.pv, pvMax()); P.san = Math.min(P.san, sanMax());
+}
+
+// gráfico radar dos 6 atributos
+function radarSVG(cor) {
+  const R = 92, C = 130, MAX = 24, ang = i => (-90 + i * 60) * Math.PI / 180;
+  const pt = (i, r) => [C + Math.cos(ang(i)) * r, C + Math.sin(ang(i)) * r];
+  let grade = '';
+  [.25, .5, .75, 1].forEach(f => { grade += `<polygon points="${ATTRS.map((_, i) => pt(i, R * f).join(',')).join(' ')}" fill="none" stroke="#3b3566" stroke-width="1"/>`; });
+  ATTRS.forEach((_, i) => { grade += `<line x1="${C}" y1="${C}" x2="${pt(i, R)[0]}" y2="${pt(i, R)[1]}" stroke="#3b3566"/>`; });
+  const pts = ATTRS.map((a, i) => pt(i, R * Math.min(1, total(a.key) / MAX)));
+  const rotulos = ATTRS.map((a, i) => { const [x, y] = pt(i, R + 20); return `<text x="${x}" y="${y - 2}" class="rl">${a.nome.slice(0, 3).toUpperCase()}</text><text x="${x}" y="${y + 11}" class="rv">${total(a.key)}</text>`; }).join('');
+  return `<svg class="radar" viewBox="0 0 260 260" role="img" aria-label="Atributos">${grade}
+    <polygon class="rpoly" points="${pts.map(p => p.join(',')).join(' ')}" fill="${cor}" fill-opacity=".28" stroke="${cor}" stroke-width="2.2" stroke-linejoin="round"/>
+    ${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="3.6" fill="${cor}"/>`).join('')}${rotulos}</svg>`;
+}
+
+function medidor(k, nome, v, max, cor) {
+  return `<div class="gauge" data-k="${k}" style="--gc:${cor}"><div class="g-top"><span>${nome}</span><b><i id="cv-${k}">${v}</i> / ${max}</b></div>
+    <div class="g-bar"><div class="g-fill" id="gf-${k}" style="width:${max ? v / max * 100 : 0}%"></div></div>
+    <div class="counter"><button data-c="${k}" data-d="-1">−</button><button data-c="${k}" data-d="1">+</button></div></div>`;
 }
 
 function renderFicha(body) {
   ensureVitais();
-  const attrs = ATTRS.map(a => {
-    const t = total(a.key);
-    return `<div class="stat"><div class="m">${a.nome}</div><div class="v">${t}</div><div class="m">mod ${mod(t) >= 0 ? '+' : ''}${mod(t)}</div></div>`;
-  }).join('');
+  const c = caminhoPorId(P.caminho), r = racaPorId(P.raca), o = origemPorId(P.origem), pat = patamarDe(P.sequencia), k = idxPatamar(P.sequencia);
+  const partes = a => { const b = P.attrs[a.key].total, ex = [[bonusCaminho(a.key), 'Caminho'], [bonusRaca(a.key), 'Raça'], [bonusSeq(a.key), 'Sequência']].filter(x => x[0]); return ex.length ? `<small>${b} ${ex.map(x => `${x[0] > 0 ? '+' : ''}${x[0]} ${x[1]}`).join(' ')}</small>` : ''; };
+  const pronto = P.digestao >= DIG_MAX;
   body.innerHTML = `
-    <div class="sheet-head">
-      <div>
+  <div class="ficha" id="ficha" style="--pc:${c.cor};--pt:${pat.cor};--k:${k}" data-tier="${pat.id}">
+    <header class="hero">
+      <div class="hero-bg" aria-hidden="true"><div class="hero-wm"><img src="img/sigilos/${c.id}.png" alt=""></div></div>
+      <div class="hero-sig"><div class="aura"></div><div class="aura a2"></div><div class="aura-anel"></div>${sigilo(c, 150)}</div>
+      <div class="hero-info">
+        <p class="hero-eyebrow">Caminho ${c.nome} · <span>${pat.nome}</span></p>
         <h2>${esc(P.nome)}</h2>
-        ${P.caminho ? `<span class="badge">${sigilo(caminhoPorId(P.caminho), 14)} ${caminhoPorId(P.caminho).nome}</span> ` : ''}<span class="badge">Sequência ${P.sequencia} · ${SEQ_NAMES[P.sequencia]}${P.caminho ? ' · ' + caminhoPorId(P.caminho).seq9 : ''}</span>
+        <div class="hero-seq">Sequência ${P.sequencia} — <b>${esc(nomeSeq(P.sequencia))}</b></div>
+        <div class="hero-chips"><span class="chip">${medalhao(r, 34)}${r.nome}</span><span class="chip">${medalhao(o, 34)}${o.nome}</span></div>
         <div class="hint">${[P.jogador && 'Jogador: ' + esc(P.jogador), P.idade && esc(P.idade) + ' anos', esc(P.genero)].filter(Boolean).join(' · ')}</div>
       </div>
+    </header>
+
+    <div class="ficha-grid">
+      <section class="blk"><h3>Atributos</h3>
+        <div class="attr-wrap">${radarSVG(c.cor)}
+          <ul class="attr-lista">${ATTRS.map(a => `<li><span>${a.nome}</span><b>${total(a.key)}</b><em>mod ${mod(total(a.key)) >= 0 ? '+' : ''}${mod(total(a.key))}</em>${partes(a)}</li>`).join('')}</ul></div></section>
+      <section class="blk"><h3>Vitais</h3>
+        ${medidor('pv', 'Pontos de Vida', P.pv, pvMax(), '#e05a6a')}
+        ${medidor('san', 'Sanidade', P.san, sanMax(), '#6fb4ff')}
+        <div class="gauge fixo" style="--gc:#b08cff"><div class="g-top"><span>Espiritualidade</span><b>${espMax()}</b></div><div class="g-bar"><div class="g-fill" style="width:100%"></div></div></div>
+        <p class="san-msg" id="san-msg"></p></section>
     </div>
-    ${(() => { const r = racaPorId(P.raca), o = origemPorId(P.origem); return `
-      <div class="emblems">${medalhao(r, 56)}<div><b>${r.nome}</b><div class="hint">${fmtBonus(r.bonus)}</div></div>${medalhao(o, 56)}<div><b>${o.nome}</b><div class="hint">£ ${o.libras}</div></div></div>
-      <p class="note">${r.traco}<br>${o.perk}</p>`; })()}
-    <h3>Atributos</h3>
-    <div class="stat-grid">${attrs}</div>
-    <h3>Vitais</h3>
-    <div class="stat-grid">
-      ${contador('pv', 'Pontos de Vida', P.pv, pvMax())}
-      ${contador('san', 'Sanidade', P.san, sanMax())}
-      <div class="stat"><div class="m">Espiritualidade</div><div class="v">${espMax()}</div><div class="m">máx.</div></div>
+
+    <section class="blk poder">
+      <h3>Escada de Poder</h3>
+      <div class="ladder">${ladderHTML()}</div>
+      <p class="pat-desc"><b style="color:${pat.cor}">${pat.nome}.</b> ${pat.desc}</p>
+      <div class="dig-wrap">
+        <div class="dig-frasco ${pronto ? 'pronto' : ''}">${frascoSVG(P.digestao, c.cor)}</div>
+        <div class="dig-info">
+          <h4>Digestão da poção</h4>
+          <p class="hint">Ao beber a poção, o Beyonder precisa <b>atuar</b> segundo o Caminho para digeri-la. Marque o progresso conforme a história avança.</p>
+          <div class="dig-pips" id="dig-pips">${Array.from({ length: DIG_MAX }, (_, i) => `<button class="pip-d ${i < P.digestao ? 'on' : ''}" data-i="${i + 1}" aria-label="Digestão ${i + 1}"></button>`).join('')}</div>
+          <div class="dig-nums"><span id="dig-n">${P.digestao}</span> / ${DIG_MAX} ${pronto ? '· <b class="ok">Poção digerida</b>' : ''}</div>
+          <label class="nome-seq">Nome da Sequência atual <input type="text" id="f-nomeseq" value="${esc(P.nomesSeq[P.sequencia] || '')}" placeholder="${esc(nomeSeq(P.sequencia, true))}"></label>
+          <div class="toolbar">${P.sequencia > 0
+            ? `<button id="btn-asc" class="primary" data-ic="estrela">${pronto ? `Ascender para a Sequência ${P.sequencia - 1}` : `Forçar ascensão (arriscado)`}</button>`
+            : `<span class="badge">Você alcançou a divindade</span>`}</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="ficha-grid">
+      <section class="blk"><h3>Raça &amp; Origem</h3>
+        <div class="emblems">${medalhao(r, 56)}<div><b>${r.nome}</b><div class="hint">${fmtBonus(r.bonus)}</div></div></div><p class="note">${r.traco}</p>
+        <div class="emblems">${medalhao(o, 56)}<div><b>${o.nome}</b><div class="hint">£ ${o.libras}</div></div></div><p class="note">${o.perk}</p>
+        <h4 class="sub">Equipamento</h4><p class="note">${o.itens.map(esc).join(' · ')}</p></section>
+      <section class="blk"><h3>Destino</h3>
+        <div class="tarot"><div class="tarot-n">${P.traco + 1}</div><small>Traço · d12</small><b>${TRACOS[P.traco].t}</b><p>${TRACOS[P.traco].d}</p></div>
+        <div class="tarot art"><div class="tarot-n">${P.artefato + 1}</div><small>Artefato selado · d10</small><b>${ARTEFATOS[P.artefato].n}</b>
+          <p><span class="ok">Dádiva:</span> ${ARTEFATOS[P.artefato].dadiva}</p><p><span class="bad">Maldição:</span> ${ARTEFATOS[P.artefato].maldicao}</p></div></section>
     </div>
-    <h3>Equipamento</h3>
-    <p class="note">${origemPorId(P.origem).itens.map(esc).join(' · ')} — £ ${origemPorId(P.origem).libras}</p>
-    <h3>Destino</h3>
-    <div class="grid2">
-      <div class="stat" style="text-align:left"><div class="m">Traço (d12 → ${P.traco + 1})</div><b>${TRACOS[P.traco].t}</b><p class="note">${TRACOS[P.traco].d}</p></div>
-      <div class="stat" style="text-align:left"><div class="m">Artefato selado (d10 → ${P.artefato + 1})</div><b>${ARTEFATOS[P.artefato].n}</b>
-        <p class="note"><b class="ok">Dádiva:</b> ${ARTEFATOS[P.artefato].dadiva}<br><b class="bad">Maldição:</b> ${ARTEFATOS[P.artefato].maldicao}</p></div>
-    </div>
-    ${P.aparencia ? `<h3>Aparência</h3><p class="note">${esc(P.aparencia)}</p>` : ''}
-    ${P.historia ? `<h3>História</h3><p class="note">${esc(P.historia)}</p>` : ''}
-    <h3>Notas de sessão</h3>
-    <textarea id="f-notas" placeholder="Anotações da campanha...">${esc(P.notas)}</textarea>
-    <div class="sheet-actions">
-      <button id="btn-export" class="primary" data-ic="baixar">Exportar JSON</button>
-    </div>`;
+    ${P.aparencia || P.historia ? `<section class="blk"><h3>Quem é</h3>${P.aparencia ? `<h4 class="sub">Aparência</h4><p class="note">${esc(P.aparencia)}</p>` : ''}${P.historia ? `<h4 class="sub">História</h4><p class="note">${esc(P.historia)}</p>` : ''}</section>` : ''}
+    <section class="blk"><h3>Notas de sessão</h3><textarea id="f-notas" placeholder="Anotações da campanha...">${esc(P.notas)}</textarea>
+      <div class="sheet-actions"><button id="btn-export" class="primary" data-ic="baixar">Exportar JSON</button></div></section>
+  </div>`;
+
+  // vitais
+  const instab = () => { const f = $('#ficha'), r = P.san / sanMax(); f.classList.toggle('san-baixa', r <= .3 && P.san > 0); f.classList.toggle('san-zero', P.san === 0);
+    $('#san-msg').textContent = P.san === 0 ? 'Perda de controle — a mente se rompeu.' : r <= .3 ? 'Sua mente vacila. Sussurros se misturam aos pensamentos…' : ''; };
   body.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => {
-    const k = b.dataset.c, delta = +b.dataset.d, max = k === 'pv' ? pvMax() : sanMax();
-    P[k] = Math.max(0, Math.min(max, P[k] + delta));
-    salvar();
-    $('#cv-' + k).textContent = P[k];
+    const kk = b.dataset.c, max = kk === 'pv' ? pvMax() : sanMax();
+    P[kk] = Math.max(0, Math.min(max, P[kk] + +b.dataset.d)); salvar();
+    $('#cv-' + kk).textContent = P[kk]; $('#gf-' + kk).style.width = (P[kk] / max * 100) + '%'; instab();
   }));
+  instab();
+  // digestão
+  body.querySelectorAll('.pip-d').forEach(b => b.addEventListener('click', () => {
+    const i = +b.dataset.i, novo = P.digestao === i ? i - 1 : i; P.digestao = novo; salvar(); if (novo > 0) Som.digerir(novo - 1);
+    renderFicha(body);
+  }));
+  $('#f-nomeseq').addEventListener('input', e => { if (e.target.value.trim()) P.nomesSeq[P.sequencia] = e.target.value.trim(); else delete P.nomesSeq[P.sequencia]; salvar(); });
+  if ($('#btn-asc')) $('#btn-asc').addEventListener('click', () => pronto ? ascender(false, 0) : ascensaoArriscada());
   $('#f-notas').addEventListener('input', e => { P.notas = e.target.value; salvar(); });
   $('#btn-export').addEventListener('click', exportarJSON);
-}
-
-function contador(k, nome, v, max) {
-  return `<div class="stat"><div class="m">${nome}</div>
-    <div class="v"><span id="cv-${k}">${v}</span><span class="m"> / ${max}</span></div>
-    <div class="counter"><button data-c="${k}" data-d="-1">−</button><button data-c="${k}" data-d="1">+</button></div></div>`;
 }
 
 /* ---------- Navegação e inicialização ---------- */

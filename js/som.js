@@ -106,6 +106,16 @@ const Som = (() => {
   const tick = () => { if (!ok()) return; osc('square', terror ? 520 : 900 + Math.random() * 200, T0(), 0.025, 0.05); };
   const dado = () => { if (!ok()) return; const t = T0(); for (let i = 0; i < 14; i++) ruido(t + i * (0.04 + i * 0.012), 0.03, 0.18, { type: 'bandpass', f: 1500 + Math.random() * 2500, q: 3 }); osc('triangle', 220, t + 0.95, 0.12, 0.12, { slide: 140 }); };
   const carta = () => { if (!ok()) return; const t = T0(); ruido(t, 0.18, 0.16, { type: 'highpass', f: 3000, attack: 0.04 }); sino(terror ? 440 : 880, t + 0.2, 0.1, 1.6); };
+  const digerir = n => { if (!ok()) return; pm = terror ? 0.8 : 1; sino(NOTAS[Math.min(9, Math.max(0, n))], T0(), 0.1, 1.4); pm = 1; };
+  const NOTAS = [392, 440, 494, 587, 659, 784, 880, 988, 1175, 1319];
+  const ascender = (k, sombrio) => { if (!ok()) return; pm = sombrio ? 0.74 : 1; const t = T0(), base = [262, 294, 330, 392, 440, 523, 660][Math.min(k, 6)];
+    osc('sawtooth', 70, t, 2.2, 0.14, { slide: base * 1.5, lp: 1400, attack: 0.9 });
+    ruido(t, 2, 0.12, { type: 'bandpass', f: 400, slide: 5000, q: 2, attack: 0.9 });
+    for (let i = 0; i <= Math.min(k, 5); i++) bumbo(t + 1.7 + i * 0.12, 0.28 + i * 0.05, 80 - i * 6);
+    acorde([base, base * 1.25, base * 1.5, base * 2], t + 1.9, 3.4 + k * 0.3, 0.4, sombrio ? 'sawtooth' : 'triangle', sombrio ? { lp: 900 } : {});
+    [2, 3, 4, 5, 6].slice(0, 2 + k).forEach((m, i) => sino(base * m, t + 2 + i * 0.2, 0.09, 3));
+    if (sombrio) { osc('sawtooth', base * 0.5 * 1.414, t + 1.9, 3, 0.1, { lp: 500 }); for (let i = 0; i < 3; i++) ruido(t + 2 + i * .6, .5, .06, { type: 'bandpass', f: 2400, q: 9, slide: 1500 }); }
+    pm = 1; };
   const confirmar = () => { if (!ok()) return; const t = T0(); [523, 784].forEach((f, i) => sino(f, t + i * 0.12, 0.1, 1.5)); };
 
   // ambiente do modo Terror: zumbido grave + batimento cardíaco
@@ -132,7 +142,7 @@ const Som = (() => {
     if (v && !mudo && init()) { pm = 0.7; const t = T0(); camadaTerror(t); pm = 1; }
   }
   return {
-    init, caminho, click, tick, dado, carta, confirmar, setMudo, setTerror, ambienteTerror,
+    init, caminho, click, tick, dado, carta, confirmar, digerir, ascender, setMudo, setTerror, ambienteTerror,
     get mudo() { return mudo; }, get terror() { return terror; },
     ids: Object.keys(TEMAS),
   };
