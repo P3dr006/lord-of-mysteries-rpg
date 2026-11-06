@@ -8,6 +8,7 @@ function novoPersonagem() {
     attrs: {},            // { key: { dados:[4], total } }
     relanceUsado: false,
     retrato: null, retratoEstilo: 'natural',
+    mesa: { lados: 20, qtd: 1, mod: 0, modo: 'normal', cd: 0 }, historico: [],
     sequencia: 9, digestao: 0, nomesSeq: {},
     caminho: null,
     raca: null, origem: null,
