@@ -12,8 +12,8 @@
 <header class="topbar">
   <h1 class="logo">✦ Lord of the Mysteries <small>RPG</small></h1>
   <nav class="topnav">
-    <button id="btn-new" class="ghost">Novo personagem</button>
-    <button id="btn-import" class="ghost">Importar JSON</button>
+    <button id="btn-new" class="ghost" data-ic="novo">Novo personagem</button>
+    <button id="btn-import" class="ghost" data-ic="subir">Importar JSON</button>
     <input id="file-import" type="file" accept="application/json" hidden>
   </nav>
 </header>
@@ -23,20 +23,21 @@
     <p class="eyebrow">Quem é Você?</p>
     <h2 class="title">O Louco que Caminha<br>entre os Mistérios</h2>
     <p class="lead">Crie seu Beyonder: role seus atributos com dados do destino e dê o primeiro passo no Caminho.</p>
-    <button id="btn-start" class="primary big">Iniciar a jornada</button>
-    <button id="btn-continue" class="ghost" hidden>Continuar personagem salvo</button>
+    <button id="btn-start" class="primary big" data-ic="estrela">Iniciar a jornada</button>
+    <button id="btn-continue" class="ghost" data-ic="livro" hidden>Continuar personagem salvo</button>
   </section>
 
   <section id="wizard" hidden>
     <ol id="stepper" class="stepper"></ol>
     <div id="step-body" class="panel"></div>
     <div class="wizard-nav">
-      <button id="btn-prev" class="ghost">← Voltar</button>
-      <button id="btn-next" class="primary">Avançar →</button>
+      <button id="btn-prev" class="ghost" data-ic="esq">Voltar</button>
+      <button id="btn-next" class="primary" data-ic="dir" data-ic-end>Avançar</button>
     </div>
   </section>
 </main>
 
+<script src="js/icones.js"></script>
 <script src="js/data.js"></script>
 <script src="js/caminhos.js"></script>
 <script src="js/mundo.js"></script>
