@@ -332,7 +332,7 @@ body.terror.t-flash::before{content:'';position:fixed;inset:0;z-index:70;backgro
 @keyframes inquieta{0%,100%{filter:none}50%{filter:saturate(.8) brightness(.96)}}
 
 /* Escada de poder */
-.ladder{display:flex;gap:4px;overflow-x:auto;padding:6px 2px 10px}
+.ladder{display:flex;gap:6px;overflow:visible;padding:24px 4px 12px}
 .deg{flex:1;min-width:58px;text-align:center;padding:8px 2px 6px;border-radius:10px;border:1px solid color-mix(in srgb,var(--tc) 40%,var(--line));background:#0b0920aa;position:relative;opacity:.55}
 .deg .n{display:block;font-size:1.5rem;color:var(--tc)}.deg .t{display:block;font-size:.62rem;color:var(--muted);letter-spacing:.05em}
 .deg.passado{opacity:.9;background:color-mix(in srgb,var(--tc) 16%,#0b0920)}.deg.passado .n{opacity:.7}
