@@ -374,7 +374,7 @@ function renderFicha(body) {
   body.innerHTML = `
   <div class="ficha" id="ficha" style="--pc:${c.cor};--pt:${pat.cor};--k:${k}" data-tier="${pat.id}">
     <header class="hero">
-      <div class="hero-bg" aria-hidden="true"><div class="hero-wm"><img src="img/sigilos/${c.id}.png" alt=""></div></div>
+      <div class="hero-bg" aria-hidden="true"><div class="hero-wm"><img src="img/sigilos/${c.id}.webp" alt=""></div></div>
       <div class="hero-sig ${P.retrato ? 'com-ret' : ''}"><div class="aura"></div><div class="aura a2"></div><div class="aura-anel"></div>${P.retrato ? `${retratoCirculo(138, 'hero-ret')}<div class="hero-insignia" title="Caminho ${c.nome}">${sigilo(c, 46)}</div>` : sigilo(c, 150)}</div>
       <div class="hero-info">
         <p class="hero-eyebrow">Caminho ${c.nome} · <span>${pat.nome}</span></p>
@@ -474,6 +474,9 @@ function exportarJSON() {
 }
 
 /* ---------- Pôster ---------- */
+// carrega um script só quando precisa (o pôster pesa ~34 KB e só é usado ao clicar no botão)
+const _scripts = {};
+function carregarScript(src) { return _scripts[src] || (_scripts[src] = new Promise((res, rej) => { const e = document.createElement('script'); e.src = src; e.onload = res; e.onerror = () => { delete _scripts[src]; rej(new Error('falha ao carregar ' + src)); }; document.head.appendChild(e); })); }
 async function abrirPoster() {
   const m = document.createElement('div'); m.className = 'crop-modal poster-modal';
   const nomeArq = (P.nome || 'beyonder').replace(/[^\w]+/g, '_');
@@ -488,7 +491,7 @@ async function abrirPoster() {
   const gerar = async () => {
     if (ocupado) return; ocupado = true; $('#pt-pdf').disabled = $('#pt-png').disabled = true;
     $('#poster-prev').innerHTML = '<div class="poster-load"><span></span>Desenhando o pôster…</div>';
-    try { const cv = await Poster.desenhar({ terror: $('#pt-terror').checked }); arq = await Poster.gerarArquivos(cv);
+    try { if (typeof Poster === 'undefined') await carregarScript('js/poster.js'); const cv = await Poster.desenhar({ terror: $('#pt-terror').checked }); arq = await Poster.gerarArquivos(cv);
       $('#poster-prev').innerHTML = `<img src="${arq.jpg}" alt="Pôster de ${esc(P.nome)}">`; $('#pt-pdf').disabled = $('#pt-png').disabled = false; Som.selar(); }
     catch (e) { $('#poster-prev').innerHTML = '<div class="poster-load">Não consegui desenhar o pôster. Tente de novo.</div>'; console.error(e); }
     ocupado = false;

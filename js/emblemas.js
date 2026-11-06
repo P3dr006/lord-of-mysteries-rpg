@@ -29,19 +29,22 @@ ORIGENS.forEach(o => Object.assign(o, EMBLEMAS[o.id]));
 
 let _medalN = 0;
 // Medalhão ornamentado com anel de runas girando
-function medalhao(item, tam = 72) {
+function medalhao(item, tam = 72, plano = false) {
   const id = 'mg' + (++_medalN), c = item.cor;
   let marcas = '';
   for (let i = 0; i < 8; i++) {
     const a = (i * 45 * Math.PI) / 180, x = 32 + 30 * Math.sin(a), y = 32 - 30 * Math.cos(a);
     marcas += `<rect x="${x - 1.6}" y="${y - 1.6}" width="3.2" height="3.2" transform="rotate(45 ${x} ${y})" fill="${c}"/>`;
   }
-  return `<svg class="medal" viewBox="0 0 64 64" width="${tam}" height="${tam}" aria-hidden="true">
-    <defs><radialGradient id="${id}" cx="50%" cy="38%" r="65%"><stop offset="0" stop-color="${c}" stop-opacity=".5"/><stop offset="1" stop-color="#0d0b1f"/></radialGradient></defs>
-    <circle cx="32" cy="32" r="30" fill="url(#${id})" stroke="${c}" stroke-width="1.5"/>
-    <g class="spin"><circle cx="32" cy="32" r="26" fill="none" stroke="${c}" stroke-opacity=".6" stroke-dasharray="1.2 3.6" stroke-width="1.4"/></g>
-    <circle cx="32" cy="32" r="22" fill="none" stroke="${c}" stroke-opacity=".25"/>
+  const fundo = `<defs><radialGradient id="${id}" cx="50%" cy="38%" r="65%"><stop offset="0" stop-color="${c}" stop-opacity=".5"/><stop offset="1" stop-color="#0d0b1f"/></radialGradient></defs>
+    <circle cx="32" cy="32" r="30" fill="url(#${id})" stroke="${c}" stroke-width="1.5"/>`;
+  const anel = `<circle cx="32" cy="32" r="26" fill="none" stroke="${c}" stroke-opacity=".6" stroke-dasharray="1.2 3.6" stroke-width="1.4"/>`;
+  const resto = `<circle cx="32" cy="32" r="22" fill="none" stroke="${c}" stroke-opacity=".25"/>
     ${marcas}
-    <g transform="translate(12.8 12.8) scale(1.6)" fill="none" stroke="${c}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 2px ${c})">${item.g}</g>
-  </svg>`;
+    <g transform="translate(12.8 12.8) scale(1.6)" fill="none" stroke="${c}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 2px ${c})">${item.g}</g>`;
+  const svg = (cls, corpo) => `<svg class="${cls}" viewBox="0 0 64 64" width="${tam}" height="${tam}" aria-hidden="true">${corpo}</svg>`;
+  // plano: um SVG só, estático (usado para desenhar o pôster)
+  if (plano) return svg('medal', fundo + anel + resto);
+  // em tela: o anel é uma camada separada que gira na placa de vídeo (um SVG que muda por dentro seria repintado a cada quadro)
+  return `<span class="medal-w" style="width:${tam}px;height:${tam}px">${svg('medal', fundo)}${svg('medal medal-ring', anel)}${svg('medal', resto)}</span>`;
 }

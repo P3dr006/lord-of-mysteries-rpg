@@ -133,7 +133,7 @@ const Poster = (() => {
     const terror = !!opt.terror, cam = caminhoPorId(P.caminho), raca = racaPorId(P.raca), orig = origemPorId(P.origem), pat = patamarDe(P.sequencia), k = idxPatamar(P.sequencia);
     if (typeof SIGILOS_DATA === 'undefined') await new Promise(r => { const s = document.createElement('script'); s.src = 'js/sigilos-data.js'; s.onload = r; s.onerror = r; document.head.appendChild(s); });
     const cor = terror ? '#e0283a' : cam.cor, ouro = terror ? '#c9a070' : '#d9b86a', brilhoT = terror ? '#ffd0c0' : '#fff3d4';
-    const [sig, ret, mr, mo] = await Promise.all([carregar(typeof SIGILOS_DATA !== 'undefined' ? SIGILOS_DATA[cam.id] : `img/sigilos/${cam.id}.png`), P.retrato ? carregar(P.retrato) : null, svgImg(medalhao(raca, 120)), svgImg(medalhao(orig, 120))]);
+    const [sig, ret, mr, mo] = await Promise.all([carregar(typeof SIGILOS_DATA !== 'undefined' ? SIGILOS_DATA[cam.id] : `img/sigilos/${cam.id}.webp`), P.retrato ? carregar(P.retrato) : null, svgImg(medalhao(raca, 120, true)), svgImg(medalhao(orig, 120, true))]);
     const cv = document.createElement('canvas'); cv.width = Math.round(W * ESC); cv.height = Math.round(H * ESC); const c = cv.getContext('2d'); c.scale(ESC, ESC);
     // fundo
     const estilo = ESTILO[cam.id] || 'misterios'; FUNDOS[estilo](c, cor, terror);

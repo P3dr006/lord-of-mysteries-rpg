@@ -15,7 +15,7 @@ function montarCapa() {
     sg.style.setProperty('--d', (i * -0.35) + 's');
     sg.title = c.nome + ' (clique para ouvir)';
     sg.addEventListener('click', () => tocarCaminho(c.id));
-    sg.innerHTML = `<span class="in"><img src="img/sigilos/${c.id}.png" alt="${c.nome}" loading="lazy"></span>`;
+    sg.innerHTML = `<span class="in"><img src="img/sigilos/${c.id}.webp" alt="${c.nome}" loading="lazy"></span>`;
     sg.querySelector('img').addEventListener('error', e => { e.target.replaceWith(Object.assign(document.createElement('span'), { className: 'fallback', innerHTML: svgGlifo(c, 40) })); });
     orbit.appendChild(sg);
   });

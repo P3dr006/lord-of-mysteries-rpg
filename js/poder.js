@@ -80,7 +80,7 @@ function mostrarAscensao(o) {
   el0.style.cssText = `--pc:${terror ? '#e0283a' : c.cor};--pt:${terror ? '#ff4a5a' : o.pat.cor};--k:${k + 1}`;
   el0.innerHTML = `<div class="asc-rays"></div><div class="asc-ring r1"></div><div class="asc-ring r2"></div><div class="asc-ring r3"></div>
     <div class="asc-core">
-      <img class="asc-sig" src="img/sigilos/${c.id}.png" alt="">
+      <img class="asc-sig" src="img/sigilos/${c.id}.webp" alt="">
       <div class="asc-num"><span class="old">${o.velho}</span><span class="new">${o.novo}</span></div>
       <p class="asc-eyebrow">${o.forcado ? 'ASCENSÃO FORÇADA' : 'ASCENSÃO'}</p>
       <h2 class="asc-nome">${esc(nomeSeq(o.novo, true))}</h2>

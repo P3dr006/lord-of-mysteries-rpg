@@ -93,6 +93,6 @@ const CAMINHOS = [
 const caminhoPorId = id => CAMINHOS.find(c => c.id === id);
 const svgGlifo = (c, tam) =>
   `<svg viewBox="0 0 24 24" width="${tam}" height="${tam}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="color:${c.cor}">${c.g}</svg>`;
-// Sigilo oficial (img/sigilos/<id>.png); se faltar, cai no desenho SVG.
+// Sigilo oficial (img/sigilos/<id>.webp); se faltar, cai no desenho SVG.
 const sigilo = (c, tam = 28) =>
-  `<img class="sigilo" src="img/sigilos/${c.id}.png" width="${tam}" height="${tam}" alt="${c.nome}" onerror="this.outerHTML=svgGlifo(caminhoPorId('${c.id}'),${tam})">`;
+  `<img class="sigilo" src="img/sigilos/${c.id}.webp" width="${tam}" height="${tam}" alt="${c.nome}" onerror="this.outerHTML=svgGlifo(caminhoPorId('${c.id}'),${tam})">`;

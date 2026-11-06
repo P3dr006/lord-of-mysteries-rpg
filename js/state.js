@@ -27,14 +27,30 @@ function sanear(p) {
 
 let P = novoPersonagem();
 
+// O retrato (imagem em base64, dezenas de KB) fica numa chave própria e só é regravado quando muda.
+// Assim, cada tecla digitada regrava só o JSON pequeno da ficha.
+const RET_KEY = 'lotm-rpg-retrato';
+let _retSalvo = undefined;            // último valor do retrato que está no armazenamento
 function salvar() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(P)); return true; } catch (e) { return false; }
+  try {
+    const { retrato, ...resto } = P;
+    localStorage.setItem(STORE_KEY, JSON.stringify(resto));
+    const r = retrato || null;
+    if (r !== _retSalvo) {
+      if (r) localStorage.setItem(RET_KEY, r); else localStorage.removeItem(RET_KEY);
+      _retSalvo = r;
+    }
+    return true;
+  } catch (e) { return false; }
 }
 function carregar() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return null;
-    return sanear(Object.assign(novoPersonagem(), JSON.parse(raw)));
+    const obj = JSON.parse(raw), guardado = localStorage.getItem(RET_KEY) || null;
+    _retSalvo = guardado;
+    if (!obj.retrato) obj.retrato = guardado;   // fichas antigas traziam o retrato dentro do JSON; a próxima gravação o move
+    return sanear(Object.assign(novoPersonagem(), obj));
   } catch (e) { return null; }
 }
 function importarJSON(file, cb) {
