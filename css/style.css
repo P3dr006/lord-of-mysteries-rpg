@@ -120,3 +120,4 @@ textarea{min-height:90px;resize:vertical}
 .caminho-info ul{padding-left:18px;color:var(--muted)}
 .caminho-info .bonus{color:var(--gold)}
 .vazio{color:var(--muted);text-align:center}
+.sigilo{object-fit:contain;vertical-align:middle;filter:drop-shadow(0 0 4px #7a5cff88)}
