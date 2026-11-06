@@ -23,7 +23,7 @@ function montarCapa() {
   if (ativo) {
     const c = caminhoPorId(ativo);
     info.hidden = false;
-    info.innerHTML = `<b>${salvo.nome.replace(/[&<>"]/g, '')}</b> · Caminho ${c.nome} · ${c.seq9}`;
+    info.innerHTML = `${salvo.retrato ? `<img class="mini-ret" src="${salvo.retrato}" alt="">` : ''}<span><b>${salvo.nome.replace(/[&<>"]/g, '')}</b> · Caminho ${c.nome} · ${c.seq9}</span>`;
     info.style.setProperty('--c', c.cor);
   } else info.hidden = true;
   document.querySelector('#btn-continue').hidden = !(salvo && salvo.nome);

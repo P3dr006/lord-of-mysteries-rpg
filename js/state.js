@@ -7,6 +7,7 @@ function novoPersonagem() {
     nome: '', jogador: '', idade: '', genero: '', aparencia: '', historia: '',
     attrs: {},            // { key: { dados:[4], total } }
     relanceUsado: false,
+    retrato: null, retratoEstilo: 'natural',
     sequencia: 9, digestao: 0, nomesSeq: {},
     caminho: null,
     raca: null, origem: null,
@@ -26,7 +27,7 @@ function sanear(p) {
 let P = novoPersonagem();
 
 function salvar() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(P)); } catch (e) {}
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(P)); return true; } catch (e) { return false; }
 }
 function carregar() {
   try {

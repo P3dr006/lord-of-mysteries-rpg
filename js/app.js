@@ -48,40 +48,54 @@ function renderIdentidade(body) {
     <h3>Quem é o seu Beyonder?</h3>
     <div class="id-wrap">
       <div class="id-form">
-        <div class="field"><label>Nome do personagem *</label>
-          <div class="inp-row"><input type="text" id="f-nome" value="${esc(P.nome)}" placeholder="Ex.: Alistair Ashcombe" autocomplete="off">
-          <button id="btn-nome" class="icon" title="Sortear um nome" data-ic="dado"></button></div></div>
-        <div class="grid2">
-          <div class="field"><label>Jogador</label><input type="text" id="f-jogador" value="${esc(P.jogador)}"></div>
-          <div class="field"><label>Idade</label><input type="text" id="f-idade" value="${esc(P.idade)}"></div>
+        <div class="id-top">
+          <div class="selo-col" id="selo-col"></div>
+          <div class="id-top-campos">
+            <div class="field"><label>Nome do personagem *</label>
+              <div class="inp-row"><input type="text" id="f-nome" value="${esc(P.nome)}" placeholder="Ex.: Alistair Ashcombe" autocomplete="off">
+              <button id="btn-nome" class="icon" title="Sortear um nome" aria-label="Sortear um nome" data-ic="dado"></button></div></div>
+            <div class="grid2">
+              <div class="field"><label>Jogador</label><input type="text" id="f-jogador" value="${esc(P.jogador)}"></div>
+              <div class="field"><label>Idade</label><input type="text" id="f-idade" value="${esc(P.idade)}"></div>
+            </div>
+            <div class="field"><label>Gênero</label><input type="text" id="f-genero" value="${esc(P.genero)}"></div>
+          </div>
         </div>
-        <div class="field"><label>Gênero</label><input type="text" id="f-genero" value="${esc(P.genero)}"></div>
         <div class="field"><label>Aparência</label><textarea id="f-aparencia" placeholder="Olhar, cicatrizes, o que as pessoas notam primeiro…">${esc(P.aparencia)}</textarea></div>
         <div class="field"><label>História</label><textarea id="f-historia" placeholder="De onde veio, o que perdeu e o que o levou a beber a poção…">${esc(P.historia)}</textarea></div>
       </div>
       <aside class="id-card" aria-label="Pré-visualização do registro">
         <div class="id-sel">Registro do Beyonder</div>
-        <svg class="id-emb" viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="54" fill="none" stroke="#d9b86a" stroke-width="1.2"/>
-          <g class="spin"><circle cx="60" cy="60" r="47" fill="none" stroke="#d9b86a" stroke-opacity=".6" stroke-dasharray="2 5"/></g>
-          <path d="M60 18l7 28 28 7-28 7-7 28-7-28-28-7 28-7z" fill="#d9b86a" fill-opacity=".18" stroke="#d9b86a" stroke-width="1.6" stroke-linejoin="round"/><circle cx="60" cy="60" r="5" fill="#d9b86a"/></svg>
+        <div class="id-emb-wrap" id="pv-emb"></div>
         <div class="id-nome" id="pv-nome"></div><div class="id-linha"></div>
         <dl><dt>Jogador</dt><dd id="pv-jog"></dd><dt>Idade</dt><dd id="pv-idade"></dd><dt>Gênero</dt><dd id="pv-gen"></dd></dl>
         <div class="id-reg">Nº <span id="pv-num"></span></div><div class="id-carimbo" id="pv-carimbo"></div>
       </aside>
     </div>`;
+  const EMB = `<svg class="id-emb" viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="54" fill="none" stroke="#d9b86a" stroke-width="1.2"/>
+          <g class="spin"><circle cx="60" cy="60" r="47" fill="none" stroke="#d9b86a" stroke-opacity=".6" stroke-dasharray="2 5"/></g>
+          <path d="M60 18l7 28 28 7-28 7-7 28-7-28-28-7 28-7z" fill="#d9b86a" fill-opacity=".18" stroke="#d9b86a" stroke-width="1.6" stroke-linejoin="round"/><circle cx="60" cy="60" r="5" fill="#d9b86a"/></svg>`;
   const prev = () => {
     $('#pv-nome').textContent = P.nome.trim() || '— sem nome —'; $('#pv-nome').classList.toggle('vazio', !P.nome.trim());
     $('#pv-jog').textContent = P.jogador || '—'; $('#pv-idade').textContent = P.idade || '—'; $('#pv-gen').textContent = P.genero || '—';
     $('#pv-num').textContent = numeroRegistro(P.nome.trim() || 'x');
+    $('#pv-emb').innerHTML = P.retrato ? retratoCirculo(96, 'id-ret') : EMB;
     const c = $('#pv-carimbo'), ok = P.nome.trim().length > 0, antes = c.dataset.ok;
     c.dataset.ok = ok ? '1' : '0'; c.textContent = ok ? 'REGISTRADO' : 'PENDENTE'; c.classList.toggle('ok', ok);
     if (ok && antes === '0') { c.classList.remove('bate'); void c.offsetWidth; c.classList.add('bate'); }
   };
-  const bind = (id, key) => $(id).addEventListener('input', e => { P[key] = e.target.value; salvar(); atualizarNext(); prev(); });
+  const montarSelo = selar => {
+    $('#selo-col').innerHTML = seloHTML(); ligarSelo(onRetrato); prev();
+    if (selar) { const e = $('#selo'); e.classList.add('selando'); setTimeout(() => e.classList.remove('selando'), 1600); }
+  };
+  const onRetrato = selar => montarSelo(selar === true);
+  window.__onRetrato = onRetrato;
+  const bind = (id, key) => $(id).addEventListener('input', e => { P[key] = e.target.value; salvar(); atualizarNext(); prev(); const m = $('.ret-vazio span'); if (m && key === 'nome') m.textContent = inicial(); const mb = $('.selo-vazio b'); if (mb && key === 'nome') mb.textContent = inicial(); });
   bind('#f-nome', 'nome'); bind('#f-jogador', 'jogador'); bind('#f-idade', 'idade');
   bind('#f-genero', 'genero'); bind('#f-aparencia', 'aparencia'); bind('#f-historia', 'historia');
-  $('#btn-nome').addEventListener('click', () => { P.nome = nomeAleatorio(); $('#f-nome').value = P.nome; salvar(); atualizarNext(); prev(); Som.carta(); });
-  $('#pv-carimbo').dataset.ok = P.nome.trim() ? '1' : '0'; prev();
+  $('#btn-nome').addEventListener('click', () => { P.nome = nomeAleatorio(); $('#f-nome').value = P.nome; salvar(); atualizarNext(); prev(); Som.carta(); const mb = $('.selo-vazio b'); if (mb) mb.textContent = inicial(); });
+  $('#pv-carimbo').dataset.ok = P.nome.trim() ? '1' : '0';
+  montarSelo(false);
 }
 
 /* ---------- Passo 2: Atributos ---------- */
@@ -361,7 +375,7 @@ function renderFicha(body) {
   <div class="ficha" id="ficha" style="--pc:${c.cor};--pt:${pat.cor};--k:${k}" data-tier="${pat.id}">
     <header class="hero">
       <div class="hero-bg" aria-hidden="true"><div class="hero-wm"><img src="img/sigilos/${c.id}.png" alt=""></div></div>
-      <div class="hero-sig"><div class="aura"></div><div class="aura a2"></div><div class="aura-anel"></div>${sigilo(c, 150)}</div>
+      <div class="hero-sig ${P.retrato ? 'com-ret' : ''}"><div class="aura"></div><div class="aura a2"></div><div class="aura-anel"></div>${P.retrato ? `${retratoCirculo(138, 'hero-ret')}<div class="hero-insignia" title="Caminho ${c.nome}">${sigilo(c, 46)}</div>` : sigilo(c, 150)}</div>
       <div class="hero-info">
         <p class="hero-eyebrow">Caminho ${c.nome} · <span>${pat.nome}</span></p>
         <h2>${esc(P.nome)}</h2>
