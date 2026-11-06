@@ -18,7 +18,7 @@
   <nav class="topnav">
     <button id="btn-terror" class="ghost icon" title="Modo Terror" aria-pressed="false"></button>
     <button id="btn-som" class="ghost icon" title="Som" aria-pressed="true"></button>
-    <button id="btn-new" class="ghost" data-ic="novo" aria-label="Novo personagem"><span class="tx">Novo personagem</span></button>
+    <button id="btn-pers" class="ghost" data-ic="pessoas" aria-label="Meus personagens"><span class="tx">Personagens</span></button>
     <button id="btn-import" class="ghost" data-ic="subir" aria-label="Importar JSON"><span class="tx">Importar JSON</span></button>
     <input id="file-import" type="file" accept="application/json" hidden>
   </nav>
@@ -34,7 +34,8 @@
         <p class="lead">Crie seu Beyonder: role os dados do destino e dê o primeiro passo no Caminho.</p>
         <div class="cover-btns">
           <button id="btn-start" class="primary big" data-ic="estrela">Iniciar a jornada</button>
-          <button id="btn-continue" class="ghost" data-ic="livro" hidden>Continuar personagem salvo</button>
+          <button id="btn-continue" class="ghost" data-ic="livro" hidden><span id="continue-txt">Continuar personagem salvo</span></button>
+          <button id="btn-lib" class="ghost" data-ic="pessoas" hidden><span id="lib-txt">Meus personagens</span></button>
         </div>
         <p id="cover-saved" class="cover-saved" hidden></p>
       </div>
