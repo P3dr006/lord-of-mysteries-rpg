@@ -385,7 +385,7 @@ function medidor(k, nome, v, max, cor) {
     <div class="g-top"><span>${nome} <em class="g-st" id="gs-${k}"></em></span>
       <label class="g-val"><input type="text" inputmode="numeric" pattern="[0-9]*" class="g-in" id="iv-${k}" value="${v}" aria-label="${nome}: valor atual" autocomplete="off"><i>/ ${max}</i></label></div>
     <div class="g-barwrap"><div class="g-bar" role="meter" aria-label="${nome}" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${v}" aria-valuetext="${v} de ${max}"><div class="g-fill" id="gf-${k}" style="width:${max ? v / max * 100 : 0}%"></div></div><span class="g-delta" id="gd-${k}" aria-hidden="true"></span></div>
-    <div class="g-btns" role="group" aria-label="Ajustar ${nome}">${PASSOS_VITAL.slice(0, 3).map(btn).join('')}<button type="button" class="adj max" data-c="${k}" data-max="1" aria-label="Restaurar ${nome} ao máximo" title="Máximo">máx</button>${PASSOS_VITAL.slice(3).map(btn).join('')}</div></div>`;
+    <div class="g-btns" role="group" aria-label="Ajustar ${nome}">${PASSOS_VITAL.slice(0, 3).map(btn).join('')}<button type="button" class="adj max" data-c="${k}" data-max="1" aria-label="máx: restaurar ${nome} ao máximo" title="Máximo">máx</button>${PASSOS_VITAL.slice(3).map(btn).join('')}</div></div>`;
 }
 
 function renderFicha(body) {
@@ -583,7 +583,7 @@ function abrirBiblioteca() {
     $('#lib-tt').textContent = itens.length === 1 ? '1 personagem' : `${itens.length} personagens`;
     if (!itens.length) { ul.innerHTML = '<li class="lib-vazio">Nenhum personagem salvo ainda. Crie o primeiro.</li>'; return; }
     ul.innerHTML = itens.map(({ id, p }) => `<li class="lib-item ${id === ativo ? 'ativo' : ''}" data-id="${id}">
-      <button type="button" class="lib-abrir" aria-label="Abrir ${esc(p.nome || 'personagem sem nome')}">${avatarLista(p)}<span class="lib-info"><b>${esc(p.nome.trim() || 'Sem nome')}</b><small>${esc(metaLista(p))}</small></span></button>
+      <button type="button" class="lib-abrir">${avatarLista(p)}<span class="lib-info"><span class="sr-only">Abrir </span><b>${esc(p.nome.trim() || 'Sem nome')}</b><small>${esc(metaLista(p))}</small></span></button>
       <div class="lib-acoes"><button type="button" class="mini lib-dup" aria-label="Duplicar ${esc(p.nome || 'personagem')}" title="Duplicar">${svgBtn('copia')}</button>
       <button type="button" class="mini lib-del" aria-label="Excluir ${esc(p.nome || 'personagem')}" title="Excluir">${svgBtn('lixo')}</button></div></li>`).join('');
     ul.querySelectorAll('.lib-item').forEach(li => {
