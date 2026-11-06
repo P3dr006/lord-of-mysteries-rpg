@@ -35,14 +35,6 @@ function carregar() {
     return sanear(Object.assign(novoPersonagem(), JSON.parse(raw)));
   } catch (e) { return null; }
 }
-function exportarJSON() {
-  const blob = new Blob([JSON.stringify(P, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = (P.nome || 'personagem').replace(/\W+/g, '_') + '.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
 function importarJSON(file, cb) {
   const r = new FileReader();
   r.onload = () => {
