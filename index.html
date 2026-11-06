@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lord of the Mysteries RPG</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="stars" aria-hidden="true"></div>
+
+<header class="topbar">
+  <h1 class="logo">✦ Lord of the Mysteries <small>RPG</small></h1>
+  <nav class="topnav">
+    <button id="btn-new" class="ghost">Novo personagem</button>
+    <button id="btn-import" class="ghost">Importar JSON</button>
+    <input id="file-import" type="file" accept="application/json" hidden>
+  </nav>
+</header>
+
+<main id="app">
+  <section id="cover" class="panel center">
+    <p class="eyebrow">Quem é Você?</p>
+    <h2 class="title">O Louco que Caminha<br>entre os Mistérios</h2>
+    <p class="lead">Crie seu Beyonder: role seus atributos com dados do destino e dê o primeiro passo no Caminho.</p>
+    <button id="btn-start" class="primary big">Iniciar a jornada</button>
+    <button id="btn-continue" class="ghost" hidden>Continuar personagem salvo</button>
+  </section>
+
+  <section id="wizard" hidden>
+    <ol id="stepper" class="stepper"></ol>
+    <div id="step-body" class="panel"></div>
+    <div class="wizard-nav">
+      <button id="btn-prev" class="ghost">← Voltar</button>
+      <button id="btn-next" class="primary">Avançar →</button>
+    </div>
+  </section>
+</main>
+
+<script src="js/data.js"></script>
+<script src="js/state.js"></script>
+<script src="js/dice.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

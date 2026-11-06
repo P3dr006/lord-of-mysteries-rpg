@@ -1,0 +1,228 @@
+const $ = s => document.querySelector(s);
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Lista de passos — as próximas etapas do projeto adicionam passos aqui.
+const STEPS = [
+  { id: 'identidade', nome: 'Identidade', render: renderIdentidade, valido: () => P.nome.trim().length > 0 },
+  { id: 'atributos',  nome: 'Atributos',  render: renderAtributos, valido: () => ATTRS.every(a => P.attrs[a.key]) },
+  { id: 'ficha',      nome: 'Ficha',      render: renderFicha,     valido: () => true },
+];
+
+function mostrar(id) {
+  $('#cover').hidden = id !== 'cover';
+  $('#wizard').hidden = id !== 'wizard';
+}
+
+function iniciarPasso() {
+  mostrar('wizard');
+  renderStepper();
+  const s = STEPS[P.step];
+  const body = $('#step-body');
+  body.innerHTML = '';
+  s.render(body);
+  $('#btn-prev').disabled = P.step === 0;
+  $('#btn-next').hidden = P.step === STEPS.length - 1;
+  $('#btn-next').disabled = !s.valido();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function atualizarNext() { $('#btn-next').disabled = !STEPS[P.step].valido(); }
+
+function renderStepper() {
+  const ol = $('#stepper');
+  ol.innerHTML = '';
+  STEPS.forEach((s, i) => {
+    const li = el('li', i === P.step ? 'on' : i < P.step ? 'done' : '', `${i + 1}. ${s.nome}`);
+    ol.appendChild(li);
+  });
+}
+
+/* ---------- Passo 1: Identidade ---------- */
+function renderIdentidade(body) {
+  body.innerHTML = `
+    <h3>Quem é o seu Beyonder?</h3>
+    <div class="grid2">
+      <div class="field"><label>Nome do personagem *</label><input type="text" id="f-nome" value="${esc(P.nome)}" placeholder="Ex.: Klein Moretti"></div>
+      <div class="field"><label>Jogador</label><input type="text" id="f-jogador" value="${esc(P.jogador)}"></div>
+      <div class="field"><label>Idade</label><input type="text" id="f-idade" value="${esc(P.idade)}"></div>
+      <div class="field"><label>Gênero</label><input type="text" id="f-genero" value="${esc(P.genero)}"></div>
+    </div>
+    <div class="field"><label>Aparência</label><textarea id="f-aparencia">${esc(P.aparencia)}</textarea></div>
+    <div class="field"><label>História</label><textarea id="f-historia">${esc(P.historia)}</textarea></div>`;
+  const bind = (id, key) => $(id).addEventListener('input', e => { P[key] = e.target.value; salvar(); atualizarNext(); });
+  bind('#f-nome', 'nome'); bind('#f-jogador', 'jogador'); bind('#f-idade', 'idade');
+  bind('#f-genero', 'genero'); bind('#f-aparencia', 'aparencia'); bind('#f-historia', 'historia');
+}
+
+/* ---------- Passo 2: Atributos ---------- */
+let rolando = false;
+
+function renderAtributos(body) {
+  body.innerHTML = `
+    <h3>Atributos — os dados do destino</h3>
+    <p class="hint">Cada atributo é 4d6 descartando o dado mais baixo (que fica apagado). Você pode usar uma única
+    <b>Relance do Destino</b> para refazer um atributo.</p>
+    <div class="toolbar">
+      <button id="btn-roll-all" class="primary">🎲 Rolar todos</button>
+      <span class="hint" id="reroll-info"></span>
+    </div>
+    <div class="attr-list" id="attr-list"></div>`;
+  const list = $('#attr-list');
+  ATTRS.forEach(a => {
+    const row = el('div', 'attr-row');
+    row.id = 'row-' + a.key;
+    row.innerHTML = `
+      <div class="attr-name"><b>${a.nome}</b><span>${a.desc}</span></div>
+      <div class="dice-tray"></div>
+      <div class="attr-total"></div>`;
+    list.appendChild(row);
+    desenharAtributo(a.key, false);
+  });
+  $('#btn-roll-all').addEventListener('click', rolarTodos);
+  atualizarRelance();
+}
+
+function atualizarRelance() {
+  const info = $('#reroll-info');
+  if (!info) return;
+  info.textContent = P.relanceUsado ? 'Relance do Destino já usada.' : 'Relance do Destino disponível (clique em um atributo já rolado).';
+  const todos = ATTRS.every(a => P.attrs[a.key]);
+  $('#btn-roll-all').disabled = todos || rolando;
+}
+
+function desenharAtributo(key, animar) {
+  const row = $('#row-' + key);
+  const tray = row.querySelector('.dice-tray');
+  const tot = row.querySelector('.attr-total');
+  const r = P.attrs[key];
+  tray.innerHTML = '';
+  if (!r) { tot.innerHTML = '—'; tray.appendChild(botaoRolar(key)); return Promise.resolve(); }
+  const dados = r.dados.map((v, i) => {
+    const dd = criarDado();
+    if (i === r.descartado) dd.classList.add('drop');
+    tray.appendChild(dd);
+    return mostrarFace(dd, v, animar);
+  });
+  tot.innerHTML = animar ? '…' : `${r.total}<small>mod ${mod(r.total) >= 0 ? '+' : ''}${mod(r.total)}</small>`;
+  const fim = Promise.all(dados).then(() => {
+    tot.innerHTML = `${r.total}<small>mod ${mod(r.total) >= 0 ? '+' : ''}${mod(r.total)}</small>`;
+    if (!P.relanceUsado) {
+      const b = el('button', 'ghost', '↺ Relance');
+      b.title = 'Usa a Relance do Destino (uma vez)';
+      b.addEventListener('click', () => relancer(key));
+      tray.appendChild(b);
+    }
+  });
+  return fim;
+}
+
+function botaoRolar(key) {
+  const b = el('button', '', '🎲 Rolar 4d6');
+  b.addEventListener('click', () => rolarAtributo(key));
+  return b;
+}
+
+async function rolarAtributo(key) {
+  if (rolando) return;
+  rolando = true;
+  P.attrs[key] = rolar4d6();
+  salvar();
+  await desenharAtributo(key, true);
+  rolando = false;
+  atualizarRelance(); atualizarNext();
+}
+
+async function rolarTodos() {
+  if (rolando) return;
+  rolando = true;
+  const pend = ATTRS.filter(a => !P.attrs[a.key]);
+  pend.forEach(a => { P.attrs[a.key] = rolar4d6(); });
+  salvar();
+  await Promise.all(pend.map(a => desenharAtributo(a.key, true)));
+  rolando = false;
+  atualizarRelance(); atualizarNext();
+}
+
+async function relancer(key) {
+  if (rolando || P.relanceUsado) return;
+  rolando = true;
+  P.relanceUsado = true;
+  P.attrs[key] = rolar4d6();
+  salvar();
+  document.querySelectorAll('.dice-tray button.ghost').forEach(b => b.remove());
+  await desenharAtributo(key, true);
+  rolando = false;
+  atualizarRelance(); atualizarNext();
+}
+
+/* ---------- Ficha ---------- */
+function ensureVitais() {
+  if (P.pv == null) P.pv = pvMax();
+  if (P.san == null) P.san = sanMax();
+}
+
+function renderFicha(body) {
+  ensureVitais();
+  const attrs = ATTRS.map(a => {
+    const t = total(a.key);
+    return `<div class="stat"><div class="m">${a.nome}</div><div class="v">${t}</div><div class="m">mod ${mod(t) >= 0 ? '+' : ''}${mod(t)}</div></div>`;
+  }).join('');
+  body.innerHTML = `
+    <div class="sheet-head">
+      <div>
+        <h2>${esc(P.nome)}</h2>
+        <span class="badge">Sequência ${P.sequencia} · ${SEQ_NAMES[P.sequencia]}</span>
+        <div class="hint">${[P.jogador && 'Jogador: ' + esc(P.jogador), P.idade && esc(P.idade) + ' anos', esc(P.genero)].filter(Boolean).join(' · ')}</div>
+      </div>
+    </div>
+    <h3>Atributos</h3>
+    <div class="stat-grid">${attrs}</div>
+    <h3>Vitais</h3>
+    <div class="stat-grid">
+      ${contador('pv', 'Pontos de Vida', P.pv, pvMax())}
+      ${contador('san', 'Sanidade', P.san, sanMax())}
+      <div class="stat"><div class="m">Espiritualidade</div><div class="v">${espMax()}</div><div class="m">máx.</div></div>
+    </div>
+    ${P.aparencia ? `<h3>Aparência</h3><p class="note">${esc(P.aparencia)}</p>` : ''}
+    ${P.historia ? `<h3>História</h3><p class="note">${esc(P.historia)}</p>` : ''}
+    <h3>Notas de sessão</h3>
+    <textarea id="f-notas" placeholder="Anotações da campanha...">${esc(P.notas)}</textarea>
+    <div class="sheet-actions">
+      <button id="btn-export" class="primary">⬇ Exportar JSON</button>
+    </div>`;
+  body.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.c, delta = +b.dataset.d, max = k === 'pv' ? pvMax() : sanMax();
+    P[k] = Math.max(0, Math.min(max, P[k] + delta));
+    salvar();
+    $('#cv-' + k).textContent = P[k];
+  }));
+  $('#f-notas').addEventListener('input', e => { P.notas = e.target.value; salvar(); });
+  $('#btn-export').addEventListener('click', exportarJSON);
+}
+
+function contador(k, nome, v, max) {
+  return `<div class="stat"><div class="m">${nome}</div>
+    <div class="v"><span id="cv-${k}">${v}</span><span class="m"> / ${max}</span></div>
+    <div class="counter"><button data-c="${k}" data-d="-1">−</button><button data-c="${k}" data-d="1">+</button></div></div>`;
+}
+
+/* ---------- Navegação e inicialização ---------- */
+$('#btn-next').addEventListener('click', () => { if (P.step < STEPS.length - 1) { P.step++; salvar(); iniciarPasso(); } });
+$('#btn-prev').addEventListener('click', () => { if (P.step > 0) { P.step--; salvar(); iniciarPasso(); } });
+$('#btn-start').addEventListener('click', () => { P = novoPersonagem(); salvar(); iniciarPasso(); });
+$('#btn-continue').addEventListener('click', () => { P = carregar(); iniciarPasso(); });
+$('#btn-new').addEventListener('click', () => {
+  if (confirm('Criar um novo personagem? O atual salvo será substituído.')) { P = novoPersonagem(); salvar(); iniciarPasso(); }
+});
+$('#btn-import').addEventListener('click', () => $('#file-import').click());
+$('#file-import').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) importarJSON(f, ok => ok ? iniciarPasso() : alert('Arquivo JSON inválido.'));
+  e.target.value = '';
+});
+
+(function init() {
+  const salvo = carregar();
+  if (salvo && salvo.nome) $('#btn-continue').hidden = false;
+  mostrar('cover');
+})();
