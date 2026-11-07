@@ -50,7 +50,8 @@ const CLIENTE = `(() => {
 })();`;
 
 function criarServidor() {
-  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [] };
+  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [] };
+  const naMesa = (u, mesa) => db.jogadores.some(j => j.mesa_id === mesa && j.user_id === u);
   const assinaturas = [];          // { id, uid, tabela, filtro, page }
   const entregue = {};             // uid -> [cada resposta entregue a esse usuário]
   const dados = [];                // próximos valores do dado (para testes determinísticos)
@@ -68,6 +69,8 @@ function criarServidor() {
     pedidos: (u, r) => mestreDe(r.mesa_id) === u || (r.para === u && r.tipo === 'aberto'),
     segredos_pedido: (u, r) => mestreDe(r.mesa_id) === u,
     resultados: (u, r) => mestreDe(r.mesa_id) === u || (r.user_id === u && r.tipo === 'aberto'),
+    sussurros: (u, r) => mestreDe(r.mesa_id) === u || r.para === u || (r.para === null && naMesa(u, r.mesa_id)),
+    sussurros_leituras: (u, r) => mestreDe(r.mesa_id) === u || r.user_id === u,
   };
   function visao(u) {     // resultados_mestre (security_invoker: vale a RLS de quem consulta)
     return db.resultados.filter(r => VE.resultados(u, r)).map(r => {
@@ -87,6 +90,21 @@ function criarServidor() {
   const registrar = (u, r) => { if (u) (entregue[u] = entregue[u] || []).push(JSON.parse(JSON.stringify(r))); return r; };
 
   const RPC = {
+    sussurrar(u, a) {
+      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre sussurra.');
+      const t = String(a.p_texto || '').trim().slice(0, 1000) || null, ti = String(a.p_titulo || '').trim().slice(0, 80) || null, img = a.p_imagem || null;
+      if (!t && !img) return erro('Escreva algo ou escolha uma imagem.');
+      if (img && (img.length > 450000 || !/^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(img))) return erro('new row violates check constraint "sussurros_imagem_check"');
+      if (a.p_para && !naMesa(a.p_para, a.p_mesa)) return erro('Jogador não encontrado.');
+      const s = { id: id('sus'), mesa_id: a.p_mesa, para: a.p_para || null, titulo: ti, texto: t, imagem: img, tem_imagem: !!img, criado_em: new Date().toISOString() };
+      db.sussurros.push(s); avisar('sussurros', s); return { data: s.id, error: null };
+    },
+    ler_sussurro(u, a) {
+      const s = db.sussurros.find(x => x.id === a.p_id);
+      if (!s || !(s.para === u || (s.para === null && naMesa(u, s.mesa_id)))) return erro('Sussurro inválido.');
+      if (!db.sussurros_leituras.some(l => l.sussurro_id === s.id && l.user_id === u)) { const l = { sussurro_id: s.id, mesa_id: s.mesa_id, user_id: u, lido_em: new Date().toISOString() }; db.sussurros_leituras.push(l); avisar('sussurros_leituras', l); }
+      return { data: null, error: null };
+    },
     criar_mesa(u, a) {
       if (!u || anonimo(u)) return erro('Entre com e-mail para criar uma mesa.');
       const AL = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c; do { c = Array.from({ length: 6 }, () => AL[Math.floor(Math.random() * AL.length)]).join(''); } while (db.mesas.some(m => m.codigo === c));
@@ -142,7 +160,8 @@ function criarServidor() {
     }
     if (q.ordem) { const [c, asc] = q.ordem; linhas = linhas.slice().sort((a, b) => (a[c] > b[c] ? 1 : a[c] < b[c] ? -1 : 0) * (asc ? 1 : -1)); }
     if (q.limite) linhas = linhas.slice(0, q.limite);
-    return { data: linhas.map(r => ({ ...r })), error: null };
+    const cols = q.colunas && q.colunas !== '*' ? q.colunas.split(',').map(c => c.trim()) : null;   // como o real: só as colunas pedidas
+    return { data: linhas.map(r => cols ? Object.fromEntries(cols.map(c => [c, r[c]])) : { ...r }), error: null };
   }
 
   async function tratar(page, op, d) {

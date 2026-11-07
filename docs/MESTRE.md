@@ -23,6 +23,12 @@ aparece no topo da aba Testes. "Rolar" pede o dado ao servidor e a animação pa
 A ficha (modificadores, PV, Sanidade, Caminho, Sequência) vai ao mestre quando muda. Ao recarregar a página,
 o jogador volta sozinho para a mesa. "Sair da mesa" remove o jogador.
 
+**Sussurros e pistas:** no Grimório, "Sussurros e pistas" manda texto e/ou imagem (carta, mapa, retrato) para
+um jogador ou para todos (também pelo botão "Sussurrar" na ficha do jogador). A imagem é reduzida no navegador do
+mestre (até 1280 px, WebP, ~330 KB no máximo). No jogador, a cena aparece na hora (névoa, palavras surgindo, a pista
+em papel envelhecido); o que chegou enquanto ele estava fora aparece quando ele volta. "Guardar na memória" marca
+como lido, e o mestre vê quem leu. As pistas ficam na aba Testes para reler. "Para todos" é guardado uma vez só.
+
 ## Arquivos
 
 | Arquivo | O que faz |
@@ -49,6 +55,12 @@ Arquivo: `supabase/migrations/20261106_mesa_do_mestre.sql`. Tudo com RLS.
 | `segredos_pedido` (dificuldade) | **só o mestre** | só por função |
 | `resultados` | o mestre; o jogador só os `aberto` dele | só por função |
 | `resultados_mestre` (visão) | só o mestre | — |
+| `sussurros` | o mestre; o jogador só os dele e os "para todos" da mesa dele | `sussurrar` (só o mestre) |
+| `sussurros_leituras` | o mestre; o jogador só as próprias | `ler_sussurro` |
+
+Sussurros: `20261107_sussurros.sql`, `…b_sussurros_corrige_leitura.sql` (achado na verificação: um `null`
+deixava quem estava fora da mesa marcar como lido) e `…c_sussurros_tem_imagem.sql`. Verificados em 19 cenários com
+papéis reais (mestre, 2 jogadores, intruso, visitante), dentro de uma transação desfeita no fim.
 
 O dado é rolado **no servidor** (`responder_pedido`, `rolar_secreto`); o site só anima até o número.
 No teste secreto o modificador vem de `ficha.mods.<atributo>` do jogador. No aberto, o modificador vem do
