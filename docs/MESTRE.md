@@ -62,6 +62,21 @@ nos Duelos.
 (testes com dificuldade e veredito, duelos, sussurros, golpes, Terror e momentos). Dá para imprimir e baixar em .md.
 Só o mestre lê.
 
+**Bestiário (fichas de criatura):** aba Bestiário. "Nova criatura": retrato (reduzido no navegador como nas pistas), nome,
+tipo, perigo (1 a 5 olhos), PV, Defesa, os 6 modificadores, Horror, até 12 poderes (um dado no efeito, como "2d6+3",
+vira botão de rolar), o que os jogadores veem e notas secretas. O bestiário é **do mestre**, vale em todas as mesas dele
+e continua quando uma mesa é apagada. Na carta: **Chamar** (vira figura com PV cheio, iniciativa = Agilidade e os
+modificadores; repetir numera "Lobo 2"), **Ficha** (rolar poderes e, com o resultado, "Ferir" ou "Abalar a mente" um
+jogador, o que manda a ordem com o nome do poder) e **Revelar** (sussurro para todos com retrato, nome e descrição; números
+e notas nunca saem). No Duelo, a figura que veio do bestiário usa o atributo escolhido.
+
+**Habilidades da mesa:** o jogador conectado à mesa propõe pela própria ficha (nome, o que faz, efeito, custo; até 5
+esperando). No Grimório aparece "Pedidos de poder" (com Sequência, Caminho e quantas habilidades ele já tem) e a carta ganha
+"✦ proposta". O mestre **aprova**, **modifica** (e aprova, com recado) ou **rejeita** (com motivo). Na ficha do jogador, o
+mestre também **concede**, **edita** e **tira** habilidades. O jogador recebe cada decisão como um decreto com selo de cera
+(também o que chegou enquanto estava fora, uma vez só) e vê na ficha: aprovadas, aguardando e recusadas (que pode dispensar).
+Sem mesa, o formulário continua anotando habilidades locais, como antes.
+
 **Dados do mestre:** em Dados, rolagens locais (d4 a d%, quantidade e modificador). Nada vai ao servidor.
 
 **Presença:** cada carta tem uma vela: acesa quando o jogador está com a mesa aberta, apagada (fumaça) quando saiu.
@@ -108,6 +123,12 @@ Arquivo: `supabase/migrations/20261106_mesa_do_mestre.sql`. Tudo com RLS.
 | `encontros` (Roda) | o mestre e os jogadores da mesa | `iniciar_encontro`, `proximo_turno`, `encerrar_encontro` (só o mestre) |
 | `disputas` (Duelos) | o mestre; o jogador só os visíveis em que está | `disputar` (só o mestre; o servidor rola) |
 | `cronica` | **só o mestre** | só o mestre (direto na tabela) |
+| `bestiario` | **só o dono** (mestre com e-mail) | só o dono; anônimo nunca |
+| `habilidades` | o mestre; o jogador só as suas (enquanto está na mesa) | mestre concede/edita/apaga; jogador só por `propor_habilidade` e `retirar_habilidade` |
+
+Bestiário e habilidades: `20261110_bestiario_e_habilidades.sql`, verificado em 39 cenários com papéis reais **sem aplicar**
+(mestre, outro mestre, 2 jogadores, intruso, visitante; inclui: jogador não se autoaprova, limite de 5, outro mestre não vê,
+apagar a ficha mantém a figura, apagar a mesa mantém o bestiário).
 
 Cena: `20261109_cena.sql`, verificado em 28 cenários com papéis reais **sem aplicar** (inclui: +30 mandado pelo navegador
 vira +3 da ficha; ficha com `"agil":"abc"` não quebra a rolagem; apagar a mesa leva tudo junto; outro mestre não mexe).

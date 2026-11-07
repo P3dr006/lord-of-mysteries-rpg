@@ -61,7 +61,7 @@ const CLIENTE = `(() => {
 })();`;
 
 function criarServidor() {
-  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [], figuras: [], encontros: [], disputas: [], cronica: [] };
+  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [], figuras: [], encontros: [], disputas: [], cronica: [], bestiario: [], habilidades: [] };
   const naMesa = (u, mesa) => db.jogadores.some(j => j.mesa_id === mesa && j.user_id === u);
   const assinaturas = [];          // { id, uid, tabela, filtro, page }
   const entregue = {};             // uid -> [cada resposta entregue a esse usuário]
@@ -88,6 +88,8 @@ function criarServidor() {
     cronica: (u, r) => mestreDe(r.mesa_id) === u,
     encontros: (u, r) => mestreDe(r.mesa_id) === u || naMesa(u, r.mesa_id),
     disputas: (u, r) => mestreDe(r.mesa_id) === u || (r.visivel && (r.a.id === u || r.b.id === u)),
+    bestiario: (u, r) => r.dono === u && !anonimo(u),
+    habilidades: (u, r) => mestreDe(r.mesa_id) === u || (r.user_id === u && naMesa(u, r.mesa_id)),
   };
   function visao(u) {     // resultados_mestre (security_invoker: vale a RLS de quem consulta)
     return db.resultados.filter(r => VE.resultados(u, r)).map(r => {
@@ -111,10 +113,23 @@ function criarServidor() {
   const d20 = () => rolar(20);
   function ladoDuelo(mesa, tipo, idL, attr) {
     if (tipo === 'jogador') { const j = db.jogadores.find(x => x.mesa_id === mesa && x.user_id === idL); if (!j) throw new Error('Jogador não encontrado.'); const d = d20(), m = modDaFicha(j.ficha, attr); return { tipo, id: idL, nome: j.nome, caminhoId: (j.ficha || {}).caminhoId || null, cor: (j.ficha || {}).cor || null, atributo: attr || null, dado: d, mod: m, total: d + m }; }
-    if (tipo === 'figura') { const f = db.figuras.find(x => x.mesa_id === mesa && x.id === idL); if (!f) throw new Error('Figura não encontrada.'); const d = d20(); return { tipo, id: idL, nome: f.nome, atributo: null, dado: d, mod: f.bonus, total: d + f.bonus }; }
+    if (tipo === 'figura') { const f = db.figuras.find(x => x.mesa_id === mesa && x.id === idL); if (!f) throw new Error('Figura não encontrada.'); const d = d20(), tem = !!attr && Object.prototype.hasOwnProperty.call(f.mods || {}, attr), m = tem ? modDaFicha({ mods: f.mods }, attr) : f.bonus; return { tipo, id: idL, nome: f.nome, atributo: tem ? attr : null, dado: d, mod: m, total: d + m }; }
     throw new Error('Lado inválido.');
   }
   const RPC = {
+    propor_habilidade(u, a) {
+      if (!naMesa(u, a.p_mesa)) return erro('Entre na mesa para propor uma habilidade.');
+      const n = String(a.p_nome || '').trim().slice(0, 60); if (!n) return erro('Dê um nome à habilidade.');
+      if (db.habilidades.filter(h => h.mesa_id === a.p_mesa && h.user_id === u && h.estado === 'pendente').length >= 5) return erro('Limite de 5 propostas esperando o mestre.');
+      const c = (v, m) => String(v || '').trim().slice(0, m) || null, agora = new Date().toISOString();
+      const h = { id: id('hab'), mesa_id: a.p_mesa, user_id: u, nome: n, descricao: c(a.p_descricao, 600), custo: c(a.p_custo, 60), efeito: c(a.p_efeito, 60), origem: 'jogador', estado: 'pendente', resposta: null, alterada: false, criado_em: agora, atualizado_em: agora };
+      db.habilidades.push(h); avisar('habilidades', h); return { data: h.id, error: null };
+    },
+    retirar_habilidade(u, a) {
+      const h = db.habilidades.find(x => x.id === a.p_id && x.user_id === u && x.origem === 'jogador' && ['pendente', 'rejeitada'].includes(x.estado));
+      if (!h) return erro('Esta habilidade não pode ser retirada.');
+      db.habilidades.splice(db.habilidades.indexOf(h), 1); avisar('habilidades', h); return { data: null, error: null };
+    },
     iniciar_encontro(u, a) {
       if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre começa um encontro.');
       const ps = db.jogadores.filter(j => j.mesa_id === a.p_mesa).map(j => { const d = d20(), b = modDaFicha(j.ficha, 'agil'); return { tipo: 'jogador', id: j.user_id, nome: j.nome, caminhoId: (j.ficha || {}).caminhoId || null, cor: (j.ficha || {}).cor || null, dado: d, bonus: b, total: d + b }; })
@@ -223,17 +238,45 @@ function criarServidor() {
     },
   };
 
+  const IMG = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/;
+  // os mesmos checks da tabela bestiario (devolve o nome do check que falhou)
+  function validarBestiario(v, parcial) {
+    const tem = k => !parcial || k in v;
+    if (tem('nome') && (!String(v.nome || '').length || String(v.nome).length > 60)) return 'nome';
+    if (tem('perigo') && v.perigo != null && !(v.perigo >= 1 && v.perigo <= 5)) return 'perigo';
+    if (tem('pv_max') && v.pv_max != null && !(v.pv_max >= 1 && v.pv_max <= 9999)) return 'pv_max';
+    if (tem('defesa') && v.defesa != null && !(v.defesa >= 0 && v.defesa <= 99)) return 'defesa';
+    if (tem('habilidades') && v.habilidades != null && (!Array.isArray(v.habilidades) || v.habilidades.length > 12)) return 'habilidades';
+    if (tem('mods') && v.mods != null && (typeof v.mods !== 'object' || Array.isArray(v.mods))) return 'mods';
+    if (tem('imagem') && v.imagem != null && (v.imagem.length > 450000 || !IMG.test(v.imagem))) return 'imagem';
+    if (tem('descricao') && v.descricao != null && v.descricao.length > 1000) return 'descricao';
+    if (tem('notas') && v.notas != null && v.notas.length > 1500) return 'notas';
+    return null;
+  }
+  const limparBestiario = v => ({ nome: v.nome, tipo: v.tipo || null, perigo: v.perigo || 1, pv_max: v.pv_max ?? null, defesa: v.defesa ?? null, horror: v.horror || null, mods: v.mods || {}, habilidades: v.habilidades || [], descricao: v.descricao || null, notas: v.notas || null, imagem: v.imagem || null });
   function consulta(q) {
     const u = q.uid; if (!u) return erro('JWT ausente');
     let linhas = q.tabela === 'resultados_mestre' ? visao(u) : (db[q.tabela] || []).filter(r => VE[q.tabela](u, r));
     linhas = linhas.filter(r => q.filtros.every(([c, v]) => String(r[c]) === String(v)));
+    if (q.op === 'insert' && q.tabela === 'bestiario') {   // o bestiário é do mestre (dono), não da mesa
+      const v = q.valores; if (!u || anonimo(u)) return erro('new row violates row-level security policy for table "bestiario"');
+      const ch = validarBestiario(v); if (ch) return erro('new row violates check constraint "bestiario_' + ch + '_check"');
+      const agora = new Date().toISOString(), linha = { id: id('bes'), dono: u, ...limparBestiario(v), criado_em: agora, atualizado_em: agora };
+      db.bestiario.push(linha); return { data: q.devolver ? [{ ...linha }] : null, error: null };
+    }
+    if (q.op === 'insert' && q.tabela === 'habilidades') {   // o mestre concede direto; o jogador só pela função
+      const v = q.valores; if (mestreDe(v.mesa_id) !== u || v.origem !== 'mestre' || v.estado !== 'aprovada' || !naMesa(v.user_id, v.mesa_id)) return erro('new row violates row-level security policy for table "habilidades"');
+      const n = String(v.nome || ''); if (!n || n.length > 60) return erro('new row violates check constraint "habilidades_nome_check"');
+      const agora = new Date().toISOString(), linha = { id: id('hab'), mesa_id: v.mesa_id, user_id: v.user_id, nome: n, descricao: v.descricao || null, custo: v.custo || null, efeito: v.efeito || null, origem: 'mestre', estado: 'aprovada', resposta: v.resposta || null, alterada: false, criado_em: agora, atualizado_em: agora };
+      db.habilidades.push(linha); avisar('habilidades', linha); return { data: q.devolver ? [{ ...linha }] : null, error: null };
+    }
     if (q.op === 'insert' && (q.tabela === 'figuras' || q.tabela === 'cronica')) {   // escritas diretas só do mestre
       const v = q.valores; if (mestreDe(v.mesa_id) !== u) return erro(`new row violates row-level security policy for table "${q.tabela}"`);
       let linha;
       if (q.tabela === 'figuras') {
         const nome = String(v.nome || '').trim(); if (!nome || nome.length > 40) return erro('new row violates check constraint "figuras_nome_check"');
         const bonus = v.bonus == null ? 0 : v.bonus; if (bonus < -10 || bonus > 20) return erro('new row violates check constraint "figuras_bonus_check"');
-        linha = { id: id('fig'), mesa_id: v.mesa_id, nome, bonus, pv: v.pv == null ? null : v.pv, pv_max: v.pv_max == null ? null : v.pv_max, criado_em: new Date().toISOString() };
+        linha = { id: id('fig'), mesa_id: v.mesa_id, nome, bonus, pv: v.pv == null ? null : v.pv, pv_max: v.pv_max == null ? null : v.pv_max, ficha_id: v.ficha_id || null, mods: v.mods || {}, defesa: v.defesa == null ? null : v.defesa, criado_em: new Date().toISOString() };
       } else {
         const t = String(v.texto || ''); if (!t || t.length > 500) return erro('new row violates check constraint "cronica_texto_check"');
         linha = { id: id('cro'), mesa_id: v.mesa_id, texto: t, criado_em: new Date().toISOString() };
@@ -250,17 +293,21 @@ function criarServidor() {
       return { data: null, error: null };
     }
     if (q.op === 'update') {
-      const COLS = { jogadores: ['nome', 'ficha'], notas_mestre: ['texto'], figuras: ['nome', 'bonus', 'pv', 'pv_max'] }[q.tabela];
+      const COLS = { jogadores: ['nome', 'ficha'], notas_mestre: ['texto'], figuras: ['nome', 'bonus', 'pv', 'pv_max'], bestiario: ['nome', 'tipo', 'perigo', 'pv_max', 'defesa', 'horror', 'mods', 'habilidades', 'descricao', 'notas', 'imagem'], habilidades: ['nome', 'descricao', 'custo', 'efeito', 'estado', 'resposta', 'alterada'] }[q.tabela];
       if (!COLS) return erro('permission denied for table ' + q.tabela);
-      const pode = linhas.filter(r => q.tabela === 'jogadores' ? r.user_id === u : mestreDe(r.mesa_id) === u);
+      if (['bestiario', 'habilidades'].includes(q.tabela) && Object.keys(q.valores).some(k => !COLS.includes(k))) return erro('permission denied for table ' + q.tabela);   // grant de update só nas colunas permitidas
+      if (q.tabela === 'bestiario') { const ch = validarBestiario(q.valores, true); if (ch) return erro('new row violates check constraint "bestiario_' + ch + '_check"'); }
+      if (q.tabela === 'habilidades' && 'estado' in q.valores && !['pendente', 'aprovada', 'rejeitada'].includes(q.valores.estado)) return erro('new row violates check constraint "habilidades_estado_check"');
+      const pode = linhas.filter(r => q.tabela === 'jogadores' ? r.user_id === u : q.tabela === 'bestiario' ? r.dono === u : mestreDe(r.mesa_id) === u);
       pode.forEach(r => { for (const k of COLS) if (k in q.valores) r[k] = q.valores[k]; r.atualizado_em = new Date().toISOString(); avisar(q.tabela, r); });
       return { data: q.devolver ? pode.map(r => ({ ...r })) : null, error: null };
     }
     if (q.op === 'delete') {
-      const DEL = { jogadores: r => r.user_id === u || mestreDe(r.mesa_id) === u, sussurros: r => mestreDe(r.mesa_id) === u, pedidos: r => mestreDe(r.mesa_id) === u, notas_mestre: r => mestreDe(r.mesa_id) === u, mesas: r => r.mestre_id === u, figuras: r => mestreDe(r.mesa_id) === u, cronica: r => mestreDe(r.mesa_id) === u }[q.tabela];
+      const DEL = { jogadores: r => r.user_id === u || mestreDe(r.mesa_id) === u, sussurros: r => mestreDe(r.mesa_id) === u, pedidos: r => mestreDe(r.mesa_id) === u, notas_mestre: r => mestreDe(r.mesa_id) === u, mesas: r => r.mestre_id === u, figuras: r => mestreDe(r.mesa_id) === u, cronica: r => mestreDe(r.mesa_id) === u, bestiario: r => r.dono === u, habilidades: r => mestreDe(r.mesa_id) === u }[q.tabela];
       if (!DEL) return erro('permission denied for table ' + q.tabela);
       const tab = db[q.tabela]; linhas.filter(DEL).forEach(r => {
         tab.splice(tab.indexOf(r), 1); avisar(q.tabela, r);
+        if (q.tabela === 'bestiario') db.figuras.forEach(f => { if (f.ficha_id === r.id) f.ficha_id = null; });   // on delete set null
         if (q.tabela === 'mesas') for (const t of Object.keys(db)) if (t !== 'mesas' && t !== 'usuarios') db[t] = db[t].filter(x => x.mesa_id !== r.id);   // on delete cascade
         if (q.tabela === 'jogadores') for (const t of ['ordens', 'notas_mestre']) db[t] = db[t].filter(x => !(x.mesa_id === r.mesa_id && (x.para || x.user_id) === r.user_id));   // on delete cascade
       });

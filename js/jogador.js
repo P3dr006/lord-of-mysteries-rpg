@@ -14,7 +14,7 @@ const Jogador = (() => {
   const temAtributos = () => ATTRS.every(a => P.attrs && P.attrs[a.key]);
   const minhaFicha = () => con && con.slot && con.slot === idAtual();
   const sinal = n => (n >= 0 ? '+' : '−') + Math.abs(n);
-  const redesenhar = () => { if (typeof Mesa === 'object') Mesa.atualizar(); marcarFab(); };
+  const redesenhar = () => { if (typeof Mesa === 'object') Mesa.atualizar(); marcarFab(); desenharHabsMesa(); };
 
   // O que o mestre vê: modificadores, PV e Sanidade (nada além disso sai do navegador).
   function ficha() {
@@ -73,7 +73,7 @@ const Jogador = (() => {
   }
 
   async function sairDaMesa() {
-    const c = con; desligar(); con = null; gravarConexao(null); pedidos = []; sussurros = []; lidos = new Set(); fila = []; estado = 'fora'; erro = ''; redesenhar();
+    const c = con; desligar(); con = null; gravarConexao(null); pedidos = []; sussurros = []; lidos = new Set(); fila = []; habs = []; decretos = []; estado = 'fora'; erro = ''; redesenhar();
     if (c && uid) { try { await (await Rede.tabela('jogador', 'jogadores')).delete().eq('mesa_id', c.mesa).eq('user_id', uid); } catch (e) { /* sem rede: o mestre remove depois */ } }
   }
 
@@ -103,6 +103,9 @@ const Jogador = (() => {
         await carregarEncontro(true); parar.push(await Rede.ouvir('jogador', 'encontros', 'encontros', 'mesa_id=eq.' + con.mesa, () => carregarEncontro().catch(() => {})));
         await carregarDuelos(true); parar.push(await Rede.ouvir('jogador', 'disputas', 'disputas', 'mesa_id=eq.' + con.mesa, () => carregarDuelos(false).catch(() => {})));
       } catch (e) { /* sem cena nesta conexão */ }
+      try {   // habilidades da mesa (concedidas, propostas e vereditos do mestre)
+        await carregarHabs(); parar.push(await Rede.ouvir('jogador', 'habilidades', 'habilidades', 'user_id=eq.' + uid, () => carregarHabs().catch(() => {})));
+      } catch (e) { /* sem habilidades da mesa nesta conexão */ }
       try { parar.push(await Rede.presenca('jogador', con.mesa, uid, { nome: con.nome }, () => {})); } catch (e) { /* sem vela */ }
       clearInterval(vigia); vigia = setInterval(conferirSeAindaEstou, 45000);
     } catch (e) { estado = 'desligado'; erro = Rede.mensagem(e); redesenhar(); }
@@ -262,6 +265,78 @@ const Jogador = (() => {
     m.querySelector('#dc-ok').addEventListener('click', fechar);
     soltar = typeof prenderFoco === 'function' ? prenderFoco(m, fechar) : () => {};
     setTimeout(() => { const b = m.querySelector('#dc-ok'); if (b && b.isConnected) b.focus(); }, 60);
+  }
+
+  // ---------- habilidades da mesa: o mestre concede; o jogador propõe e recebe o veredito (selo de cera) ----------
+  let habs = [], decretos = [];
+  const KV = 'lotm-rpg-habs-vistas';
+  const vistas = () => { try { return JSON.parse(localStorage.getItem(KV)) || {}; } catch (e) { return {}; } };
+  const marcarVista = h => { try { const v = vistas(); v[h.id] = chaveHab(h); localStorage.setItem(KV, JSON.stringify(v)); } catch (e) { /* só nesta visita */ } };
+  const chaveHab = h => h.estado + '|' + (h.atualizado_em || '');
+  async function carregarHabs() {
+    if (!con || !uid) return;
+    const r = await (await Rede.tabela('jogador', 'habilidades')).select('id,nome,descricao,custo,efeito,origem,estado,resposta,alterada,criado_em,atualizado_em').eq('mesa_id', con.mesa).eq('user_id', uid).order('criado_em');
+    if (r.error) throw r.error;
+    habs = r.data || [];
+    desenharHabsMesa();
+    // o que mudou desde a última vez: concedida, aprovada (com ou sem mudanças), reescrita ou recusada (também o que chegou com o jogador fora)
+    const v = vistas();
+    habs.filter(h => h.estado !== 'pendente' && v[h.id] !== chaveHab(h) && !decretos.some(d => d.h.id === h.id))
+      .forEach(h => decretos.push({ h, antes: v[h.id] }));
+    mostrarDecreto();
+  }
+  function mostrarDecreto() {
+    if (!decretos.length || document.querySelector('.decreto')) return;
+    if (document.querySelector('.sussurro, .duelo-cena')) { setTimeout(mostrarDecreto, 1500); return; }   // não atropela outra cena
+    const { h, antes } = decretos.shift(), rej = h.estado === 'rejeitada';
+    const ja = antes && antes.startsWith('aprovada');
+    const titulo = rej ? 'O mestre recusa' : ja ? 'O mestre reescreve' : h.origem === 'mestre' ? 'O mestre concede' : h.alterada ? 'Aprovada, com mudanças' : 'O mestre aprova';
+    const m = document.createElement('div'); m.className = 'decreto' + (rej ? ' recusa' : ''); m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'dec-t');
+    m.innerHTML = `<div class="dec-papel"><span class="dec-selo" aria-hidden="true"><i></i></span>
+      <small class="dec-olho">${rej ? 'Proposta de habilidade' : 'Nova habilidade'}</small><h2 id="dec-t">${esc2(titulo)}</h2>
+      <div class="dec-hab"><b class="${rej ? 'riscado' : ''}">${esc2(h.nome)}</b>${h.descricao ? `<p>${esc2(h.descricao)}</p>` : ''}
+        ${h.efeito || h.custo ? `<p class="hm-tags">${h.efeito ? `<span><i>Efeito</i>${esc2(h.efeito)}</span>` : ''}${h.custo ? `<span><i>Custo</i>${esc2(h.custo)}</span>` : ''}</p>` : ''}</div>
+      ${h.resposta ? `<blockquote class="dec-recado">${esc2(h.resposta)}<cite>o mestre</cite></blockquote>` : ''}
+      <button type="button" class="primary" id="dec-ok">${rej ? 'Entendi' : 'Guardar na ficha'}</button></div>`;
+    document.body.appendChild(m);
+    if (typeof Som === 'object') { try { rej ? Som.falha() : Som.selar(); } catch (e) { /* sem som */ } }
+    anunciar(`${titulo}: ${h.nome}${h.resposta ? '. O mestre diz: ' + h.resposta : ''}`);
+    let soltar = () => {};
+    const fechar = () => { marcarVista(h); soltar(); m.classList.add('saindo'); setTimeout(() => { m.remove(); mostrarDecreto(); }, 220); };
+    m.querySelector('#dec-ok').addEventListener('click', fechar);
+    soltar = typeof prenderFoco === 'function' ? prenderFoco(m, fechar) : () => {};
+    setTimeout(() => { const b = m.querySelector('#dec-ok'); if (b && b.isConnected) b.focus(); }, 60);
+  }
+  const podePropor = () => estado === 'ligado' && !!minhaFicha();
+  async function propor(d) {
+    if (!podePropor()) throw new Rede.ErroRede('Entre na mesa com esta ficha para propor ao mestre.');
+    await Rede.rpc('jogador', 'propor_habilidade', { p_mesa: con.mesa, p_nome: String(d.nome || '').trim().slice(0, 60), p_descricao: String(d.desc || '').trim().slice(0, 600), p_custo: String(d.custo || '').trim().slice(0, 60), p_efeito: String(d.efeito || '').trim().slice(0, 60) });
+    anunciar('Proposta enviada ao mestre: ' + d.nome);
+    await carregarHabs();
+  }
+  async function retirar(id) {
+    await Rede.rpc('jogador', 'retirar_habilidade', { p_id: id });
+    await carregarHabs();
+  }
+  // na ficha aberta: as habilidades da mesa e o formulário vira "Propor ao mestre"
+  function desenharHabsMesa() {
+    const el = document.querySelector('#hab-mesa'); if (!el) return;
+    const ligado = podePropor(), apr = habs.filter(h => h.estado === 'aprovada'), pend = habs.filter(h => h.estado === 'pendente'), rej = habs.filter(h => h.estado === 'rejeitada');
+    const tags = h => h.efeito || h.custo ? `<p class="hm-tags">${h.efeito ? `<span><i>Efeito</i>${esc2(h.efeito)}</span>` : ''}${h.custo ? `<span><i>Custo</i>${esc2(h.custo)}</span>` : ''}</p>` : '';
+    const recado = h => h.resposta ? `<p class="hm-recado">“${esc2(h.resposta)}” <span>— o mestre</span></p>` : '';
+    el.innerHTML = ligado && habs.length ? `<h4 class="sub hm-tit">Da mesa <i>${esc2(con.codigo)}</i></h4><ul class="hab-lista hm-lista">
+      ${apr.map(h => `<li class="hm hab-da-mesa"><div><b>${esc2(h.nome)}</b><span class="hm-selo">${h.origem === 'mestre' ? 'Concedida pelo mestre' : h.alterada ? 'Aprovada com mudanças' : 'Aprovada pelo mestre'}</span>${h.descricao ? `<p>${esc2(h.descricao)}</p>` : ''}${tags(h)}${recado(h)}</div></li>`).join('')}
+      ${pend.map(h => `<li class="hm pend"><div><b>${esc2(h.nome)}</b><span class="hm-selo espera">Aguardando o mestre</span>${h.descricao ? `<p>${esc2(h.descricao)}</p>` : ''}${tags(h)}</div><span class="hab-ac"><button type="button" class="mini hm-retirar" data-h="${esc2(h.id)}" aria-label="Retirar a proposta ${esc2(h.nome)}" title="Retirar a proposta">×</button></span></li>`).join('')}
+      ${rej.map(h => `<li class="hm rej"><div><b>${esc2(h.nome)}</b><span class="hm-selo nao">Recusada</span>${recado(h)}</div><span class="hab-ac"><button type="button" class="mini hm-retirar" data-h="${esc2(h.id)}" aria-label="Dispensar ${esc2(h.nome)}" title="Dispensar">×</button></span></li>`).join('')}
+      </ul>` : '';
+    el.querySelectorAll('.hm-retirar').forEach(b => b.addEventListener('click', async () => { b.disabled = true; try { await retirar(b.dataset.h); anunciar('Proposta retirada'); const f = document.querySelector('#hab-nome'); if (f) f.focus(); } catch (e) { b.disabled = false; const msg = document.querySelector('#hab-msg'); if (msg) { msg.textContent = Rede.mensagem(e); msg.hidden = false; } } }));
+    // o formulário da ficha: ligado à mesa, a habilidade nova vai ao mestre (editar uma anotação antiga continua local)
+    const form = document.querySelector('#hab-form'); if (!form) return;
+    const editando = !document.querySelector('#hab-cancela').hidden, propondo = ligado && !editando;
+    form.classList.toggle('propondo', propondo);
+    document.querySelector('#hab-extra').hidden = !propondo;
+    document.querySelector('#hab-tt').textContent = editando ? 'Editar habilidade' : propondo ? 'Propor uma habilidade ao mestre' : 'Anotar uma habilidade';
+    document.querySelector('#hab-ok').lastChild.textContent = editando ? 'Salvar' : propondo ? 'Propor' : 'Adicionar';
   }
 
   // ---------- sussurros e pistas do mestre ----------
@@ -427,5 +502,5 @@ const Jogador = (() => {
     if (fab) fab.addEventListener('click', () => { const m = document.querySelector('#mesa'); if (pedidos.length && estado === 'ligado' && m && !m.hidden) Mesa.irParaTestes(); });
   });
 
-  return { desenhar, entrar, sairDaMesa, ligar, rolarPedido, fichaParaMestre: ficha, get estado() { return estado; }, get encontro() { return encontro; }, get pedidos() { return pedidos.slice(); } };
+  return { desenhar, entrar, sairDaMesa, ligar, rolarPedido, fichaParaMestre: ficha, propor, retirar, podePropor, desenharHabsMesa, get habilidades() { return habs.slice(); }, get estado() { return estado; }, get encontro() { return encontro; }, get pedidos() { return pedidos.slice(); } };
 })();

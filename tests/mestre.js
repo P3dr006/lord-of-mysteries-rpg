@@ -346,7 +346,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     await ate(async () => (await m.textContent('#m-jogadores')).includes('Audrey'));
     const uidA = srv.db.jogadores.find(x => x.nome === 'Audrey').user_id, uidM = srv.db.mesas[0].mestre_id;
     // abas
-    { const n = await m.evaluate(() => document.querySelectorAll('[role=tab].m-aba').length); ok('o Grimório tem 5 abas', n === 5, String(n)); }
+    { const n = await m.evaluate(() => document.querySelectorAll('[role=tab].m-aba').length); ok('o Grimório tem 6 abas', n === 6, String(n)); }
     await m.focus('#aba-acoes'); await m.keyboard.press('ArrowRight');
     ok('setas do teclado trocam de aba', await m.evaluate(() => document.activeElement.id === 'aba-cena' && !document.querySelector('#p-cena').hidden && document.querySelector('#p-acoes').hidden));
     ok('a aba escolhida é lembrada', await m.evaluate(() => localStorage.getItem('lotm-grimorio-aba') === 'cena'));
@@ -441,6 +441,122 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('cena: nenhum erro de script', m.erros.length === 0 && j.erros.length === 0 && a2.erros.length === 0, [m.erros[0], j.erros[0], a2.erros[0]].filter(Boolean).join(' | '));
     await cA.close(); }
 
+  console.log('\n7e) Bestiário e habilidades da mesa');
+  { const uidJ = srv.db.jogadores.find(x => x.nome === 'Klein').user_id, uidM = srv.db.mesas[0].mestre_id;
+    const semViolacoes = async (p, nome) => { const v = await axe(p); ok(nome + ' sem violações de acessibilidade', v.length === 0, v.join(' | ')); };
+    const fecharCena = async () => { for (const sel of ['#dc-ok', '#sus-ok', '#dec-ok']) if (await j.isVisible(sel)) { await j.click(sel); await espera(300); } };
+    // ---- bestiário
+    await m.click('#aba-bestiario'); await m.click('#bs-nova'); await m.waitForSelector('#be-nome');
+    await m.click('#be-salvar');
+    ok('criatura sem nome não é guardada', await ate(async () => /nome/.test(await m.textContent('#be-erro'))) && srv.db.bestiario.length === 0);
+    await m.fill('#be-nome', 'Lobo de Tingen'); await m.fill('#be-pv', '20'); await m.fill('#be-m-agil', '3'); await m.fill('#be-m-forca', '5');
+    await m.click('#be-hab-mais'); await m.fill('#be-h-nome-0', 'Mordida'); await m.fill('#be-h-efeito-0', '2d6+3 de dano');
+    await m.fill('#be-desc', 'Olhos de vidro.'); await m.fill('#be-notas', 'Foge do fogo.');
+    await semViolacoes(m, 'editor de criatura');
+    await m.click('#be-salvar');
+    ok('a criatura entra no bestiário', await ate(async () => srv.db.bestiario.length === 1 && await m.isVisible('.bs-carta')));
+    const bes = srv.db.bestiario[0] || { mods: {}, habilidades: [{}] };
+    ok('guarda modificadores, poderes e o dono', bes.mods.forca === 5 && bes.mods.agil === 3 && bes.habilidades[0].efeito === '2d6+3 de dano' && bes.dono === uidM);
+    await semViolacoes(m, 'aba Bestiário');
+    { const r = await j.evaluate(async () => { const a = await (await Rede.tabela('jogador', 'bestiario')).select('*'); const b = await (await Rede.tabela('jogador', 'bestiario')).insert({ nome: 'x' }).select('id'); return { lidos: (a.data || []).length, negado: !!b.error }; });
+      ok('jogador não lê o bestiário do mestre', r.lidos === 0);
+      ok('jogador não escreve no bestiário', r.negado && srv.db.bestiario.length === 1); }
+    ok('notas e números da criatura nunca chegam ao jogador', !JSON.stringify(srv.entregue[uidJ] || []).includes('Foge do fogo'));
+    // ---- chamar à cena, ficha, rolar poder, ferir
+    await m.click('.bs-chamar'); await ate(() => srv.db.figuras.some(f => f.ficha_id === bes.id));
+    await m.click('.bs-chamar');
+    ok('chamar duas vezes numera (nomes distintos)', await ate(() => { const fs2 = srv.db.figuras.filter(f => f.ficha_id === bes.id); return fs2.length === 2 && fs2[0].nome !== fs2[1].nome && /^Lobo de Tingen [0-9]$/.test(fs2[1].nome); }), JSON.stringify(srv.db.figuras.map(f => f.nome)));
+    const fig = srv.db.figuras.find(f => f.ficha_id === bes.id) || {};
+    ok('a figura nasce com PV cheio, iniciativa = Agilidade e os modificadores', fig.pv === 20 && fig.pv_max === 20 && fig.bonus === 3 && fig.mods && fig.mods.forca === 5);
+    await m.click('#aba-cena'); await m.click(`.m-fig[data-f="${fig.id}"] .fg-ficha`); await m.waitForSelector('.bs-ficha');
+    await m.click('#bf-rolar-0'); const tot = Number(await m.textContent('#bf-res-0 .bf-tot'));
+    ok('rolar o poder: 2d6+3 dá entre 5 e 15', tot >= 5 && tot <= 15, String(tot));
+    const nOrd = srv.db.ordens.length; await m.selectOption('#bf-alvo-0', uidJ); await m.click('#bf-pv-0');
+    ok('"Ferir" manda a ordem de dano com o nome do poder', await ate(() => { const o = srv.db.ordens[srv.db.ordens.length - 1]; return srv.db.ordens.length === nOrd + 1 && o.valor === -tot && o.para === uidJ && o.motivo === fig.nome + ': Mordida'; }));
+    await semViolacoes(m, 'ficha da criatura');
+    await m.keyboard.press('Escape');
+    ok('Esc fecha a ficha da criatura e devolve o foco', await ate(() => m.evaluate(() => !document.querySelector('.bs-ficha') && document.activeElement.classList.contains('fg-ficha'))));
+    await ate(() => j.evaluate(() => !document.querySelector('.golpe, .golpe-tela'))); await fecharCena();
+    // ---- Duelo com o atributo da criatura
+    srv.proximosDados(10, 10);
+    await m.click('#aba-acoes'); await m.selectOption('#d-a', 'jogador:' + uidJ); await m.selectOption('#d-a-attr', 'forca'); await m.selectOption('#d-b', 'figura:' + fig.id);
+    ok('figura do bestiário libera o atributo no Duelo', await m.evaluate(() => !document.querySelector('#d-b-attr').disabled));
+    await m.selectOption('#d-b-attr', 'forca'); await m.click('#d-rolar');
+    ok('o Duelo usa a Força da criatura (+5)', await ate(() => { const d = srv.db.disputas[srv.db.disputas.length - 1]; return d && d.b.atributo === 'forca' && d.b.mod === 5 && d.b.total === 15; }));
+    await ate(() => j.isVisible('#dc-ok'), 3000); await fecharCena();
+    // ---- revelar
+    await m.click('#aba-bestiario'); await m.click('.bs-revelar'); await m.waitForSelector('.m-conf'); await m.click('#cf-ok');
+    ok('revelar manda um sussurro para todos com nome e descrição (sem as notas)', await ate(() => srv.db.sussurros.some(s => s.titulo === 'Lobo de Tingen' && s.para === null && s.texto === 'Olhos de vidro.')) && !srv.db.sussurros.some(s => /Foge do fogo/.test(s.texto || '')));
+    await ate(() => j.isVisible('#sus-ok'), 4000); await fecharCena();
+
+    // ---- habilidades: o jogador propõe pela ficha
+    if (await j.isVisible('#mesa')) await j.click('#mesa-x');
+    await j.fill('#hab-nome', 'Truque do palhaço'); await j.fill('#hab-desc', 'O inimigo perde a próxima ação.');
+    ok('na mesa, o formulário da ficha vira "Propor ao mestre"', await j.evaluate(() => /Propor/.test(document.querySelector('#hab-tt').textContent) && !document.querySelector('#hab-extra').hidden));
+    await j.fill('#hab-efeito', 'Perde 1 ação'); await j.click('#hab-ok');
+    ok('a proposta vai ao servidor como pendente', await ate(() => srv.db.habilidades.some(h => h.nome === 'Truque do palhaço' && h.estado === 'pendente' && h.origem === 'jogador' && h.user_id === uidJ && h.efeito === 'Perde 1 ação')));
+    ok('não vira anotação local', await j.evaluate(() => !P.habilidades.some(h => h.nome === 'Truque do palhaço')));
+    ok('aparece na ficha como "Aguardando o mestre"', await ate(() => j.evaluate(() => /Aguardando o mestre/.test(document.querySelector('#hab-mesa').textContent))));
+    ok('o mestre vê o pedido de poder ao vivo', await ate(() => m.isVisible('#m-propostas .hp-prop')));
+    ok('a carta do jogador ganha o selo "1 proposta"', /1 proposta/.test(await m.textContent(`.m-carta-j[data-u="${uidJ}"]`)));
+    await semViolacoes(m, 'pedidos de poder');
+    { const r = await j.evaluate(async mesa => {
+        const t = () => Rede.tabela('jogador', 'habilidades');
+        const ins = await (await t()).insert({ mesa_id: mesa, user_id: 'x', nome: 'Deus', origem: 'mestre', estado: 'aprovada' }).select('id');
+        const h = ((await (await t()).select('id').eq('estado', 'pendente')).data || [])[0];
+        await (await t()).update({ estado: 'aprovada' }).eq('id', h.id);
+        return !!ins.error;
+      }, srv.db.mesas[0].id);
+      ok('jogador não concede habilidade a si mesmo direto na tabela', r && !srv.db.habilidades.some(h => h.nome === 'Deus'));
+      ok('jogador não aprova a própria proposta', srv.db.habilidades.find(h => h.nome === 'Truque do palhaço').estado === 'pendente'); }
+    { const lim = await j.evaluate(async () => { for (let i = 0; i < 4; i++) await Jogador.propor({ nome: 'P' + i }); try { await Jogador.propor({ nome: 'P9' }); return 'passou'; } catch (e) { return Rede.mensagem(e); } });
+      ok('limite de 5 propostas esperando', /Limite de 5/.test(lim), lim); }
+    await j.evaluate(async () => { for (const h of Jogador.habilidades.filter(x => /^P\d$/.test(x.nome))) await Jogador.retirar(h.id); });
+    ok('o jogador retira as próprias propostas', await ate(() => !srv.db.habilidades.some(h => /^P\d$/.test(h.nome))));
+    // ---- modificar e aprovar
+    const hid = srv.db.habilidades.find(h => h.nome === 'Truque do palhaço').id;
+    await ate(() => m.isVisible(`#q${hid}-mud`)); await m.click(`#q${hid}-mud`);
+    await m.fill(`#q${hid}-efeito`, 'Perde metade da ação'); await m.fill(`#q${hid}-resp`, 'Reduzi para a Sequência 9.'); await m.click(`#q${hid}-okm`);
+    ok('aprovar com mudanças grava a versão do mestre e o recado', await ate(() => { const h = srv.db.habilidades.find(x => x.id === hid); return h.estado === 'aprovada' && h.alterada && h.efeito === 'Perde metade da ação' && h.resposta === 'Reduzi para a Sequência 9.'; }));
+    ok('o jogador recebe o decreto "Aprovada, com mudanças"', await ate(() => j.evaluate(() => /Aprovada, com mudanças/.test((document.querySelector('.decreto') || {}).textContent || '') && /Reduzi/.test(document.querySelector('.decreto').textContent))));
+    await semViolacoes(j, 'decreto do mestre');
+    await j.click('#dec-ok');
+    ok('o decreto lido fica marcado (não volta ao reconectar)', await ate(() => j.evaluate(id => (JSON.parse(localStorage.getItem('lotm-rpg-habs-vistas') || '{}')[id] || '').startsWith('aprovada|'), hid)));
+    // ---- rejeitar com motivo
+    await j.evaluate(() => Jogador.propor({ nome: 'Chama absoluta', desc: 'Queima tudo' }));
+    const rid = await (async () => { await ate(() => srv.db.habilidades.some(h => h.nome === 'Chama absoluta')); return srv.db.habilidades.find(h => h.nome === 'Chama absoluta').id; })();
+    await ate(() => m.isVisible(`#q${rid}-rej`)); await m.click(`#q${rid}-rej`); await m.fill(`#q${rid}-mot`, 'Não combina com o Caminho.'); await m.click(`#q${rid}-okr`);
+    ok('rejeitar com motivo', await ate(() => { const h = srv.db.habilidades.find(x => x.id === rid); return h.estado === 'rejeitada' && h.resposta === 'Não combina com o Caminho.'; }));
+    ok('o jogador vê a recusa e o motivo', await ate(() => j.evaluate(() => { const d = document.querySelector('.decreto.recusa'); return !!d && /Não combina/.test(d.textContent); })));
+    await j.click('#dec-ok');
+    ok('a fila de pedidos some quando não há mais nada', await ate(() => m.evaluate(() => document.querySelector('#m-propostas').hidden)));
+    await j.evaluate(id => Jogador.retirar(id), rid);
+    ok('o jogador dispensa a recusada', await ate(() => !srv.db.habilidades.some(h => h.id === rid)));
+    // ---- conceder, editar e tirar pela ficha do jogador
+    await m.click(`.m-carta-j[data-u="${uidJ}"] .m-cj-ver`); await m.waitForSelector('.mf-conceder'); await m.evaluate(() => { document.querySelector('.mf-conceder').open = true; });
+    await m.fill(`#c${uidJ}-nome`, 'Visão Espiritual'); await m.fill(`#c${uidJ}-custo`, '1 de Espiritualidade'); await m.click('#mf-conceder');
+    ok('conceder pela ficha do jogador', await ate(() => srv.db.habilidades.some(h => h.nome === 'Visão Espiritual' && h.origem === 'mestre' && h.estado === 'aprovada' && h.user_id === uidJ)));
+    ok('o jogador recebe "O mestre concede"', await ate(() => j.evaluate(() => /O mestre concede/.test((document.querySelector('.decreto') || {}).textContent || ''))));
+    await j.click('#dec-ok');
+    const vid = srv.db.habilidades.find(h => h.nome === 'Visão Espiritual').id;
+    await m.click(`#e${vid}-ed`); await m.fill(`#e${vid}-nome`, 'Visão Espiritual aguçada'); await m.click(`#e${vid}-ok`);
+    ok('editar uma habilidade concedida', await ate(() => srv.db.habilidades.find(h => h.id === vid).nome === 'Visão Espiritual aguçada'));
+    ok('o jogador vê "O mestre reescreve"', await ate(() => j.evaluate(() => /O mestre reescreve/.test((document.querySelector('.decreto') || {}).textContent || ''))));
+    await j.click('#dec-ok');
+    await semViolacoes(m, 'habilidades na ficha do jogador');
+    await m.click(`#e${vid}-x`); await m.waitForSelector('.m-conf'); await m.click('#cf-ok');
+    ok('tirar a habilidade some da ficha do jogador', await ate(async () => !srv.db.habilidades.some(h => h.id === vid) && await j.evaluate(id => !Jogador.habilidades.some(h => h.id === id), vid)));
+    await m.keyboard.press('Escape');
+    // ---- outra jogadora não vê as habilidades de Klein
+    { const cB = await contexto(browser, srv), b2 = await pagina(cB, URL_SITE);
+      await b2.evaluate(f2 => { novoSlot(); P = sanear(f2); salvar(); P.step = 5; salvar(); iniciarPasso(); }, FICHA({ nome: 'Zelda' }));
+      await b2.evaluate(c => Jogador.entrar(c), codigo); await ate(() => srv.db.jogadores.some(x => x.nome === 'Zelda'));
+      const n = await b2.evaluate(async () => ((await (await Rede.tabela('jogador', 'habilidades')).select('*')).data || []).length);
+      ok('uma jogadora não vê as habilidades da outra', n === 0 && srv.db.habilidades.some(h => h.user_id === uidJ), String(n));
+      await b2.evaluate(() => Jogador.sairDaMesa()); await ate(() => !srv.db.jogadores.some(x => x.nome === 'Zelda')); await cB.close(); }
+    ok('bestiário e habilidades: nenhum erro de script', m.erros.length === 0 && j.erros.length === 0, [m.erros[0], j.erros[0]].filter(Boolean).join(' | '));
+  }
+
   console.log('\n8) Ficha ao vivo');
   if (await j.isVisible('#mesa')) await j.click('#mesa-x'); await j.click('.adj[data-c="pv"][data-d="-5"]');
   const pvNovo = await j.evaluate(() => P.pv);
@@ -482,7 +598,8 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
   await m.fill('#cf-in', codigo.toLowerCase());
   ok('com o código digitado, libera', await m.evaluate(() => !document.querySelector('#cf-ok').disabled));
   await m.click('#cf-ok');
-  ok('a mesa e tudo dela somem', await ate(() => srv.db.mesas.length === 0 && ['jogadores', 'pedidos', 'resultados', 'sussurros', 'ordens', 'figuras', 'disputas', 'cronica', 'encontros', 'notas_mestre'].every(t => srv.db[t].length === 0)) && await ate(async () => !(await m.$('[data-apagar-mesa]'))));
+  ok('a mesa e tudo dela somem', await ate(() => srv.db.mesas.length === 0 && ['jogadores', 'pedidos', 'resultados', 'sussurros', 'ordens', 'figuras', 'disputas', 'cronica', 'encontros', 'notas_mestre', 'habilidades'].every(t => srv.db[t].length === 0)) && await ate(async () => !(await m.$('[data-apagar-mesa]'))));
+  ok('o bestiário é do mestre: continua depois de apagar a mesa', srv.db.bestiario.length === 1);
   await m.click('#m-sair');
   ok('sair do grimório volta ao login', await ate(() => m.isVisible('#m-email')));
   await ctxM.close(); await ctxJ.close();
