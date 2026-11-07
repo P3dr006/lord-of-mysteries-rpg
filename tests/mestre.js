@@ -21,7 +21,15 @@ async function contexto(browser, srv, extra = {}) {
   if (srv) await srv.ligar(ctx);
   return ctx;
 }
-async function pagina(ctx, url) { const p = await ctx.newPage(); p.erros = []; p.on('pageerror', e => p.erros.push(e.message)); await p.goto(url); await p.waitForTimeout(300); return p; }
+async function pagina(ctx, url) { const p = await ctx.newPage(); p.erros = []; p.on('pageerror', e => p.erros.push(e.message)); await p.goto(url); await p.waitForTimeout(300); if (url === URL_MESTRE) grimorio(p); return p; }
+// No Grimório as seções ficam em abas: antes de mexer num elemento, o teste abre a aba onde ele mora (como o mestre faria).
+function grimorio(p) {
+  const abrir = sel => p.evaluate(s => { const el = document.querySelector(s.replace(/ >> nth=\d+$/, '')); const pn = el && el.closest('.m-aba-p'); if (pn && pn.hidden) { const b = document.querySelector('#aba-' + pn.dataset.p); if (b) b.click(); } }, sel).catch(() => {});
+  for (const k of ['click', 'fill', 'selectOption', 'isVisible', 'check', 'setInputFiles', 'textContent', 'inputValue', 'getAttribute']) {
+    const orig = p[k].bind(p);
+    p[k] = async (sel, ...r) => { if (typeof sel === 'string') await abrir(sel); return orig(sel, ...r); };
+  }
+}
 async function jogadorPronto(ctx, ficha = {}) {
   const p = await pagina(ctx, URL_SITE);
   await p.evaluate(f => { novoSlot(); P = sanear(f); salvar(); P.step = 5; salvar(); iniciarPasso(); }, FICHA(ficha));
@@ -126,7 +134,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
   ok('código em minúsculas e com espaço funciona', await ate(() => j.isVisible('.on-status.ligado')), await j.textContent('#online').catch(() => ''));
   ok('o mestre vê o jogador entrar ao vivo', await ate(() => m.isVisible('.m-carta-j')));
   const esperado = await j.evaluate(() => ({ mods: Object.fromEntries(ATTRS.map(a => [a.key, mod(total(a.key))])), pv: P.pv, pvMax: pvMax(), san: P.san, sanMax: sanMax() }));
-  const naTela = await m.evaluate(() => ({ nome: document.querySelector('.m-carta-j .m-cj-id b').textContent, mods: [...document.querySelectorAll('.m-carta-j .m-mods b')].map(b => b.textContent), pv: document.querySelector('.m-carta-j .m-barra b').textContent }));
+  const naTela = await m.evaluate(() => ({ nome: document.querySelector('.m-carta-j .m-cj-id b').firstChild.textContent, mods: [...document.querySelectorAll('.m-carta-j .m-mods b')].map(b => b.textContent), pv: document.querySelector('.m-carta-j .m-barra b').textContent }));
   ok('nome do personagem no painel', naTela.nome === 'Klein', naTela.nome);
   ok('modificadores da ficha no painel', naTela.mods.join(' ') === Object.values(esperado.mods).map(v => (v >= 0 ? '+' : '−') + Math.abs(v)).join(' '), naTela.mods.join(' '));
   ok('PV atual / máximo no painel', naTela.pv === `${esperado.pv}/${esperado.pvMax}`, naTela.pv);
@@ -330,6 +338,109 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('o jogador não consegue escrever notas', /permission|security|policy/i.test(JSON.stringify(await j.evaluate(async m2 => (await (await Rede.tabela('jogador', 'notas_mestre')).insert({ mesa_id: m2, user_id: 'x', texto: 'hack' })).error, srv.db.mesas[0].id))));
     ok('controle: nenhum erro de script', m.erros.length === 0 && j.erros.length === 0, [m.erros[0], j.erros[0]].filter(Boolean).join(' | ')); }
 
+  console.log('\n7d) Cena: abas, Figuras, Roda do Destino, Duelo, Crônica, Dados, presença');
+  { // uma segunda jogadora para a cena
+    const cA = await contexto(browser, srv), a2 = await pagina(cA, URL_SITE);
+    await a2.evaluate(f2 => { novoSlot(); P = sanear(f2); salvar(); P.step = 5; salvar(); iniciarPasso(); }, FICHA({ nome: 'Audrey', caminho: 'visionario' }));
+    await a2.evaluate(c => Jogador.entrar(c), codigo);
+    await ate(async () => (await m.textContent('#m-jogadores')).includes('Audrey'));
+    const uidA = srv.db.jogadores.find(x => x.nome === 'Audrey').user_id, uidM = srv.db.mesas[0].mestre_id;
+    // abas
+    { const n = await m.evaluate(() => document.querySelectorAll('[role=tab].m-aba').length); ok('o Grimório tem 5 abas', n === 5, String(n)); }
+    await m.focus('#aba-acoes'); await m.keyboard.press('ArrowRight');
+    ok('setas do teclado trocam de aba', await m.evaluate(() => document.activeElement.id === 'aba-cena' && !document.querySelector('#p-cena').hidden && document.querySelector('#p-acoes').hidden));
+    ok('a aba escolhida é lembrada', await m.evaluate(() => localStorage.getItem('lotm-grimorio-aba') === 'cena'));
+    // presença
+    ok('a vela da Audrey acende quando ela está com a mesa aberta', await ate(() => m.evaluate(u => !!document.querySelector('.m-carta-j[data-u="' + u + '"] .m-vela.acesa'), uidA)));
+    // Figuras
+    await m.fill('#f-nome', 'Lobo de Tingen'); await m.fill('#f-bonus', '2'); await m.fill('#f-pv', '18'); await m.click('#f-add');
+    ok('chamar uma figura', await ate(async () => /Lobo de Tingen/.test(await m.textContent('#m-figuras'))));
+    await m.click('.m-fig .fg-d[data-d="-5"]');
+    ok('o PV da figura cai e fica salvo', await ate(() => srv.db.figuras[0].pv === 13) && /13/.test(await m.textContent('.m-fig .m-barra b')));
+    ok('figura sem nome é barrada', await (async () => { await m.fill('#f-nome', ''); await m.click('#f-add'); return ate(async () => /nome/.test(await m.textContent('#m-erro-fig'))); })());
+    ok('o jogador não vê as figuras', (await j.evaluate(async () => (await (await Rede.tabela('jogador', 'figuras')).select('*')).data.length)) === 0);
+    { const v = await axe(m); ok('aba Cena sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    // Roda do Destino: d20 de Klein 18, Audrey 5, Lobo 10 (Agilidade da ficha: +1)
+    srv.proximosDados(18, 5, 10);
+    await m.click('#rd-girar');
+    ok('a Roda gira com jogadores e a figura', await ate(() => srv.db.encontros[0] && srv.db.encontros[0].ordem.length === 3));
+    ok('a ordem vem do servidor, do maior para o menor', srv.db.encontros[0].ordem.map(p => p.nome + ' ' + p.total).join(', ') === 'Klein 19, Lobo de Tingen 12, Audrey 6', srv.db.encontros[0].ordem.map(p => p.nome + ' ' + p.total).join(', '));
+    ok('a faixa da Roda aparece no topo do Grimório', await ate(() => m.isVisible('#m-roda .rd-p.vez')));
+    ok('a carta de quem está na vez ganha a chama', await m.evaluate(u => document.querySelector('.m-carta-j[data-u="' + u + '"]').classList.contains('na-vez'), uidJ));
+    ok('o foco do teclado vai para "Próximo turno"', await m.evaluate(() => document.activeElement.id === 'rd-prox2'));
+    ok('o jogador vê a Roda com os 3', await ate(() => j.evaluate(() => document.querySelectorAll('#roda-jog .rj-fila li').length === 3)), await j.evaluate(() => JSON.stringify({ estado: Jogador.estado, faixa: !!document.querySelector('#roda-jog'), n: document.querySelectorAll('#roda-jog .rj-fila li').length, enc: Jogador.encontro && Jogador.encontro.ativo })));
+    ok('"É a sua vez" aparece para quem começa', await ate(() => j.isVisible('.sua-vez')) && await j.evaluate(() => document.querySelector('#roda-jog').classList.contains('minha')));
+    ok('para os outros, a faixa diz de quem é a vez', await ate(async () => /Vez de Klein/.test(await a2.textContent('#roda-jog'))));
+    { const v = await axe(j); ok('jogador com a Roda sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    await m.click('#rd-prox2');
+    ok('próximo turno: vez da figura', await ate(async () => /Vez de Lobo de Tingen/.test(await j.textContent('#roda-jog'))));
+    await m.click('#rd-prox2');
+    ok('e a Audrey sente "É a sua vez"', await ate(() => a2.isVisible('.sua-vez')));
+    await m.click('#rd-prox2');
+    ok('a volta completa abre a rodada 2', await ate(() => srv.db.encontros[0].rodada === 2 && srv.db.encontros[0].vez === 0) && await ate(async () => /Rodada 2/.test(await j.textContent('#roda-jog'))));
+    ok('jogador não passa o turno', /Só o mestre/.test(await j.evaluate(async mesa => { try { await Rede.rpc('jogador', 'proximo_turno', { p_mesa: mesa }); return 'aceitou'; } catch (e) { return Rede.mensagem(e); } }, srv.db.mesas[0].id)));
+    await j.click('#roda-jog .rj-alt');
+    ok('o jogador pode recolher a faixa', await j.evaluate(() => document.querySelector('#roda-jog').classList.contains('recolhida') && document.activeElement.classList.contains('rj-alt')));
+    await m.click('#rd-fim'); await m.waitForSelector('.m-conf');
+    { const v = await axe(m); ok('confirmação sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    await m.click('#cf-ok');
+    ok('encerrar some com a Roda de todos', await ate(async () => !(await j.$('#roda-jog')) && !(await a2.$('#roda-jog')) && !(await m.isVisible('#m-roda'))));
+    // Duelo
+    await m.click('#aba-acoes');
+    await m.fill('#d-rotulo', 'Queda de braço'); await m.selectOption('#d-a', 'jogador:' + uidJ); await m.selectOption('#d-a-attr', 'forca');
+    await m.selectOption('#d-b', 'figura:' + srv.db.figuras[0].id);
+    ok('figura não usa atributo (o bônus dela vale)', await m.evaluate(() => document.querySelector('#d-b-attr').disabled));
+    srv.proximosDados(7, 15); await m.click('#d-rolar');
+    ok('o duelo aparece no Grimório', await ate(async () => /Lobo de Tingen leva a melhor/.test(await m.textContent('#m-duelo-res'))));
+    ok('o servidor usou a Força da ficha e o bônus da figura', /7 \+0/.test(await m.textContent('#m-duelo-res')) || /d20 7/.test(await m.textContent('#m-duelo-res')), (await m.textContent('#m-duelo-res')).replace(/\s+/g, ' '));
+    ok('o jogador do duelo vê a cena', await ate(() => j.isVisible('.duelo-cena')) && /Lobo de Tingen/.test(await j.textContent('.duelo-cena')));
+    await espera(800);
+    ok('quem não está no duelo não vê', !(await a2.$('.duelo-cena')));
+    { const v = await axe(j); ok('cena do duelo sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    await j.click('#dc-ok'); await ate(async () => !(await j.$('.duelo-cena')));
+    await m.fill('#d-rotulo', 'Olhares na missa'); await m.selectOption('#d-a', 'jogador:' + uidJ); await m.selectOption('#d-a-attr', 'pres'); await m.selectOption('#d-b', 'jogador:' + uidA); await m.selectOption('#d-b-attr', 'pres');
+    await m.click('#d-visivel'); await m.click('#d-rolar');
+    ok('duelo escondido: só o mestre vê', await ate(async () => /só você viu/.test(await m.textContent('#m-duelo-res'))));
+    await espera(900);
+    ok('duelo escondido não chega a nenhum jogador', !(await j.$('.duelo-cena')) && !(await a2.$('.duelo-cena')) && !JSON.stringify(srv.entregue[uidJ] || []).includes('Olhares na missa') && !JSON.stringify(srv.entregue[uidA] || []).includes('Olhares na missa'));
+    await m.click('#d-visivel');
+    await m.selectOption('#d-b', 'jogador:' + uidJ); await m.click('#d-rolar');
+    ok('o mesmo lado dos dois lados é barrado', await ate(async () => /dois lados diferentes/.test(await m.textContent('#m-erro-duelo'))));
+    // anti-trapaça no teste aberto
+    await m.selectOption('#t-para', uidJ); await m.selectOption('#t-attr', 'agil'); await m.fill('#t-rotulo', 'Pular a cerca'); await m.fill('#t-dif', '10'); await m.click('#t-aberto');
+    await ate(() => j.evaluate(() => Jogador.pedidos.length === 1));
+    const trapaca = await j.evaluate(async () => { const p = Jogador.pedidos[0]; return Rede.rpc('jogador', 'responder_pedido', { p_pedido: p.id, p_modificador: 30 }); });
+    ok('teste aberto: +30 mandado pelo navegador é ignorado (vale a ficha)', trapaca.modificador === 1, JSON.stringify(trapaca));
+    // Crônica
+    await m.fill('#cr-texto', 'O grupo encontra o diário do bispo.'); await m.click('#cr-add');
+    ok('registrar um momento', await ate(async () => /diário do bispo/.test(await m.textContent('#m-cron'))));
+    await m.click('#cr-ler');
+    ok('a crônica abre como página', await ate(() => m.isVisible('.cr-pagina')));
+    const cron = (await m.textContent('.cr-pagina')).replace(/\s+/g, ' ');
+    ok('a crônica junta momentos, duelos, testes, golpes e sussurros', /diário do bispo/.test(cron) && /Queda de braço/.test(cron) && /Pular a cerca/.test(cron) && /Mordida do lobo/.test(cron) && /O mapa rasgado/.test(cron), cron.slice(0, 200));
+    ok('o Terror ligado para a mesa aparece uma vez só', (cron.match(/O Terror toma a mesa/g) || []).length === 1 || (cron.match(/O Terror toma a mesa/g) || []).length === 2, String((cron.match(/O Terror toma a mesa/g) || []).length));
+    { const v = await axe(m); ok('crônica sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    const [dl] = await Promise.all([m.waitForEvent('download'), m.click('#cr-baixar2')]);
+    const md = fs.readFileSync(await dl.path(), 'utf8');
+    ok('baixar gera um .md com a crônica', /\.md$/.test(dl.suggestedFilename()) && /^# Crônica — Tingen/.test(md) && /diário do bispo/.test(md), dl.suggestedFilename());
+    await m.keyboard.press('Escape');
+    ok('Esc fecha a crônica e devolve o foco', await ate(async () => !(await m.$('.cr-pagina'))) && await m.evaluate(() => document.activeElement.id === 'cr-ler'));
+    ok('o jogador não lê a crônica', (await j.evaluate(async () => (await (await Rede.tabela('jogador', 'cronica')).select('*')).data.length)) === 0);
+    // Dados do mestre
+    const antesDados = (srv.entregue[uidM] || []).length;
+    await m.click('.dm-tipo[data-l="6"]'); await m.fill('#dm-qtd', '3'); await m.fill('#dm-mod', '2'); await m.click('#dm-rolar');
+    const tot = Number(await m.textContent('.dm-tot'));
+    { const n = await m.evaluate(() => document.querySelectorAll('#dm-res i').length); ok('dados do mestre: 3d6+2 entre 5 e 20', tot >= 5 && tot <= 20 && n === 3, tot + ' com ' + n + ' dados'); }
+    ok('dados do mestre não vão ao servidor', (srv.entregue[uidM] || []).length === antesDados);
+    { const v = await axe(m); ok('aba Dados sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    // tirar da mesa
+    await m.click('.m-carta-j[data-u="' + uidA + '"] .m-cj-ver'); await m.waitForSelector('#mf-tirar'); await m.click('#mf-tirar'); await m.waitForSelector('.m-conf'); await m.click('#cf-ok');
+    ok('tirar da mesa remove a carta', await ate(async () => !(await m.textContent('#m-jogadores')).includes('Audrey')));
+    await a2.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    ok('a jogadora tirada é avisada', await ate(async () => (await a2.evaluate(() => Jogador.estado)) === 'fora' && /tirou você/.test(await a2.evaluate(() => document.querySelector('#online') ? document.querySelector('#online').textContent : ''))) || await ate(() => a2.evaluate(() => Jogador.estado === 'fora')));
+    ok('cena: nenhum erro de script', m.erros.length === 0 && j.erros.length === 0 && a2.erros.length === 0, [m.erros[0], j.erros[0], a2.erros[0]].filter(Boolean).join(' | '));
+    await cA.close(); }
+
   console.log('\n8) Ficha ao vivo');
   if (await j.isVisible('#mesa')) await j.click('#mesa-x'); await j.click('.adj[data-c="pv"][data-d="-5"]');
   const pvNovo = await j.evaluate(() => P.pv);
@@ -365,6 +476,13 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
   ok('modificador absurdo é limitado a ±30', (await m.$$eval('.m-carta-j .m-mods b', b => b.map(x => x.textContent))).includes('+30'));
   ok('nenhum erro de script no mestre', m.erros.length === 0, m.erros[0] || '');
   ok('nenhum erro de script no jogador', j.erros.length === 0, j.erros[0] || '');
+  await m.evaluate(() => document.querySelector('#m-voltar').click()); await m.waitForSelector('[data-apagar-mesa]');
+  await m.click('[data-apagar-mesa]'); await m.waitForSelector('#cf-in');
+  ok('apagar mesa exige digitar o código', await m.evaluate(() => document.querySelector('#cf-ok').disabled));
+  await m.fill('#cf-in', codigo.toLowerCase());
+  ok('com o código digitado, libera', await m.evaluate(() => !document.querySelector('#cf-ok').disabled));
+  await m.click('#cf-ok');
+  ok('a mesa e tudo dela somem', await ate(() => srv.db.mesas.length === 0 && ['jogadores', 'pedidos', 'resultados', 'sussurros', 'ordens', 'figuras', 'disputas', 'cronica', 'encontros', 'notas_mestre'].every(t => srv.db[t].length === 0)) && await ate(async () => !(await m.$('[data-apagar-mesa]'))));
   await m.click('#m-sair');
   ok('sair do grimório volta ao login', await ate(() => m.isVisible('#m-email')));
   await ctxM.close(); await ctxJ.close();
