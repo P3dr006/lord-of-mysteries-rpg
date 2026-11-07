@@ -73,7 +73,7 @@ const Jogador = (() => {
   }
 
   async function sairDaMesa() {
-    const c = con; desligar(); con = null; gravarConexao(null); pedidos = []; sussurros = []; lidos = new Set(); fila = []; habs = []; decretos = []; estado = 'fora'; erro = ''; redesenhar();
+    const c = con; desligar(); con = null; gravarConexao(null); pedidos = []; sussurros = []; lidos = new Set(); fila = []; habs = []; efeitos = []; decretos = []; estado = 'fora'; erro = ''; redesenhar();
     if (c && uid) { try { await (await Rede.tabela('jogador', 'jogadores')).delete().eq('mesa_id', c.mesa).eq('user_id', uid); } catch (e) { /* sem rede: o mestre remove depois */ } }
   }
 
@@ -105,6 +105,7 @@ const Jogador = (() => {
       } catch (e) { /* sem cena nesta conexão */ }
       try {   // habilidades da mesa (concedidas, propostas e vereditos do mestre)
         await carregarHabs(); parar.push(await Rede.ouvir('jogador', 'habilidades', 'habilidades', 'user_id=eq.' + uid, () => carregarHabs().catch(() => {})));
+        await carregarEfeitos(); parar.push(await Rede.ouvir('jogador', 'efeitos', 'efeitos', 'user_id=eq.' + uid, () => carregarEfeitos().catch(() => {})));
       } catch (e) { /* sem habilidades da mesa nesta conexão */ }
       try { parar.push(await Rede.presenca('jogador', con.mesa, uid, { nome: con.nome }, () => {})); } catch (e) { /* sem vela */ }
       clearInterval(vigia); vigia = setInterval(conferirSeAindaEstou, 45000);
@@ -211,9 +212,10 @@ const Jogador = (() => {
   };
   async function carregarEncontro(inicio) {
     if (!con) return;
-    const r = await (await Rede.tabela('jogador', 'encontros')).select('ativo,rodada,vez,ordem').eq('mesa_id', con.mesa);
+    const r = await (await Rede.tabela('jogador', 'encontros')).select('id,nome,ativo,rodada,vez,ordem,jogadores').eq('mesa_id', con.mesa);
     if (r.error) throw r.error;
-    encontro = (r.data || [])[0] || null; mostrarRoda(encontro && encontro.ativo ? encontro : null, !!inicio);
+    // só a batalha em que o jogador está agora (a de que saiu continua legível só para a faixa sumir)
+    encontro = (r.data || []).find(b => b.ativo && Array.isArray(b.jogadores) && b.jogadores.includes(uid)) || null; mostrarRoda(encontro && encontro.ativo ? encontro : null, !!inicio);
   }
   function mostrarRoda(e, inicio) {
     let faixa = document.querySelector('#roda-jog');
@@ -224,7 +226,7 @@ const Jogador = (() => {
     const minha = atual.tipo === 'jogador' && atual.id === uid;
     faixa.classList.toggle('recolhida', rodaRecolhida); faixa.classList.toggle('minha', minha);
     faixa.innerHTML = '<button type="button" class="rj-alt" aria-expanded="' + !rodaRecolhida + '" aria-label="' + (rodaRecolhida ? 'Mostrar' : 'Recolher') + ' a Roda do Destino">' + (rodaRecolhida ? '◂' : '▸') + '</button>'
-      + '<div class="rj-cab"><small>Roda do Destino</small><b>Rodada ' + (Number(e.rodada) || 1) + '</b><span>' + (minha ? '<strong>Sua vez</strong>' : 'Vez de <strong>' + esc2(atual.nome || '—') + '</strong>') + '</span></div>'
+      + '<div class="rj-cab"><small>' + esc2(e.nome && e.nome !== 'Encontro' ? e.nome : 'Roda do Destino') + '</small><b>Rodada ' + (Number(e.rodada) || 1) + '</b><span>' + (minha ? '<strong>Sua vez</strong>' : 'Vez de <strong>' + esc2(atual.nome || '—') + '</strong>') + '</span></div>'
       + '<ol class="rj-fila">' + ordem.map((p, i) => '<li class="' + (i === vez ? 'vez ' : '') + (i < vez ? 'foi ' : '') + (p.tipo === 'jogador' && p.id === uid ? 'eu' : '') + '"' + (i === vez ? ' aria-current="true"' : '') + '>' + md(p, 30) + '<span>' + esc2(p.nome || '') + '</span></li>').join('') + '</ol>';
     faixa.querySelector('.rj-alt').addEventListener('click', () => { rodaRecolhida = !rodaRecolhida; mostrarRoda(encontro && encontro.ativo ? encontro : null); const b = document.querySelector('#roda-jog .rj-alt'); if (b) b.focus(); });
     const chave = (e.rodada || 1) + ':' + vez + ':' + (atual.id || '');
@@ -281,13 +283,14 @@ const Jogador = (() => {
     desenharHabsMesa();
     // o que mudou desde a última vez: concedida, aprovada (com ou sem mudanças), reescrita ou recusada (também o que chegou com o jogador fora)
     const v = vistas();
-    habs.filter(h => h.estado !== 'pendente' && v[h.id] !== chaveHab(h) && !decretos.some(d => d.h.id === h.id))
+    habs.filter(h => h.estado !== 'pendente' && v[h.id] !== chaveHab(h) && !decretos.some(d => d.h && d.h.id === h.id))
       .forEach(h => decretos.push({ h, antes: v[h.id] }));
     mostrarDecreto();
   }
   function mostrarDecreto() {
     if (!decretos.length || document.querySelector('.decreto')) return;
     if (document.querySelector('.sussurro, .duelo-cena')) { setTimeout(mostrarDecreto, 1500); return; }   // não atropela outra cena
+    if (decretos[0] && decretos[0].ef) return decretoEfeito(decretos.shift().ef);
     const { h, antes } = decretos.shift(), rej = h.estado === 'rejeitada';
     const ja = antes && antes.startsWith('aprovada');
     const titulo = rej ? 'O mestre recusa' : ja ? 'O mestre reescreve' : h.origem === 'mestre' ? 'O mestre concede' : h.alterada ? 'Aprovada, com mudanças' : 'O mestre aprova';
@@ -306,6 +309,58 @@ const Jogador = (() => {
     m.querySelector('#dec-ok').addEventListener('click', fechar);
     soltar = typeof prenderFoco === 'function' ? prenderFoco(m, fechar) : () => {};
     setTimeout(() => { const b = m.querySelector('#dec-ok'); if (b && b.isConnected) b.focus(); }, 60);
+  }
+
+  // ---------- bênçãos, maldições e selos que o mestre avisou (os secretos nunca chegam aqui) ----------
+  let efeitos = [];
+  const KE = 'lotm-rpg-efeitos-vistos';
+  const efVistos = () => { try { return JSON.parse(localStorage.getItem(KE)) || {}; } catch (e) { return {}; } };
+  const efVisto = ef => { try { const v = efVistos(); v[ef.id] = 1; localStorage.setItem(KE, JSON.stringify(v)); } catch (e) { /* só nesta visita */ } };
+  const NOME_AT = typeof ATTRS !== 'undefined' ? Object.fromEntries(ATTRS.map(a => [a.key, a.nome])) : {};
+  const sinal2 = n => (n >= 0 ? '+' : '−') + Math.abs(n);
+  const oQueFaz = e => e.habilidade ? (e.tipo === 'perda' ? 'Perdida: ' : 'Selada: ') + e.habilidade : (NOME_AT[e.atributo] || e.atributo) + ' ' + sinal2(Number(e.valor) || 0);
+  async function carregarEfeitos() {
+    if (!con || !uid) return;
+    const r = await (await Rede.tabela('jogador', 'efeitos')).select('id,tipo,atributo,valor,habilidade,rotulo,descricao,criado_em').eq('mesa_id', con.mesa).eq('user_id', uid).order('criado_em');
+    if (r.error) throw r.error;
+    efeitos = r.data || [];
+    desenharHabsMesa();
+    const v = efVistos();
+    efeitos.filter(e => !v[e.id] && !decretos.some(d => d.ef && d.ef.id === e.id)).forEach(ef => decretos.push({ ef }));
+    mostrarDecreto();
+  }
+  function decretoEfeito(ef) {
+    const ruim = ef.tipo !== 'bencao';
+    const titulo = { bencao: 'Uma bênção desce', maldicao: 'Uma maldição recai', bloqueio: 'Uma habilidade é selada', perda: 'Uma habilidade se perde' }[ef.tipo] || 'O mestre decreta';
+    const m = document.createElement('div'); m.className = 'decreto ef-dec ef-' + ef.tipo + (ruim ? ' recusa' : ''); m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'dec-t');
+    m.innerHTML = `<div class="dec-papel"><span class="dec-selo" aria-hidden="true"><i></i></span>
+      <small class="dec-olho">${ef.tipo === 'bencao' ? 'Bênção' : ef.tipo === 'maldicao' ? 'Maldição' : 'Selo sobre você'}</small><h2 id="dec-t">${esc2(titulo)}</h2>
+      <div class="dec-hab"><b class="${ef.tipo === 'perda' ? 'riscado' : ''}">${esc2(ef.rotulo)}</b><p class="hm-tags"><span><i>Efeito</i>${esc2(oQueFaz(ef))}</span></p>${ef.descricao ? `<p>${esc2(ef.descricao)}</p>` : ''}</div>
+      <button type="button" class="primary" id="dec-ok">${ef.tipo === 'bencao' ? 'Aceitar' : 'Entendi'}</button></div>`;
+    document.body.appendChild(m);
+    if (typeof Som === 'object') { try { ruim ? Som.falha() : Som.selar(); } catch (e) { /* sem som */ } }
+    anunciar(`${titulo}: ${ef.rotulo}. ${oQueFaz(ef)}`);
+    let soltar = () => {};
+    const fechar = () => { efVisto(ef); soltar(); m.classList.add('saindo'); setTimeout(() => { m.remove(); mostrarDecreto(); }, 220); };
+    m.querySelector('#dec-ok').addEventListener('click', fechar);
+    soltar = typeof prenderFoco === 'function' ? prenderFoco(m, fechar) : () => {};
+    setTimeout(() => { const b = m.querySelector('#dec-ok'); if (b && b.isConnected) b.focus(); }, 60);
+  }
+  // na ficha: o bloco "Sobre você" e a marca nas habilidades seladas ou perdidas
+  function desenharEfeitos() {
+    let el = document.querySelector('#ef-jog');
+    const hm = document.querySelector('#hab-mesa'); if (!hm) return;
+    if (!el) { el = document.createElement('div'); el.id = 'ef-jog'; el.className = 'ef-jog'; hm.parentNode.insertBefore(el, hm); }
+    const ligado = estado === 'ligado';
+    el.innerHTML = ligado && efeitos.length ? `<h4 class="sub hm-tit">Sobre você</h4><ul class="ef-jlista">${efeitos.map(e => `<li class="ef-j ef-${e.tipo}"><span class="ef-ic" aria-hidden="true">${{ bencao: '✦', maldicao: '☠', bloqueio: '⛓', perda: '✕' }[e.tipo]}</span>
+      <div><b>${esc2(e.rotulo)}</b><span>${esc2(oQueFaz(e))}</span>${e.descricao ? `<p>${esc2(e.descricao)}</p>` : ''}</div></li>`).join('')}</ul>` : '';
+    document.querySelectorAll('.hab-lista li').forEach(li => {
+      li.classList.remove('selada', 'perdida'); const velha = li.querySelector('.ef-marca'); if (velha) velha.remove();
+      const b = li.querySelector('b'); if (!b || !ligado) return;
+      const e = efeitos.find(x => x.habilidade && x.habilidade === b.textContent.trim()); if (!e) return;
+      li.classList.add(e.tipo === 'perda' ? 'perdida' : 'selada');
+      b.insertAdjacentHTML('afterend', `<span class="ef-marca">${e.tipo === 'perda' ? '✕ perdida' : '⛓ selada'}</span>`);
+    });
   }
   const podePropor = () => estado === 'ligado' && !!minhaFicha();
   async function propor(d) {
@@ -329,6 +384,7 @@ const Jogador = (() => {
       ${pend.map(h => `<li class="hm pend"><div><b>${esc2(h.nome)}</b><span class="hm-selo espera">Aguardando o mestre</span>${h.descricao ? `<p>${esc2(h.descricao)}</p>` : ''}${tags(h)}</div><span class="hab-ac"><button type="button" class="mini hm-retirar" data-h="${esc2(h.id)}" aria-label="Retirar a proposta ${esc2(h.nome)}" title="Retirar a proposta">×</button></span></li>`).join('')}
       ${rej.map(h => `<li class="hm rej"><div><b>${esc2(h.nome)}</b><span class="hm-selo nao">Recusada</span>${recado(h)}</div><span class="hab-ac"><button type="button" class="mini hm-retirar" data-h="${esc2(h.id)}" aria-label="Dispensar ${esc2(h.nome)}" title="Dispensar">×</button></span></li>`).join('')}
       </ul>` : '';
+    desenharEfeitos();
     el.querySelectorAll('.hm-retirar').forEach(b => b.addEventListener('click', async () => { b.disabled = true; try { await retirar(b.dataset.h); anunciar('Proposta retirada'); const f = document.querySelector('#hab-nome'); if (f) f.focus(); } catch (e) { b.disabled = false; const msg = document.querySelector('#hab-msg'); if (msg) { msg.textContent = Rede.mensagem(e); msg.hidden = false; } } }));
     // o formulário da ficha: ligado à mesa, a habilidade nova vai ao mestre (editar uma anotação antiga continua local)
     const form = document.querySelector('#hab-form'); if (!form) return;
@@ -502,5 +558,5 @@ const Jogador = (() => {
     if (fab) fab.addEventListener('click', () => { const m = document.querySelector('#mesa'); if (pedidos.length && estado === 'ligado' && m && !m.hidden) Mesa.irParaTestes(); });
   });
 
-  return { desenhar, entrar, sairDaMesa, ligar, rolarPedido, fichaParaMestre: ficha, propor, retirar, podePropor, desenharHabsMesa, get habilidades() { return habs.slice(); }, get estado() { return estado; }, get encontro() { return encontro; }, get pedidos() { return pedidos.slice(); } };
+  return { desenhar, entrar, sairDaMesa, ligar, rolarPedido, fichaParaMestre: ficha, propor, retirar, podePropor, desenharHabsMesa, get habilidades() { return habs.slice(); }, get efeitos() { return efeitos.slice(); }, get estado() { return estado; }, get encontro() { return encontro; }, get pedidos() { return pedidos.slice(); } };
 })();
