@@ -81,6 +81,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     await p.fill('#on-cod', 'abc234'); await p.click('#on-entrar');
     ok('entrar sem rede mostra mensagem clara', await ate(() => p.isVisible('.on-erro')), await p.textContent('.on-erro').catch(() => ''));
     ok('a mensagem não é técnica', /conexão|internet/i.test(await p.textContent('.on-erro')));
+    ok('login anônimo desligado no Supabase vira instrução em português', /Allow anonymous sign-ins/.test(await p.evaluate(() => Rede.mensagem({ message: 'Anonymous sign-ins are disabled' }))));
     await p.click('.aba[data-aba=livre]'); await p.click('#rolar');
     ok('os dados comuns continuam rolando', await ate(() => p.isVisible('#resultado'), 4000));
     ok('nenhum erro de script', p.erros.length === 0, p.erros[0] || '');
