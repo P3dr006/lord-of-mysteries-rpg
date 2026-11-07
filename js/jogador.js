@@ -162,6 +162,13 @@ const Jogador = (() => {
     // volta para a mesa sozinho se o jogador já estava numa (só com rede)
     if (con && navigator.onLine !== false && Rede.configurada()) setTimeout(ligar, 600);
     window.addEventListener('online', () => { if (con && estado === 'desligado') ligar(); });
+    // atalho da capa: abre a ficha salva e leva direto ao campo do código
+    const atalho = document.querySelector('#btn-entrar-mesa');
+    if (atalho) atalho.addEventListener('click', () => {
+      if (idAtivoSalvo()) document.querySelector('#btn-continue').click();
+      else { avisar('Primeiro, seu personagem', 'Para entrar numa mesa você precisa de um personagem: o mestre vê o nome, os modificadores, PV e Sanidade. Clique em “Iniciar a jornada” e, com a ficha pronta, use este atalho de novo.'); return; }
+      setTimeout(() => { Mesa.irParaTestes(); setTimeout(() => { const i = document.querySelector('#on-cod'); if (i && !i.disabled) i.focus(); }, 150); }, 250);
+    });
     // com pedido esperando, abrir a mesa já leva para a aba Testes
     const fab = document.querySelector('#fab-mesa');
     if (fab) fab.addEventListener('click', () => { const m = document.querySelector('#mesa'); if (pedidos.length && estado === 'ligado' && m && !m.hidden) Mesa.irParaTestes(); });

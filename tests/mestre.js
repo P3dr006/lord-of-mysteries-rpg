@@ -57,6 +57,20 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     const cfg = fs.readFileSync(path.join(RAIZ, 'js/config.js'), 'utf8').replace(/\/\/.*$/gm, '');   // sem os comentários de alerta
     ok('config.js só tem a chave pública', /sb_publishable_/.test(cfg) && !/sb_secret_|service_role\s*[:=]/.test(cfg)); }
 
+  console.log('\n1b) Achar onde entrar na mesa');
+  { const ctx = await contexto(browser, null); const p = await jogadorPronto(ctx);
+    ok('o campo do código é o primeiro item da aba Testes', await p.evaluate(() => document.querySelector('#mesa-corpo').firstElementChild.id === 'online'));
+    ok('o campo aparece sem rolar o painel', await p.evaluate(() => { const i = document.querySelector('#on-cod').getBoundingClientRect(), c = document.querySelector('#mesa-corpo').getBoundingClientRect(); return i.top >= c.top && i.bottom <= c.bottom; }));
+    await p.click('#mesa-x'); await p.evaluate(() => voltarCapa()); await p.waitForTimeout(300);
+    ok('a capa tem o atalho "Entrar numa mesa"', await p.isVisible('#btn-entrar-mesa'));
+    await p.click('#btn-entrar-mesa');
+    ok('o atalho abre a mesa direto no campo do código', await ate(() => p.evaluate(() => document.activeElement && document.activeElement.id === 'on-cod')));
+    ok('atalho: nenhum erro de script', p.erros.length === 0, p.erros[0] || ''); await ctx.close(); }
+  { const ctx = await contexto(browser, null); const p = await pagina(ctx, URL_SITE);
+    await p.click('#btn-entrar-mesa');
+    ok('sem personagem, o atalho explica que é preciso criar um', await ate(async () => /Primeiro, seu personagem/.test(await p.textContent('body'))));
+    await ctx.close(); }
+
   console.log('\n2) Sem rede, o site continua funcionando');
   { const ctx = await contexto(browser, null); await ctx.route(/cdn\.jsdelivr\.net/, r => r.abort());
     const p = await jogadorPronto(ctx);

@@ -78,18 +78,17 @@ const Mesa = (() => {
       $('#rolar').addEventListener('click', () => rolar({ lados: k.lados, qtd: k.qtd, mod: k.mod, rotulo: rotuloLivre() }));
     } else if (aba === 'testes') {
       const tem = ATTRS.every(a => P.attrs && P.attrs[a.key]);
-      const pedidoNoTopo = typeof Jogador === 'object' && Jogador.pedidos.length > 0;   // o pedido do mestre vem primeiro
-      c.innerHTML = `${pedidoNoTopo ? '<div class="online topo" id="online"></div>' : ''}
+      // a mesa online (código do mestre e pedidos) fica sempre no topo: é o que o jogador procura primeiro
+      c.innerHTML = `<div class="online topo" id="online"></div>
         <div class="lbl">Teste de atributo <i>d20 + modificador${k.mod ? ` ${sinal(k.mod)}` : ''}</i></div>
         ${tem ? '' : '<p class="hint">Role os atributos do personagem para liberar os testes.</p>'}
         <div class="attrs-mesa">${ATTRS.map(a => `<button type="button" class="attr-b" data-a="${a.key}" style="--ac:${a.cor}" ${tem ? '' : 'disabled'}>${iconeAttr(a, 22)}<span>${a.nome}</span><b>${tem ? sinal(mod(total(a.key))) : '—'}</b></button>`).join('')}</div>
         <div class="lbl">Mente</div>
         <div class="san-teste"><div><b>Teste de Sanidade</b><small>d20 + Presença. A dificuldade e o que acontece com sua Sanidade quem decide é o mestre.</small></div><button type="button" class="primary" id="t-san" ${tem ? '' : 'disabled'} data-ic="olho">Rolar</button></div>
-        <p class="hint">O mestre define a dificuldade e o resultado.</p>
-        ${pedidoNoTopo ? '' : '<div class="online" id="online"></div>'}`;
+        <p class="hint">O mestre define a dificuldade e o resultado.</p>`;
       const ts = $('#t-san'); if (ts) ts.addEventListener('click', testeSanidade);
       if (typeof Jogador === 'object') Jogador.desenhar($('#online'));
-      if (pedidoNoTopo) c.scrollTop = 0;
+      c.scrollTop = 0;
     } else {
       const h = P.historico || [];
       c.innerHTML = `<div class="lbl">Últimas rolagens ${h.length ? `<button type="button" class="link-remover" id="h-limpar">Limpar</button>` : ''}</div>` +
