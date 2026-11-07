@@ -14,10 +14,12 @@
     "segredos": "node tools/verificar-segredos.js --tudo",
     "segredos:historico": "node tools/verificar-segredos.js --historico",
     "test:segredos": "node tests/segredos.js",
-    "test:mestre": "node tests/mestre.js"
+    "test:mestre": "node tests/mestre.js",
+    "test:quieto": "node tests/segredos.js --quieto && node tests/robustez.js --quieto && node tests/ficha.js --quieto && node tests/acessibilidade.js --quieto && node tests/audio.js --quieto && node tests/mestre.js --quieto"
   },
   "devDependencies": {
-    "playwright": "^1.40.0",
-    "axe-core": "^4.10.0"
+    "axe-core": "^4.10.0",
+    "pg": "^8.23.1",
+    "playwright": "^1.40.0"
   }
 }

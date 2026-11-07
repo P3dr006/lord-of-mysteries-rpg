@@ -1,3 +1,4 @@
+require('./quieto');
 // Testes de acessibilidade: axe-core (WCAG 2.1 A/AA), teclado, "reduzir movimento", rótulos e contraste.
 // Uso: npm run test:a11y
 const { chromium } = require('playwright');

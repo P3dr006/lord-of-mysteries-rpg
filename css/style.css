@@ -1928,3 +1928,34 @@ li.perdida>div>b,li.perdida>b{text-decoration:line-through;text-decoration-color
 .m-cj-ef{flex-basis:100%;order:-1;margin:0 0 8px}
 @media (max-width:640px){.mf-novo-ef .m-grade{grid-template-columns:1fr}}
 .m-cj-ef>i{display:none}
+
+/* ---------- Fase 2: estética com CSS moderno (sem biblioteca) ---------- */
+/* ir do site para o Grimório (e voltar) com transição suave entre páginas */
+@view-transition{navigation:auto}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.45s}
+/* abas do Grimório: o painel surge como tinta assentando no papel */
+.m-aba-p:not([hidden]){animation:aba-tinta .42s cubic-bezier(.2,.7,.2,1)}
+@keyframes aba-tinta{from{opacity:0;filter:blur(6px);transform:translateY(8px)}to{opacity:1;filter:none;transform:none}}
+/* janelas (ficha, criatura, revelar) entram sem JS */
+.m-ficha-fundo{transition:opacity .3s ease;@starting-style{opacity:0}}
+.m-ficha-fundo>[role=dialog]{transition:transform .38s cubic-bezier(.2,.8,.2,1),opacity .38s ease;@starting-style{transform:translateY(14px) scale(.97);opacity:0}}
+/* quem está na vez: um anel de luz girando (ângulo animado com @property) */
+@property --giro{syntax:'<angle>';inherits:false;initial-value:0deg}
+.rd-p.vez::after{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;pointer-events:none;
+  background:conic-gradient(from var(--giro),transparent 0 62%,#ffb24a 80%,#fff3c4 86%,transparent 92%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:giro 2.6s linear infinite}
+@keyframes giro{to{--giro:360deg}}
+/* aura do sigilo na ficha do mestre pulsa de cor */
+@property --aura{syntax:'<percentage>';inherits:false;initial-value:30%}
+.mf-selo{filter:drop-shadow(0 0 14px color-mix(in srgb,var(--cc,#d9b86a) var(--aura),transparent));animation:aura 3.4s ease-in-out infinite alternate}
+@keyframes aura{to{--aura:75%}}
+/* ficha longa: os blocos acendem ao entrar na tela (animação ligada à rolagem) */
+@supports (animation-timeline:view()){
+  .mf-bloco,.hab-lista li{animation:acende linear both;animation-timeline:view();animation-range:entry 0% entry 60%}
+  @keyframes acende{from{transform:translateY(18px) scale(.985)}to{transform:none}}
+}
+@media (prefers-reduced-motion:reduce){
+  @view-transition{navigation:none}
+  .m-aba-p:not([hidden]),.rd-p.vez::after,.mf-selo,.mf-bloco,.hab-lista li{animation:none}
+  .m-ficha-fundo,.m-ficha-fundo>[role=dialog]{transition:none}
+}

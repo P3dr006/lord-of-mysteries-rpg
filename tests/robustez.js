@@ -1,3 +1,4 @@
+require('./quieto');
 // Testes de robustez (Playwright). Uso:  npm install  &&  npm test
 // Cada teste reproduz um defeito já encontrado na auditoria; se algum voltar, o teste falha.
 const { chromium } = require('playwright');

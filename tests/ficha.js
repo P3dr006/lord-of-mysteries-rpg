@@ -1,3 +1,4 @@
+require('./quieto');
 // Testes da ficha útil: vários personagens, PV/Sanidade rápidos e habilidades. Uso: npm run test:ficha
 const { chromium } = require('playwright');
 const path = require('path');

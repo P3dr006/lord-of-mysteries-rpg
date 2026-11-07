@@ -1,3 +1,4 @@
+require('./quieto');
 // Testes de áudio: nivelamento dos sons (medição offline), volume, sons dos botões, silenciar, aba em segundo plano e o painel.
 // Uso: npm run test:audio   (a medição leva cerca de 1 minuto)
 const { chromium } = require('playwright');

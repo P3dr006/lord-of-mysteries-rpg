@@ -1,3 +1,4 @@
+require('./quieto');
 // Testa o verificador de segredos e o hook de commit. Uso: npm run test:segredos
 // Os "segredos" abaixo são falsos e montados em partes, para o próprio teste não ser bloqueado.
 const { acharNoTexto, acharNoNome } = require('../tools/verificar-segredos.js');

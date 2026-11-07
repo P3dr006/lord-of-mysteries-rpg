@@ -1,3 +1,4 @@
+require('./quieto');
 // Testes da mesa online (mestre e jogador) com um Supabase FALSO em memória (tests/supabase-falso.js).
 // Prova: o site funciona sem rede, a biblioteca é fixa e verificada, o jogador nunca recebe dificuldade
 // nem teste secreto, o dado do pedido vem do servidor, e a ficha chega ao mestre ao vivo.

@@ -168,6 +168,24 @@ tabela `efeitos` (só o mestre escreve; o jogador lê só os próprios não secr
 `privado.mod_do_jogador` / `mod_visivel` somam os efeitos em `rolar_secreto`, `responder_pedido` e no Duelo;
 `segredos_pedido.oculto` e `resultados_mestre` com o total real. Verificada em 35 cenários com papéis reais, desfeita no fim.
 
+## Migrações sem o chat (economiza contexto)
+
+`tools/migracao.js` roda a migração direto no banco, sem o SQL passar pela conversa:
+
+- `node tools/migracao.js verificar supabase/migrations/X.sql verificacao.sql`: migração + cenários numa transação que é
+  **sempre desfeita**; mostra só a linha `RESULTADO`.
+- `node tools/migracao.js aplicar supabase/migrations/X.sql --sim`: aplica e registra em `supabase_migrations`.
+
+Configuração (uma vez, feita pelo Pedro no terminal dele, **nunca** no projeto nem no chat):
+1. Supabase > Project Settings > Database > Connection string (URI, "Session pooler"), com a senha do banco.
+2. `setx SUPABASE_DB_URL "postgresql://..."` e abrir um terminal novo.
+3. Se o Node reclamar do certificado: baixar em Database > SSL Configuration e `setx SUPABASE_DB_CA "C:\caminho\prod-ca.crt"`.
+
+Travas: só aceita o projeto lotm-rpg, só lê `.sql`, verifica o TLS (não há modo inseguro), nunca imprime a URL nem a senha
+(nem em erros), `aplicar` exige `--sim`. Sem a variável, as migrações continuam pelo conector do Supabase.
+
+Testes enxutos: `npm run test:quieto` (só falhas + placar) e `node tests/mestre.js --quieto --ate=7d` (para depois da seção).
+
 ## Configuração que falta no painel do Supabase
 
 Em **Authentication → URL Configuration**: Site URL e Redirect URLs =
