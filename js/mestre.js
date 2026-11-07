@@ -88,5 +88,14 @@ const Rede = (() => {
     return () => { try { c.removeChannel(canal); } catch (e) { /* já fechado */ } };
   }
 
-  return { cliente, configurada, mensagem, usuario, entrarAnonimo, entrarEmail, criarConta, sair, rpc, tabela, ouvir, SDK, ErroRede };
+  // Presença (quem está com a aba aberta): canal com o nome da mesa; quem passa `dados` se anuncia, todos recebem o estado.
+  async function presenca(papel, mesaId, chave, dados, aoMudar) {
+    const c = await cliente(papel);
+    const canal = c.channel('presenca-' + mesaId, { config: { presence: { key: chave } } });
+    canal.on('presence', { event: 'sync' }, () => { try { aoMudar(canal.presenceState()); } catch (e) { /* tela já fechou */ } })
+      .subscribe(async st => { if (st === 'SUBSCRIBED' && dados) { try { await canal.track(dados); } catch (e) { /* tenta na reconexão */ } } });
+    return () => { try { c.removeChannel(canal); } catch (e) { /* já fechado */ } };
+  }
+
+  return { cliente, configurada, mensagem, usuario, entrarAnonimo, entrarEmail, criarConta, sair, rpc, tabela, ouvir, presenca, SDK, ErroRede };
 })();

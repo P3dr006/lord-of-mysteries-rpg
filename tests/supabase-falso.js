@@ -38,20 +38,30 @@ const CLIENTE = `(() => {
       auth,
       from: consulta,
       rpc: (nome, args) => chamar('rpc', { uid: uid(), nome, args }),
-      channel(nome) {
-        const ch = { subs: [] };
-        ch.on = (tipo, cfg, cb) => { ch.subs.push([cfg, cb]); return ch; };
-        ch.subscribe = () => { ch.subs.forEach(([cfg, cb]) => { const id = Math.random().toString(36).slice(2); ch.ids = (ch.ids || []).concat(id); window.__subs[id] = cb; chamar('sub', { id, uid: uid(), tabela: cfg.table, filtro: cfg.filter }); }); return ch; };
+      channel(nome, opcoes) {
+        const ch = { subs: [], pres: [], estado: {}, nome, chave: opcoes && opcoes.config && opcoes.config.presence && opcoes.config.presence.key };
+        ch.on = (tipo, cfg, cb) => { (tipo === 'presence' ? ch.pres : ch.subs).push([cfg, cb]); return ch; };
+        ch.subscribe = cbEstado => {
+          ch.subs.forEach(([cfg, cb]) => { const id = Math.random().toString(36).slice(2); ch.ids = (ch.ids || []).concat(id); window.__subs[id] = cb; chamar('sub', { id, uid: uid(), tabela: cfg.table, filtro: cfg.filter }); });
+          if (ch.pres.length) {   // presença: o servidor falso mantém quem está em cada canal e avisa todos
+            ch.pid = Math.random().toString(36).slice(2);
+            window.__pres = window.__pres || {}; window.__pres[ch.pid] = est => { ch.estado = est; ch.pres.forEach(([, cb]) => cb()); };
+            chamar('pjoin', { pid: ch.pid, canal: nome }).then(() => cbEstado && cbEstado('SUBSCRIBED'));
+          } else if (cbEstado) setTimeout(() => cbEstado('SUBSCRIBED'), 0);
+          return ch;
+        };
+        ch.track = dados => chamar('ptrack', { pid: ch.pid, canal: nome, chave: ch.chave, dados });
+        ch.presenceState = () => ch.estado;
         return ch;
       },
-      removeChannel(ch) { (ch.ids || []).forEach(id => { delete window.__subs[id]; chamar('unsub', { id }); }); },
+      removeChannel(ch) { (ch.ids || []).forEach(id => { delete window.__subs[id]; chamar('unsub', { id }); }); if (ch.pid) { delete window.__pres[ch.pid]; chamar('pleave', { pid: ch.pid, canal: ch.nome }); } },
     };
   }
   window.supabase = { createClient: criar };
 })();`;
 
 function criarServidor() {
-  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [] };
+  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [], figuras: [], encontros: [], disputas: [], cronica: [] };
   const naMesa = (u, mesa) => db.jogadores.some(j => j.mesa_id === mesa && j.user_id === u);
   const assinaturas = [];          // { id, uid, tabela, filtro, page }
   const entregue = {};             // uid -> [cada resposta entregue a esse usuário]
@@ -74,6 +84,10 @@ function criarServidor() {
     sussurros_leituras: (u, r) => mestreDe(r.mesa_id) === u || r.user_id === u,
     ordens: (u, r) => mestreDe(r.mesa_id) === u || r.para === u,
     notas_mestre: (u, r) => mestreDe(r.mesa_id) === u,
+    figuras: (u, r) => mestreDe(r.mesa_id) === u,
+    cronica: (u, r) => mestreDe(r.mesa_id) === u,
+    encontros: (u, r) => mestreDe(r.mesa_id) === u || naMesa(u, r.mesa_id),
+    disputas: (u, r) => mestreDe(r.mesa_id) === u || (r.visivel && (r.a.id === u || r.b.id === u)),
   };
   function visao(u) {     // resultados_mestre (security_invoker: vale a RLS de quem consulta)
     return db.resultados.filter(r => VE.resultados(u, r)).map(r => {
@@ -92,7 +106,46 @@ function criarServidor() {
   }
   const registrar = (u, r) => { if (u) (entregue[u] = entregue[u] || []).push(JSON.parse(JSON.stringify(r))); return r; };
 
+  // igual a privado.mod_da_ficha: valor ilegível vira 0, limite ±30
+  const modDaFicha = (f, attr) => { if (!attr) return 0; const v = ((f || {}).mods || {})[attr]; return /^-?[0-9]{1,3}$/.test(String(v)) ? Math.max(-30, Math.min(30, parseInt(v, 10))) : 0; };
+  const d20 = () => rolar(20);
+  function ladoDuelo(mesa, tipo, idL, attr) {
+    if (tipo === 'jogador') { const j = db.jogadores.find(x => x.mesa_id === mesa && x.user_id === idL); if (!j) throw new Error('Jogador não encontrado.'); const d = d20(), m = modDaFicha(j.ficha, attr); return { tipo, id: idL, nome: j.nome, caminhoId: (j.ficha || {}).caminhoId || null, cor: (j.ficha || {}).cor || null, atributo: attr || null, dado: d, mod: m, total: d + m }; }
+    if (tipo === 'figura') { const f = db.figuras.find(x => x.mesa_id === mesa && x.id === idL); if (!f) throw new Error('Figura não encontrada.'); const d = d20(); return { tipo, id: idL, nome: f.nome, atributo: null, dado: d, mod: f.bonus, total: d + f.bonus }; }
+    throw new Error('Lado inválido.');
+  }
   const RPC = {
+    iniciar_encontro(u, a) {
+      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre começa um encontro.');
+      const ps = db.jogadores.filter(j => j.mesa_id === a.p_mesa).map(j => { const d = d20(), b = modDaFicha(j.ficha, 'agil'); return { tipo: 'jogador', id: j.user_id, nome: j.nome, caminhoId: (j.ficha || {}).caminhoId || null, cor: (j.ficha || {}).cor || null, dado: d, bonus: b, total: d + b }; })
+        .concat(db.figuras.filter(f => f.mesa_id === a.p_mesa && (a.p_figuras || []).includes(f.id)).map(f => { const d = d20(); return { tipo: 'figura', id: f.id, nome: f.nome, caminhoId: null, cor: null, dado: d, bonus: f.bonus, total: d + f.bonus }; }))
+        .sort((x, y) => y.total - x.total || y.bonus - x.bonus);
+      if (!ps.length) return erro('Ninguém para entrar na Roda.');
+      let e = db.encontros.find(x => x.mesa_id === a.p_mesa);
+      if (!e) db.encontros.push(e = { mesa_id: a.p_mesa });
+      Object.assign(e, { ativo: true, rodada: 1, vez: 0, ordem: ps, atualizado_em: new Date().toISOString() }); avisar('encontros', e);
+      return { data: ps, error: null };
+    },
+    proximo_turno(u, a) {
+      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre passa o turno.');
+      const e = db.encontros.find(x => x.mesa_id === a.p_mesa && x.ativo); if (!e) return erro('Nenhum encontro em andamento.');
+      const n = Math.max(1, e.ordem.length); if (e.vez + 1 >= n) e.rodada++; e.vez = (e.vez + 1) % n; e.atualizado_em = new Date().toISOString(); avisar('encontros', e);
+      return { data: { rodada: e.rodada, vez: e.vez }, error: null };
+    },
+    encerrar_encontro(u, a) {
+      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre encerra o encontro.');
+      const e = db.encontros.find(x => x.mesa_id === a.p_mesa); if (e) { e.ativo = false; e.atualizado_em = new Date().toISOString(); avisar('encontros', e); }
+      return { data: null, error: null };
+    },
+    disputar(u, a) {
+      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre começa um duelo.');
+      if (a.p_a_tipo === a.p_b_tipo && a.p_a_id === a.p_b_id) return erro('Escolha dois lados diferentes.');
+      try {
+        const A = ladoDuelo(a.p_mesa, a.p_a_tipo, a.p_a_id, a.p_a_attr), B = ladoDuelo(a.p_mesa, a.p_b_tipo, a.p_b_id, a.p_b_attr), rot = String(a.p_rotulo || '').trim().slice(0, 80) || 'Duelo';
+        const d = { id: id('due'), mesa_id: a.p_mesa, rotulo: rot, a: A, b: B, visivel: a.p_visivel !== false, criado_em: new Date().toISOString() };
+        db.disputas.push(d); avisar('disputas', d); return { data: { rotulo: rot, a: A, b: B }, error: null };
+      } catch (e) { return erro(e.message); }
+    },
     ordenar(u, a) {
       if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre dá ordens.');
       if (!['pv', 'san', 'terror'].includes(a.p_tipo)) return erro('Ordem desconhecida.');
@@ -152,14 +205,16 @@ function criarServidor() {
       const p = db.pedidos.find(x => x.id === a.p_pedido);
       if (!p || p.para !== u || p.tipo !== 'aberto') return erro('Pedido inválido.');
       if (p.estado !== 'pendente') return erro('Este teste já foi rolado.');
-      const mo = Math.max(-30, Math.min(30, a.p_modificador || 0)), v = rolar(p.lados), r = { pedido_id: p.id, mesa_id: p.mesa_id, user_id: u, tipo: 'aberto', dado: v, lados: p.lados, modificador: mo, total: v + mo, criado_em: new Date().toISOString() };
+      // à prova de trapaça: o modificador vem da ficha guardada, não do navegador (p_modificador é ignorado)
+      const fj = (db.jogadores.find(j => j.mesa_id === p.mesa_id && j.user_id === u) || {}).ficha;
+      const mo = modDaFicha(fj, p.atributo), v = rolar(p.lados), r = { pedido_id: p.id, mesa_id: p.mesa_id, user_id: u, tipo: 'aberto', dado: v, lados: p.lados, modificador: mo, total: v + mo, criado_em: new Date().toISOString() };
       db.resultados.push(r); p.estado = 'feito'; avisar('resultados', r); avisar('pedidos', p);
       return { data: { dado: v, lados: p.lados, modificador: mo, total: v + mo }, error: null };
     },
     rolar_secreto(u, a) {
       if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre rola testes secretos.');
       const j = db.jogadores.find(x => x.mesa_id === a.p_mesa && x.user_id === a.p_para); if (!j) return erro('Jogador não encontrado.');
-      const l = a.p_lados || 20, mo = a.p_atributo ? Math.max(-30, Math.min(30, parseInt((j.ficha.mods || {})[a.p_atributo], 10) || 0)) : 0, v = rolar(l);
+      const l = a.p_lados || 20, mo = modDaFicha(j.ficha, a.p_atributo), v = rolar(l);
       const p = { id: id('ped'), mesa_id: a.p_mesa, para: a.p_para, tipo: 'secreto', rotulo: a.p_rotulo, atributo: a.p_atributo || null, lados: l, estado: 'feito', criado_em: new Date().toISOString() };
       db.pedidos.push(p); db.segredos_pedido.push({ pedido_id: p.id, mesa_id: a.p_mesa, dificuldade: a.p_dificuldade });
       const r = { pedido_id: p.id, mesa_id: a.p_mesa, user_id: a.p_para, tipo: 'secreto', dado: v, lados: l, modificador: mo, total: v + mo, criado_em: new Date().toISOString() };
@@ -172,7 +227,21 @@ function criarServidor() {
     const u = q.uid; if (!u) return erro('JWT ausente');
     let linhas = q.tabela === 'resultados_mestre' ? visao(u) : (db[q.tabela] || []).filter(r => VE[q.tabela](u, r));
     linhas = linhas.filter(r => q.filtros.every(([c, v]) => String(r[c]) === String(v)));
-    if (q.op === 'insert') {   // só notas_mestre aceita escrita direta (as outras tabelas são só por função)
+    if (q.op === 'insert' && (q.tabela === 'figuras' || q.tabela === 'cronica')) {   // escritas diretas só do mestre
+      const v = q.valores; if (mestreDe(v.mesa_id) !== u) return erro(`new row violates row-level security policy for table "${q.tabela}"`);
+      let linha;
+      if (q.tabela === 'figuras') {
+        const nome = String(v.nome || '').trim(); if (!nome || nome.length > 40) return erro('new row violates check constraint "figuras_nome_check"');
+        const bonus = v.bonus == null ? 0 : v.bonus; if (bonus < -10 || bonus > 20) return erro('new row violates check constraint "figuras_bonus_check"');
+        linha = { id: id('fig'), mesa_id: v.mesa_id, nome, bonus, pv: v.pv == null ? null : v.pv, pv_max: v.pv_max == null ? null : v.pv_max, criado_em: new Date().toISOString() };
+      } else {
+        const t = String(v.texto || ''); if (!t || t.length > 500) return erro('new row violates check constraint "cronica_texto_check"');
+        linha = { id: id('cro'), mesa_id: v.mesa_id, texto: t, criado_em: new Date().toISOString() };
+      }
+      db[q.tabela].push(linha); avisar(q.tabela, linha);
+      return { data: q.devolver ? [{ ...linha }] : null, error: null };
+    }
+    if (q.op === 'insert') {   // notas_mestre aceita escrita direta do mestre; as outras tabelas são só por função
       if (q.tabela !== 'notas_mestre') return erro('permission denied for table ' + q.tabela);
       const v = q.valores; if (mestreDe(v.mesa_id) !== u) return erro('new row violates row-level security policy for table "notas_mestre"');
       if (!naMesa(v.user_id, v.mesa_id)) return erro('violates foreign key constraint');
@@ -181,17 +250,18 @@ function criarServidor() {
       return { data: null, error: null };
     }
     if (q.op === 'update') {
-      const COLS = { jogadores: ['nome', 'ficha'], notas_mestre: ['texto'] }[q.tabela];
+      const COLS = { jogadores: ['nome', 'ficha'], notas_mestre: ['texto'], figuras: ['nome', 'bonus', 'pv', 'pv_max'] }[q.tabela];
       if (!COLS) return erro('permission denied for table ' + q.tabela);
       const pode = linhas.filter(r => q.tabela === 'jogadores' ? r.user_id === u : mestreDe(r.mesa_id) === u);
       pode.forEach(r => { for (const k of COLS) if (k in q.valores) r[k] = q.valores[k]; r.atualizado_em = new Date().toISOString(); avisar(q.tabela, r); });
       return { data: q.devolver ? pode.map(r => ({ ...r })) : null, error: null };
     }
     if (q.op === 'delete') {
-      const DEL = { jogadores: r => r.user_id === u || mestreDe(r.mesa_id) === u, sussurros: r => mestreDe(r.mesa_id) === u, pedidos: r => mestreDe(r.mesa_id) === u, notas_mestre: r => mestreDe(r.mesa_id) === u, mesas: r => r.mestre_id === u }[q.tabela];
+      const DEL = { jogadores: r => r.user_id === u || mestreDe(r.mesa_id) === u, sussurros: r => mestreDe(r.mesa_id) === u, pedidos: r => mestreDe(r.mesa_id) === u, notas_mestre: r => mestreDe(r.mesa_id) === u, mesas: r => r.mestre_id === u, figuras: r => mestreDe(r.mesa_id) === u, cronica: r => mestreDe(r.mesa_id) === u }[q.tabela];
       if (!DEL) return erro('permission denied for table ' + q.tabela);
       const tab = db[q.tabela]; linhas.filter(DEL).forEach(r => {
         tab.splice(tab.indexOf(r), 1); avisar(q.tabela, r);
+        if (q.tabela === 'mesas') for (const t of Object.keys(db)) if (t !== 'mesas' && t !== 'usuarios') db[t] = db[t].filter(x => x.mesa_id !== r.id);   // on delete cascade
         if (q.tabela === 'jogadores') for (const t of ['ordens', 'notas_mestre']) db[t] = db[t].filter(x => !(x.mesa_id === r.mesa_id && (x.para || x.user_id) === r.user_id));   // on delete cascade
       });
       return { data: null, error: null };
@@ -202,11 +272,24 @@ function criarServidor() {
     return { data: linhas.map(r => cols ? Object.fromEntries(cols.map(c => [c, r[c]])) : { ...r }), error: null };
   }
 
+  const canais = {};
+  function presencaAvisar(nome) {
+    const c = canais[nome]; if (!c) return; const estado = {};
+    for (const m of c.values()) if (m.chave) (estado[m.chave] = estado[m.chave] || []).push({ ...(m.dados || {}), presence_ref: 'r' });
+    for (const [pid, m] of c) m.page.evaluate(([p, e]) => window.__pres && window.__pres[p] && window.__pres[p](e), [pid, estado]).catch(() => {});
+  }
   async function tratar(page, op, d) {
     if (op === 'anon') { const u = { id: id('anon'), is_anonymous: true }; db.usuarios.push({ ...u, anon: true }); return { data: u, error: null }; }
     if (op === 'signup') { if (db.usuarios.some(x => x.email === d.email)) return erro('User already registered'); db.usuarios.push({ id: id('user'), email: d.email, senha: d.password, confirmado: false }); return { data: { email: d.email }, error: null }; }
     if (op === 'login') { const x = db.usuarios.find(y => y.email === d.email && y.senha === d.password); if (!x) return erro('Invalid login credentials'); if (x.confirmado === false) return erro('Email not confirmed'); return { data: { id: x.id, email: x.email, is_anonymous: false }, error: null }; }
     if (op === 'sub') { assinaturas.push({ ...d, page }); return { data: null, error: null }; }
+    if (op === 'pjoin' || op === 'ptrack' || op === 'pleave') {   // Presence: { chave: [dados] } como no Supabase
+      const c = canais[d.canal] = canais[d.canal] || new Map();
+      if (op === 'pjoin') { c.set(d.pid, { page, chave: null, dados: null }); if (!page.__presencaFecha) { page.__presencaFecha = true; page.on('close', () => { for (const [nome, cc] of Object.entries(canais)) { let mudou = false; for (const [pid, m] of cc) if (m.page === page) { cc.delete(pid); mudou = true; } if (mudou) presencaAvisar(nome); } }); } }
+      if (op === 'ptrack' && c.has(d.pid)) Object.assign(c.get(d.pid), { chave: d.chave, dados: d.dados });
+      if (op === 'pleave') c.delete(d.pid);
+      presencaAvisar(d.canal); return { data: null, error: null };
+    }
     if (op === 'unsub') { const i = assinaturas.findIndex(a => a.id === d.id); if (i >= 0) assinaturas.splice(i, 1); return { data: null, error: null }; }
     if (op === 'rpc') return registrar(d.uid, RPC[d.nome] ? RPC[d.nome](d.uid, d.args || {}) : erro('função desconhecida'));
     if (op === 'query') return registrar(d.uid, consulta(d));

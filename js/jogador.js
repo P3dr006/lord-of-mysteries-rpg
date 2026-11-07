@@ -78,7 +78,7 @@ const Jogador = (() => {
   }
 
   // ---------- conexão ao vivo ----------
-  function desligar() { parar.forEach(f => f()); parar = []; }
+  function desligar() { parar.forEach(f => f()); parar = []; clearInterval(vigia); vigia = null; mostrarRoda(null); }
   async function ligar() {
     if (!con) return;
     desligar(); estado = 'ligando'; erro = ''; redesenhar();
@@ -99,6 +99,12 @@ const Jogador = (() => {
       enviarFicha();
       enfileirarNaoLidos();   // o que chegou enquanto estava fora aparece agora
       sincronizarTerror(); aplicarOrdens();
+      try {   // Roda do Destino e duelos (se falharem, o resto continua)
+        await carregarEncontro(true); parar.push(await Rede.ouvir('jogador', 'encontros', 'encontros', 'mesa_id=eq.' + con.mesa, () => carregarEncontro().catch(() => {})));
+        await carregarDuelos(true); parar.push(await Rede.ouvir('jogador', 'disputas', 'disputas', 'mesa_id=eq.' + con.mesa, () => carregarDuelos(false).catch(() => {})));
+      } catch (e) { /* sem cena nesta conexão */ }
+      try { parar.push(await Rede.presenca('jogador', con.mesa, uid, { nome: con.nome }, () => {})); } catch (e) { /* sem vela */ }
+      clearInterval(vigia); vigia = setInterval(conferirSeAindaEstou, 45000);
     } catch (e) { estado = 'desligado'; erro = Rede.mensagem(e); redesenhar(); }
   }
 
@@ -181,6 +187,81 @@ const Jogador = (() => {
       else if (!ligar && visto === con.mesa + ':1') terrorDaMesa(false, true);          // o mestre desligou o que ele tinha ligado
       else if (!ligar && !visto) { try { localStorage.setItem(K_TERROR, con.mesa + ':0'); } catch (er) { /* idem */ } }   // não mexe no Terror pessoal
     } catch (e) { /* sem estado: fica como está */ }
+  }
+
+  // ---------- o mestre pode tirar o jogador da mesa: conferido de tempos em tempos e ao voltar para a aba ----------
+  let vigia = null;
+  async function conferirSeAindaEstou() {
+    if (estado !== 'ligado' || !con || !uid) return;
+    try {
+      const r = await (await Rede.tabela('jogador', 'jogadores')).select('user_id').eq('mesa_id', con.mesa).eq('user_id', uid);
+      if (!r.error && r.data && !r.data.length) { desligar(); con = null; gravarConexao(null); estado = 'fora'; erro = 'O mestre tirou você da mesa. Se foi engano, peça o código de novo.'; redesenhar(); anunciar(erro); }
+    } catch (e) { /* sem rede: confere depois */ }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') conferirSeAindaEstou(); });
+
+  // ---------- Roda do Destino: faixa com a ordem e o momento "é a sua vez" ----------
+  let encontro = null, ultimaVez = '', rodaRecolhida = false;
+  const md = (p, tam) => {
+    const cid = /^[a-z]{2,20}$/.test(p.caminhoId || '') ? p.caminhoId : '', cor = /^#[0-9a-f]{6}$/i.test(p.cor || '') ? p.cor : '#8a84b0';
+    return '<span class="md" style="--cc:' + cor + '">' + (cid ? '<img src="img/sigilos/' + cid + '.webp" alt="" width="' + tam + '" height="' + tam + '">' : '<b aria-hidden="true">' + esc2((p.nome || '?').trim().charAt(0).toUpperCase()) + '</b>') + '</span>';
+  };
+  async function carregarEncontro(inicio) {
+    if (!con) return;
+    const r = await (await Rede.tabela('jogador', 'encontros')).select('ativo,rodada,vez,ordem').eq('mesa_id', con.mesa);
+    if (r.error) throw r.error;
+    encontro = (r.data || [])[0] || null; mostrarRoda(encontro && encontro.ativo ? encontro : null, !!inicio);
+  }
+  function mostrarRoda(e, inicio) {
+    let faixa = document.querySelector('#roda-jog');
+    if (!e) { if (faixa) faixa.remove(); document.body.classList.remove('com-roda'); ultimaVez = ''; return; }
+    const ordem = (Array.isArray(e.ordem) ? e.ordem : []).filter(p => p && typeof p === 'object'), vez = Math.max(0, Math.min(ordem.length - 1, Number(e.vez) || 0)), atual = ordem[vez] || {};
+    if (!faixa) { faixa = document.createElement('aside'); faixa.id = 'roda-jog'; faixa.className = 'roda-jog'; faixa.setAttribute('aria-label', 'Roda do Destino'); document.body.appendChild(faixa); }
+    document.body.classList.add('com-roda');
+    const minha = atual.tipo === 'jogador' && atual.id === uid;
+    faixa.classList.toggle('recolhida', rodaRecolhida); faixa.classList.toggle('minha', minha);
+    faixa.innerHTML = '<button type="button" class="rj-alt" aria-expanded="' + !rodaRecolhida + '" aria-label="' + (rodaRecolhida ? 'Mostrar' : 'Recolher') + ' a Roda do Destino">' + (rodaRecolhida ? '◂' : '▸') + '</button>'
+      + '<div class="rj-cab"><small>Roda do Destino</small><b>Rodada ' + (Number(e.rodada) || 1) + '</b><span>' + (minha ? '<strong>Sua vez</strong>' : 'Vez de <strong>' + esc2(atual.nome || '—') + '</strong>') + '</span></div>'
+      + '<ol class="rj-fila">' + ordem.map((p, i) => '<li class="' + (i === vez ? 'vez ' : '') + (i < vez ? 'foi ' : '') + (p.tipo === 'jogador' && p.id === uid ? 'eu' : '') + '"' + (i === vez ? ' aria-current="true"' : '') + '>' + md(p, 30) + '<span>' + esc2(p.nome || '') + '</span></li>').join('') + '</ol>';
+    faixa.querySelector('.rj-alt').addEventListener('click', () => { rodaRecolhida = !rodaRecolhida; mostrarRoda(encontro && encontro.ativo ? encontro : null); const b = document.querySelector('#roda-jog .rj-alt'); if (b) b.focus(); });
+    const chave = (e.rodada || 1) + ':' + vez + ':' + (atual.id || '');
+    if (chave !== ultimaVez) { const discreto = !!inicio; ultimaVez = chave; if (minha) suaVez(e.rodada, discreto); else if (!discreto) anunciar('Rodada ' + (e.rodada || 1) + '. Vez de ' + (atual.nome || '')); }
+  }
+  function suaVez(rodada, discreto) {
+    anunciar('É a sua vez. Rodada ' + (rodada || 1));
+    if (discreto) return;   // ao entrar/recarregar já na sua vez: só a faixa avisa
+    if (typeof Som === 'object') Som.selar();
+    const el = document.createElement('div'); el.className = 'sua-vez'; el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = '<div class="sv-chama"></div><b>É a sua vez</b><small>Rodada ' + (Number(rodada) || 1) + '</small>';
+    document.body.appendChild(el); setTimeout(() => el.remove(), 2800);
+  }
+
+  // ---------- Duelo: quando o jogador está num duelo visível, a cena aparece para ele ----------
+  let duelosVistos = new Set();
+  async function carregarDuelos(inicio) {
+    if (!con) return;
+    const r = await (await Rede.tabela('jogador', 'disputas')).select('id,rotulo,a,b,criado_em').eq('mesa_id', con.mesa).order('criado_em', { ascending: false }).limit(10);
+    if (r.error) throw r.error;
+    const ds = r.data || [];
+    if (inicio) { duelosVistos = new Set(ds.map(d => d.id)); return; }   // os antigos não reaparecem
+    ds.filter(d => !duelosVistos.has(d.id)).reverse().forEach(d => { duelosVistos.add(d.id); mostrarDuelo(d); });
+  }
+  function mostrarDuelo(d) {
+    const A = d.a || {}, B = d.b || {}, ta = Number(A.total), tb = Number(B.total), venc = ta === tb ? null : ta > tb ? A : B, eu = !!venc && venc.tipo === 'jogador' && venc.id === uid;
+    const lado = L => '<div class="du-lado ' + (venc ? (venc === L ? 'vence' : 'perde') : 'empata') + '">' + md(L, 54) + '<b class="du-nome">' + esc2(L.nome || '') + '</b><span class="du-num">' + (Number(L.total) || 0) + '</span><small>d20 ' + (Number(L.dado) || 0) + (Number(L.mod) ? ' ' + sinal(Number(L.mod)) : '') + '</small></div>';
+    const m = document.createElement('div'); m.className = 'duelo-cena'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'dc-t');
+    m.innerHTML = '<div class="dc-core"><small class="dc-olho">Duelo</small><h2 id="dc-t">' + esc2(d.rotulo || 'Duelo') + '</h2>'
+      + '<div class="du jog"><div class="du-arena">' + lado(A) + '<span class="du-x" aria-hidden="true">×</span>' + lado(B) + '</div>'
+      + '<p class="du-fim">' + (venc ? (eu ? '<b>Você leva a melhor</b>' : '<b>' + esc2(venc.nome || '') + '</b> leva a melhor') : '<b>Empate</b>') + ' · o mestre decide o que acontece</p></div>'
+      + '<button type="button" class="primary" id="dc-ok">Fechar</button></div>';
+    document.body.appendChild(m);
+    if (typeof Som === 'object') Som.dado();
+    anunciar('Duelo, ' + (d.rotulo || '') + ': ' + A.nome + ' ' + ta + ', ' + B.nome + ' ' + tb + '. ' + (venc ? venc.nome + ' leva a melhor' : 'Empate'));
+    let soltar = () => {};
+    const fechar = () => { soltar(); m.classList.add('saindo'); setTimeout(() => m.remove(), 220); };
+    m.querySelector('#dc-ok').addEventListener('click', fechar);
+    soltar = typeof prenderFoco === 'function' ? prenderFoco(m, fechar) : () => {};
+    setTimeout(() => { const b = m.querySelector('#dc-ok'); if (b && b.isConnected) b.focus(); }, 60);
   }
 
   // ---------- sussurros e pistas do mestre ----------
@@ -346,5 +427,5 @@ const Jogador = (() => {
     if (fab) fab.addEventListener('click', () => { const m = document.querySelector('#mesa'); if (pedidos.length && estado === 'ligado' && m && !m.hidden) Mesa.irParaTestes(); });
   });
 
-  return { desenhar, entrar, sairDaMesa, ligar, rolarPedido, fichaParaMestre: ficha, get estado() { return estado; }, get pedidos() { return pedidos.slice(); } };
+  return { desenhar, entrar, sairDaMesa, ligar, rolarPedido, fichaParaMestre: ficha, get estado() { return estado; }, get encontro() { return encontro; }, get pedidos() { return pedidos.slice(); } };
 })();

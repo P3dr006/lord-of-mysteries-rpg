@@ -41,6 +41,37 @@ pode desligar o próprio (o Terror pisca e tem som forte); a mesa não força de
 **Notas secretas:** na ficha do jogador, "Notas secretas" (só o mestre lê e escreve; salva sozinha). A carta mostra
 "✎ nota secreta" quando existe uma.
 
+**Abas do Grimório:** Jogadores ficam sempre à esquerda; à direita, **Ações** (Teste, Duelo, Corpo e mente),
+**Cena** (Roda do Destino, Figuras), **Segredos** (Sussurros e pistas), **Crônica** (Resultados e diário) e **Dados**.
+A aba escolhida é lembrada; setas do teclado trocam de aba.
+
+**Roda do Destino (iniciativa):** em Cena, "Girar a Roda": o servidor rola d20 + Agilidade (da ficha) de cada jogador e
+d20 + bônus das figuras marcadas. A ordem aparece numa faixa no topo do Grimório (quem está na vez tem a chama; a carta
+dele ganha "na vez") e numa faixa no canto da tela dos jogadores (que pode ser recolhida). Quando chega a vez de alguém,
+aparece "É a sua vez" na tela dele. "Próximo turno" avança; a volta completa abre a rodada seguinte. "Encerrar" some
+com a Roda de todos.
+
+**Duelo (teste contestado):** em Ações, escolha o que está em jogo, os dois lados (jogadores ou figuras) e o atributo
+de cada jogador. O servidor rola os dois (figura usa o bônus). Com "os jogadores do duelo veem" marcado, quem está no
+duelo vê a cena com os dois números; desmarcado, só o mestre. Quem leva a melhor aparece; o que acontece, o mestre decide.
+
+**Figuras da cena (NPCs):** em Cena, nome, bônus e PV (opcional), com −5/−1/+1/+5. Só o mestre vê; entram na Roda e
+nos Duelos.
+
+**Crônica da sessão:** em Crônica, "Registrar um momento" e "Ler a crônica": uma página de pergaminho com tudo em ordem
+(testes com dificuldade e veredito, duelos, sussurros, golpes, Terror e momentos). Dá para imprimir e baixar em .md.
+Só o mestre lê.
+
+**Dados do mestre:** em Dados, rolagens locais (d4 a d%, quantidade e modificador). Nada vai ao servidor.
+
+**Presença:** cada carta tem uma vela: acesa quando o jogador está com a mesa aberta, apagada (fumaça) quando saiu.
+
+**Tirar da mesa / apagar mesa:** na ficha do jogador, "Tirar da mesa" (pede confirmação; ele é avisado e pode voltar
+com o código). Na lista de mesas, "Apagar" exige digitar o código da mesa e some com tudo dela.
+
+**Teste aberto à prova de trapaça:** o modificador do teste aberto agora vem da ficha guardada no servidor (a mesma que o
+mestre vê), não do que o navegador manda. Modificador ilegível na ficha vale 0 em vez de dar erro.
+
 ## Arquivos
 
 | Arquivo | O que faz |
@@ -72,6 +103,14 @@ Arquivo: `supabase/migrations/20261106_mesa_do_mestre.sql`. Tudo com RLS.
 | `ordens` (dano, cura, Terror) | o mestre; o jogador só as dele | `ordenar` (só o mestre); `aplicar_ordem` (uma vez) |
 | `notas_mestre` | **só o mestre** | só o mestre (direto na tabela) |
 | `mesas.terror` | lido por `estado_da_mesa` (mestre e jogadores da mesa) | `ordenar(..., 'terror', 1/0)` |
+
+| `figuras` (NPCs) | **só o mestre** | só o mestre (direto na tabela) |
+| `encontros` (Roda) | o mestre e os jogadores da mesa | `iniciar_encontro`, `proximo_turno`, `encerrar_encontro` (só o mestre) |
+| `disputas` (Duelos) | o mestre; o jogador só os visíveis em que está | `disputar` (só o mestre; o servidor rola) |
+| `cronica` | **só o mestre** | só o mestre (direto na tabela) |
+
+Cena: `20261109_cena.sql`, verificado em 28 cenários com papéis reais **sem aplicar** (inclui: +30 mandado pelo navegador
+vira +3 da ficha; ficha com `"agil":"abc"` não quebra a rolagem; apagar a mesa leva tudo junto; outro mestre não mexe).
 
 Controle do mestre: `20261108_controle_do_mestre.sql`, verificado em 31 cenários com papéis reais **sem aplicar**
 (a migração e os testes rodaram numa transação desfeita no fim). Aplicar no banco junto com a publicação do site.

@@ -40,7 +40,7 @@ h2,h3{color:var(--gold);font-weight:normal;margin-top:0}
 
 /* Botões — cantos chanfrados, filete dourado, brilho ao pairar */
 .opt{font-family:inherit;cursor:pointer;color:var(--text)}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip){
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):not(.m-aba):not(.dm-tipo):not(.rj-alt){
   --cut:10px; --edge:linear-gradient(135deg,#4b4480,#2f2a5c); --fill:linear-gradient(180deg,#1f1b40,#15122e);
   --clip:polygon(var(--cut) 0,calc(100% - var(--cut)) 0,100% var(--cut),100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,var(--cut) 100%,0 calc(100% - var(--cut)),0 var(--cut));
   position:relative;isolation:isolate;border:0;border-radius:0;cursor:pointer;
@@ -48,17 +48,17 @@ button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not
   padding:11px 24px;font-family:Georgia,'Times New Roman',serif;font-size:.85rem;
   letter-spacing:.09em;text-transform:uppercase;color:var(--text);
   background:var(--edge);clip-path:var(--clip);transition:color .2s,transform .15s,filter .2s}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip)::before{content:'';position:absolute;inset:1.5px;z-index:-1;background:var(--fill);
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):not(.m-aba):not(.dm-tipo):not(.rj-alt)::before{content:'';position:absolute;inset:1.5px;z-index:-1;background:var(--fill);
   clip-path:polygon(calc(var(--cut) - 1px) 0,calc(100% - var(--cut) + 1px) 0,100% calc(var(--cut) - 1px),100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,calc(var(--cut) - 1px) 100%,0 calc(100% - var(--cut) + 1px),0 calc(var(--cut) - 1px));
   transition:filter .2s}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip)::after{content:'';position:absolute;inset:0;pointer-events:none;
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):not(.m-aba):not(.dm-tipo):not(.rj-alt)::after{content:'';position:absolute;inset:0;pointer-events:none;
   background:linear-gradient(105deg,transparent 35%,rgba(255,240,200,.38) 50%,transparent 65%);
   background-size:260% 100%;background-position:130% 0;opacity:0}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):hover:not(:disabled){--edge:linear-gradient(135deg,#f3dd9c,#b8913f 50%,#f3dd9c);color:var(--gold2);transform:translateY(-1px)}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):hover:not(:disabled)::before{filter:brightness(1.35)}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):hover:not(:disabled)::after{opacity:1;animation:brilho .9s ease}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):active:not(:disabled){transform:translateY(1px)}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):focus-visible{outline:2px solid var(--gold2);outline-offset:3px}
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):not(.m-aba):not(.dm-tipo):not(.rj-alt):hover:not(:disabled){--edge:linear-gradient(135deg,#f3dd9c,#b8913f 50%,#f3dd9c);color:var(--gold2);transform:translateY(-1px)}
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):not(.m-aba):not(.dm-tipo):not(.rj-alt):hover:not(:disabled)::before{filter:brightness(1.35)}
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):not(.m-aba):not(.dm-tipo):not(.rj-alt):hover:not(:disabled)::after{opacity:1;animation:brilho .9s ease}
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):not(.m-aba):not(.dm-tipo):not(.rj-alt):active:not(:disabled){transform:translateY(1px)}
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):not(.m-aba):not(.dm-tipo):not(.rj-alt):focus-visible{outline:2px solid var(--gold2);outline-offset:3px}
 button:disabled{opacity:.42;cursor:not-allowed;filter:grayscale(.5)}
 @keyframes brilho{from{background-position:130% 0}to{background-position:-30% 0}}
 button .bi{flex:none;transition:transform .25s}
@@ -635,7 +635,7 @@ body.terror .stepper::after{background:linear-gradient(90deg,#a01020,#e8c9a0)}
   #btn-asc{width:100%;white-space:normal;line-height:1.3}
   .toolbar{width:100%}
   /* toque confortável */
-  button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip){min-height:44px}
+  button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):not(.m-aba):not(.dm-tipo):not(.rj-alt){min-height:44px}
   .counter button{min-height:42px;min-width:54px}
   .tarot{padding-left:60px}
   .sheet-actions button{width:100%}
@@ -654,7 +654,7 @@ body.terror .stepper::after{background:linear-gradient(90deg,#a01020,#e8c9a0)}
   .opt:not(.sel){padding:10px 12px}
 }
 @media(max-width:560px){
-  .topnav button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip){padding:9px 11px;min-width:46px}
+  .topnav button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):not(.m-aba):not(.dm-tipo):not(.rj-alt){padding:9px 11px;min-width:46px}
 }
 
 /* ======================= RETRATO DA ALMA ======================= */
@@ -1266,7 +1266,6 @@ body.com-sussurro{overflow:hidden}
 .pista-b>span{min-width:0}
 
 /* ---------- Controle do mestre: Grimório ---------- */
-.m-jog{grid-row:span 4}
 .m-cab{grid-template-columns:1fr auto auto}
 .m-cab .m-codigo-wrap{grid-column:3;grid-row:2}
 .m-terror{all:unset;box-sizing:border-box;cursor:pointer;grid-column:2;grid-row:2;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;border:1px solid #3b3566;background:#0c0a20;transition:border-color .2s,background-color .2s}
@@ -1345,3 +1344,238 @@ button.ghost.c-cura.san{--edge:linear-gradient(135deg,#9ac8ff,#2a4a8a 50%,#9ac8f
 .aviso-terror.desliga b{color:#c9c3e6}
 .aviso-terror small{display:block;margin-top:4px;color:#d8c8c8;font-size:.78rem}
 @keyframes aviso-terror{0%{opacity:0;transform:translate(-50%,-10px)}8%,85%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-10px)}}
+
+/* =================== Grimório: abas como fitas de marcador =================== */
+.m-painel{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)}
+.m-jog{grid-row:auto;align-self:start;position:sticky;top:12px}
+.m-lado{min-width:0;display:flex;flex-direction:column;gap:16px}
+.m-abas{display:flex;gap:4px;flex-wrap:wrap;padding:0 6px;margin-bottom:-6px;position:relative;z-index:1}
+.m-aba{all:unset;box-sizing:border-box;cursor:pointer;position:relative;padding:10px 16px 14px;min-height:44px;font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;color:#a8a2c6;
+  background:linear-gradient(180deg,#1c1745,#120f2e);border:1px solid #3b3566;border-bottom:0;border-radius:8px 8px 0 0;clip-path:polygon(0 0,100% 0,100% 100%,50% calc(100% - 6px),0 100%);transition:color .2s,transform .2s}
+.m-aba:hover{color:var(--text)}
+.m-aba.on{color:#1a1030;background:linear-gradient(180deg,#f3dd9c,#c8a253);border-color:#f3dd9c;transform:translateY(-3px)}
+.m-aba:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+.m-aba-p{display:flex;flex-direction:column;gap:16px}
+.m-aba-p[hidden]{display:none!important}
+.m-sub{font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:#a8a2c6;font-weight:normal}
+
+/* =================== Roda do Destino (faixa no topo) =================== */
+.m-roda{grid-column:1/-1;position:relative;padding:14px 18px 16px;border-radius:16px;border:1px solid #d9b86a55;
+  background:radial-gradient(120% 140% at 50% -40%,#3a2a12aa,transparent 60%),linear-gradient(180deg,#1b1640,#0e0b24);box-shadow:0 18px 40px #0008,inset 0 1px 0 #ffffff12;overflow:hidden}
+.m-roda::before{content:"";position:absolute;left:50%;top:-220px;width:520px;height:520px;margin-left:-260px;border-radius:50%;border:1px dashed #d9b86a33;animation:gira 90s linear infinite;pointer-events:none}
+.rd-cab{position:relative;display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.rd-tit{font-size:.66rem;letter-spacing:.26em;text-transform:uppercase;color:#c4a8ff}
+.rd-rod{font-weight:normal;color:var(--gold2);font-size:1.05rem}
+.rd-agora{color:#d8d2f0;font-size:.9rem}.rd-agora b{color:#fff3c4;font-weight:normal}
+.rd-prox{margin-left:auto}
+.rd-fila{position:relative;list-style:none;margin:0;padding:6px 2px 2px;display:flex;gap:10px;overflow-x:auto;scrollbar-width:thin}
+.rd-p{position:relative;flex:none;width:86px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px 8px;border-radius:12px;border:1px solid #2f2a5c;background:#0c0a20cc;text-align:center;animation:pedido-chega .4s both;animation-delay:calc(var(--i) * 50ms)}
+.rd-p.foi{opacity:.5}
+.rd-p.figura{border-style:dashed}
+.rd-p .md{width:46px;height:46px}
+.rd-nome{font-size:.74rem;color:#e8e4f5;line-height:1.15;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rd-p small{font-size:.66rem;color:#a8a2c6;font-variant-numeric:tabular-nums}
+.rd-p.vez{border-color:#ffb24a;background:radial-gradient(120% 100% at 50% 0%,#5a3010,#120f2e 70%);box-shadow:0 0 0 1px #ffb24a66,0 0 26px #ff8a2a55;transform:translateY(-4px)}
+.rd-chama{position:absolute;top:-14px;left:50%;width:16px;height:22px;margin-left:-8px;border-radius:50% 50% 40% 40%/60% 60% 40% 40%;background:radial-gradient(ellipse at 50% 70%,#fff6c8 0 20%,#ffb24a 45%,#ff5a1a 75%,transparent 80%);opacity:0;filter:drop-shadow(0 0 6px #ff8a2a)}
+.rd-p.vez .rd-chama{opacity:1;animation:chama 1.1s ease-in-out infinite alternate}
+@keyframes chama{0%{transform:scale(1,1) rotate(-3deg)}50%{transform:scale(.92,1.1) rotate(2deg)}100%{transform:scale(1.05,.95) rotate(-1deg)}}
+
+/* medalhão (sigilo do Caminho) usado na Roda e no Duelo */
+.md{position:relative;display:inline-grid;place-items:center;border-radius:50%;width:54px;height:54px;flex:none;border:1px solid color-mix(in srgb,var(--cc) 70%,#000);background:radial-gradient(circle,color-mix(in srgb,var(--cc) 30%,#120f2e),#0a0818 72%);box-shadow:0 0 14px color-mix(in srgb,var(--cc) 40%,transparent)}
+.md img{width:78%;height:78%;object-fit:contain}
+.md b{font-weight:normal;color:var(--gold2);font-size:1.2rem}
+
+/* carta na vez */
+.m-carta-j.na-vez{border-color:#ffb24a;box-shadow:0 0 0 1px #ffb24a66,0 0 30px #ff8a2a44,0 10px 28px #0007}
+.m-carta-j.na-vez::after{content:"na vez";position:absolute;top:10px;right:12px;font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:#1a1030;background:linear-gradient(180deg,#ffd27a,#ff9a3a);padding:3px 8px;border-radius:999px;box-shadow:0 0 12px #ff8a2a88}
+
+/* controle da Roda (aba Cena) */
+.rd-estado{margin:0 0 4px;color:#d8d2f0}.rd-estado b{color:var(--gold2);font-weight:normal}
+.rd-figs{border:1px solid #2f2a5c;border-radius:10px;padding:8px 12px;margin:8px 0}
+.rd-figs legend{font-size:.66rem;letter-spacing:.18em;text-transform:uppercase;color:#a8a2c6;padding:0 6px}
+.rd-figs label{display:inline-flex;align-items:center;gap:8px;margin:4px 14px 4px 0;text-transform:none;letter-spacing:.02em;font-size:.88rem;color:var(--text);cursor:pointer;min-height:32px}
+.rd-figs input{width:18px;height:18px;accent-color:#d9b86a}
+.rd-figs i{font-style:normal;color:#a8a2c6}
+
+/* =================== Duelo =================== */
+.d-lados{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:end;margin-top:4px}
+.d-lado{display:flex;flex-direction:column;gap:6px;min-width:0}
+.d-lado label{margin:12px 0 0}
+.d-x{display:grid;place-items:center;height:44px;color:#ff9a6a;font-size:1.4rem;text-shadow:0 0 12px #ff5a1a}
+.d-ver{display:flex;align-items:center;gap:10px;margin:14px 0 0;text-transform:none;letter-spacing:.02em;font-size:.86rem;color:#d8d2f0;cursor:pointer;min-height:36px}
+.d-ver input{width:18px;height:18px;accent-color:#d9b86a;flex:none}
+.m-duelo-res:empty{display:none}
+.m-duelo-res{margin-top:14px}
+.du{position:relative;padding:14px 12px 10px;border-radius:14px;border:1px solid #ff9a6a44;background:radial-gradient(100% 120% at 50% 50%,#2a1208,#0c0a20 70%);overflow:hidden}
+.du-rot{margin:0 0 8px;text-align:center;font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;color:#ffb48a}
+.du-arena{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+.du-lado{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;transition:opacity .3s}
+.du-nome{font-weight:normal;color:#e8e4f5;font-size:.9rem;max-width:100%;overflow-wrap:anywhere}
+.du-num{font-size:2.6rem;line-height:1;color:#fff3c4;font-variant-numeric:tabular-nums}
+.du-lado small{font-size:.68rem;color:#a8a2c6}
+.du-lado.vence .du-num{color:#ffd27a;text-shadow:0 0 22px #ff9a3a}
+.du-lado.vence .md{box-shadow:0 0 0 2px #ffd27a,0 0 26px #ff9a3a}
+.du-lado.perde{opacity:.55}
+.du-x{font-size:1.8rem;color:#ff7a4a;text-shadow:0 0 16px #ff5a1a}
+.du-fim{margin:10px 0 0;text-align:center;font-size:.85rem;color:#d8d2f0}.du-fim b{color:var(--gold2);font-weight:normal}.du-fim i{color:#c4a8ff;font-style:normal}
+.m-duelo-res.vem .du-lado:first-child{animation:du-a .55s cubic-bezier(.2,.9,.3,1.2) both}
+.m-duelo-res.vem .du-lado:last-child{animation:du-b .55s cubic-bezier(.2,.9,.3,1.2) both}
+.m-duelo-res.vem .du-x{animation:du-choque .5s .35s both}
+@keyframes du-a{from{opacity:0;transform:translateX(-40px)}}
+@keyframes du-b{from{opacity:0;transform:translateX(40px)}}
+@keyframes du-choque{0%{opacity:0;transform:scale(2.4)}60%{opacity:1;transform:scale(.9)}}
+
+/* =================== Figuras da cena =================== */
+.f-form{display:grid;grid-template-columns:1.6fr .7fr .7fr auto;gap:0 10px;align-items:end}
+.f-form .ghost{margin-bottom:0;min-height:44px}
+.m-figs{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:8px}
+.m-fig{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:10px 12px;border-radius:10px;border:1px dashed #6a5aa0;background:linear-gradient(110deg,#1a1440,#0c0a20)}
+.m-fig.caida{opacity:.6;border-color:#a0283a}
+.fg-id b{display:block;font-weight:normal;color:#e8e4f5}
+.fg-id small{font-size:.72rem;color:#a8a2c6}
+.fg-pv{grid-column:1/-1;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+.fg-bts{display:flex;gap:4px}
+.fg-bts .c-chip{min-height:36px;min-width:38px;font-size:.78rem}
+.fg-x{grid-column:2;grid-row:1;justify-self:end}
+
+/* =================== Crônica =================== */
+.m-cron-lista{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:4px}
+.m-cron-lista li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:baseline;padding:6px 10px;border-radius:8px;background:#0a0818;border-left:2px solid #d9b86a77}
+.m-cron-lista li span{font-size:.7rem;color:#a8a2c6;font-variant-numeric:tabular-nums}
+.m-cron-lista li p{margin:0;font-size:.85rem;color:#e8e4f5}
+.m-cron-lista li.m-vazio{display:block;border:0;background:none}
+.cr-fundo{place-items:start center;overflow-y:auto}
+.cr-pagina{position:relative;width:min(760px,100%);margin:24px auto;padding:44px 52px 28px;border-radius:4px;color:#2a1a10;
+  background:radial-gradient(120% 80% at 50% 0%,#f6ead0,#e9d6ae 60%,#d9c08e);box-shadow:0 30px 80px #000c,inset 0 0 80px #8a5a2a55,inset 0 0 0 1px #b08a5a;font-family:Georgia,'Times New Roman',serif;animation:revela .4s both}
+.cr-pagina:focus{outline:none}
+.cr-x{position:absolute!important;top:12px;right:12px}
+.cr-cab{text-align:center;padding-bottom:16px;margin-bottom:18px;border-bottom:1px solid #8a5a2a66}
+.cr-cab small{font-size:.66rem;letter-spacing:.32em;text-transform:uppercase;color:#7a4a1a}
+.cr-cab h2{margin:6px 0 4px;font-size:2rem;color:#3a1a08;font-weight:normal}
+.cr-cab p{margin:0;font-style:italic;color:#5a3a1a}
+.cr-linha{list-style:none;margin:0;padding:0 0 0 18px;border-left:1px solid #8a5a2a88}
+.cr-e{position:relative;display:grid;grid-template-columns:52px 80px 1fr;gap:10px;padding:7px 0;align-items:baseline}
+.cr-e::before{content:"";position:absolute;left:-23px;top:13px;width:9px;height:9px;border-radius:50%;background:#7a4a1a;box-shadow:0 0 0 3px #f1e2c2}
+.cr-h{font-size:.74rem;color:#7a5a3a;font-variant-numeric:tabular-nums}
+.cr-t{font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;color:#8a3a1a}
+.cr-e.sussurro .cr-t{color:#5a2a8a}.cr-e.golpe .cr-t{color:#a01a1a}.cr-e.duelo .cr-t{color:#8a4a0a}.cr-e.momento .cr-t{color:#2a5a3a}.cr-e.terror .cr-t{color:#7a0a1a}
+.cr-e p{margin:0;font-size:.95rem;line-height:1.45;color:#2a1a10}
+.cr-e.momento p{font-style:italic}
+.cr-vazio{text-align:center;font-style:italic;color:#5a3a1a}
+.cr-pe{display:flex;justify-content:center;gap:10px;margin-top:22px;padding-top:14px;border-top:1px solid #8a5a2a44}
+@media print{
+  body.imprimindo-cronica *{visibility:hidden!important}
+  body.imprimindo-cronica .cr-pagina,body.imprimindo-cronica .cr-pagina *{visibility:visible!important}
+  body.imprimindo-cronica .cr-pagina{position:absolute;inset:0 auto auto 0;margin:0;width:100%;box-shadow:none;background:#fff;animation:none}
+  body.imprimindo-cronica .cr-x,body.imprimindo-cronica .cr-pe{display:none!important}
+}
+
+/* =================== Dados do mestre =================== */
+.dm-tipos{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+.dm-tipo{all:unset;box-sizing:border-box;cursor:pointer;display:grid;place-items:center;min-height:44px;border-radius:8px;border:1px solid #2f2a5c;background:linear-gradient(180deg,#1c1745,#0a0820);color:#d8d2f0;font-size:.82rem}
+.dm-tipo.on{border-color:var(--gold);color:var(--gold2);box-shadow:0 0 12px #d9b86a44}
+.dm-tipo:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+.dm-linha{display:grid;grid-template-columns:1fr 1fr auto;gap:0 10px;align-items:end}
+.dm-linha .primary{margin-bottom:0}
+.dm-res:empty{display:none}
+.dm-res{display:flex;align-items:center;gap:16px;margin-top:14px;padding:12px 16px;border-radius:12px;border:1px solid #3b3566;background:radial-gradient(100% 140% at 0% 50%,#2a2060,#0c0a20)}
+.dm-res.vem .dm-tot{animation:sus-surge .4s both}
+.dm-tot{font-size:2.6rem;line-height:1;font-weight:normal;color:#fff3c4;font-variant-numeric:tabular-nums;min-width:64px;text-align:center}
+.dm-res small{display:block;font-size:.66rem;letter-spacing:.18em;text-transform:uppercase;color:#a8a2c6}
+.dm-res span{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.dm-res i{font-style:normal;min-width:26px;padding:2px 6px;text-align:center;border-radius:5px;background:#0a0818;border:1px solid #3b3566;font-size:.8rem;color:#e8e4f5}
+.dm-res em{font-style:normal;font-size:.8rem;color:#a8a2c6;align-self:center}
+.dm-res strong{display:block;margin-top:4px;font-weight:normal;font-size:.7rem;letter-spacing:.18em;text-transform:uppercase}
+.dm-res.crit{border-color:#ffd24a}.dm-res.crit .dm-tot{color:#ffe27a;text-shadow:0 0 20px #ffd24a}.dm-res.crit strong{color:#ffe27a}
+.dm-res.fumble{border-color:#e0283a}.dm-res.fumble .dm-tot{color:#ff7a7a}.dm-res.fumble strong{color:#ff7a7a}
+.dm-hist{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:2px;font-size:.76rem;color:#a8a2c6;font-variant-numeric:tabular-nums}
+
+/* =================== presença: a vela =================== */
+.m-vela{position:relative;display:inline-block;width:10px;height:18px;margin-left:8px;vertical-align:-2px}
+.m-vela i{position:absolute;left:2px;bottom:0;width:6px;height:10px;border-radius:2px 2px 1px 1px;background:linear-gradient(180deg,#e9dcc0,#a8957a)}
+.m-vela i::before{content:"";position:absolute;left:50%;bottom:9px;width:1px;height:3px;margin-left:-.5px;background:#3a2a1a}
+.m-vela i::after{content:"";position:absolute;left:50%;bottom:12px;width:7px;height:9px;margin-left:-3.5px;border-radius:50% 50% 40% 40%/60% 60% 40% 40%;opacity:0}
+.m-vela.acesa i::after{opacity:1;background:radial-gradient(ellipse at 50% 70%,#fff6c8 0 20%,#ffb24a 50%,#ff5a1a 78%,transparent 82%);filter:drop-shadow(0 0 4px #ff9a2a);animation:chama .9s ease-in-out infinite alternate;transform-origin:50% 100%}
+.m-vela:not(.acesa) i::after{opacity:.6;width:4px;height:10px;margin-left:-2px;border-radius:50%;background:linear-gradient(0deg,#8a84b066,transparent);animation:fumaca 3s ease-out infinite}
+@keyframes fumaca{0%{opacity:.6;transform:translateY(0) scaleX(1)}100%{opacity:0;transform:translateY(-8px) scaleX(2)}}
+
+/* =================== mesas: apagar · confirmação forte =================== */
+.m-mesa-li{position:relative}
+.m-mesa-x{position:absolute!important;right:8px;bottom:6px}
+.m-conf-fundo{z-index:99}
+.m-conf{width:min(460px,100%);padding:24px;border-radius:16px;border:1px solid #3b3566;background:linear-gradient(180deg,#1b1745,#0d0b22);box-shadow:0 30px 80px #000c;animation:revela .25s both}
+.m-conf.perigo{border-color:#a0283a;box-shadow:0 30px 80px #000c,0 0 40px #a0283a44}
+.m-conf h2{margin:0 0 8px;font-size:1.2rem;color:var(--gold2)}
+.m-conf.perigo h2{color:#ff9a9a}
+.m-conf p{margin:0 0 12px;color:#d8d2f0;font-size:.9rem;line-height:1.5}
+.m-conf label{text-transform:none;letter-spacing:.02em;font-size:.86rem;color:#d8d2f0}
+.m-conf label b{color:#fff3c4;letter-spacing:.2em}
+.m-conf input{width:100%;padding:10px 12px;border-radius:6px;border:1px solid #2f2a5c;background:#0a0820;color:var(--text);font:inherit;letter-spacing:.2em;text-transform:uppercase;min-height:44px;margin-top:6px}
+.mf-tirar{margin-left:4px}
+@media (max-width:860px){
+  .m-painel{grid-template-columns:1fr}
+  .m-jog{position:static}
+  .f-form{grid-template-columns:1fr 1fr}
+  .f-form .f-nome{grid-column:1/-1}
+  .dm-tipos{grid-template-columns:repeat(4,1fr)}
+}
+@media (max-width:520px){
+  .d-lados{grid-template-columns:1fr}
+  .d-x{height:auto}
+  .cr-pagina{padding:36px 18px 20px}
+  .cr-e{grid-template-columns:44px 1fr}
+  .cr-e .cr-t{grid-column:2}
+  .cr-e p{grid-column:1/-1}
+  .dm-linha{grid-template-columns:1fr 1fr}
+  .dm-linha .primary{grid-column:1/-1;margin-top:10px}
+  .m-aba{padding:10px 10px 14px;font-size:.64rem;letter-spacing:.12em}
+}
+.dm-linha{margin-top:6px}
+.cr-pe button.ghost{--edge:linear-gradient(135deg,#7a4a1a,#3a1a08 50%,#7a4a1a);--fill:linear-gradient(180deg,#f3e3c0,#dcc391);color:#3a1a08}
+.cr-pe button.ghost:hover:not(:disabled){color:#1a0a04}
+
+/* =================== Jogador: faixa da Roda do Destino =================== */
+.roda-jog{position:fixed;z-index:60;left:max(14px,env(safe-area-inset-left));bottom:max(14px,env(safe-area-inset-bottom));max-width:min(620px,calc(100vw - 120px));display:flex;align-items:center;gap:12px;padding:10px 14px 10px 10px;border-radius:14px;border:1px solid #d9b86a66;
+  background:radial-gradient(120% 160% at 0% 50%,#3a2a12cc,transparent 60%),linear-gradient(180deg,#1b1640f2,#0e0b24f2);box-shadow:0 14px 40px #000a;animation:pedido-chega .4s both}
+.roda-jog.minha{border-color:#ffb24a;box-shadow:0 0 0 1px #ffb24a66,0 0 30px #ff8a2a55,0 14px 40px #000a}
+.rj-alt{all:unset;box-sizing:border-box;cursor:pointer;flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:8px;border:1px solid #3b3566;color:#d8d2f0;background:#0c0a20}
+.rj-alt:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+.rj-cab{flex:none;display:flex;flex-direction:column;line-height:1.2}
+.rj-cab small{font-size:.58rem;letter-spacing:.24em;text-transform:uppercase;color:#c4a8ff}
+.rj-cab b{font-weight:normal;color:var(--gold2);font-size:.95rem}
+.rj-cab span{font-size:.76rem;color:#d8d2f0}.rj-cab strong{font-weight:normal;color:#ffd27a}
+.rj-fila{list-style:none;margin:0;padding:0;display:flex;gap:8px;overflow-x:auto;min-width:0;scrollbar-width:thin}
+.rj-fila li{position:relative;flex:none;display:flex;flex-direction:column;align-items:center;gap:2px;width:52px;padding:4px 2px 2px;border-radius:10px;font-size:.6rem;color:#a8a2c6;text-align:center}
+.rj-fila li span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rj-fila .md{width:34px;height:34px}
+.rj-fila li.foi{opacity:.45}
+.rj-fila li.eu span{color:var(--gold2)}
+.rj-fila li.vez{background:radial-gradient(100% 100% at 50% 0%,#5a3010,transparent 80%);color:#ffe2b0}
+.rj-fila li.vez .md{box-shadow:0 0 0 2px #ffb24a,0 0 16px #ff8a2a}
+.roda-jog.recolhida .rj-fila,.roda-jog.recolhida .rj-cab small{display:none}
+.roda-jog.recolhida{padding-right:14px}
+
+/* "É a sua vez": a chama sobe no centro da tela */
+.sua-vez{position:fixed;inset:0;z-index:94;pointer-events:none;display:grid;place-items:center;align-content:center;gap:6px;text-align:center;background:radial-gradient(circle at 50% 55%,#5a2a0a66,transparent 55%);animation:sv-fundo 2.8s ease both}
+.sv-chama{width:70px;height:96px;margin:0 auto 6px;border-radius:50% 50% 42% 42%/62% 62% 38% 38%;background:radial-gradient(ellipse at 50% 72%,#fff8d8 0 16%,#ffd27a 34%,#ff8a2a 60%,#c03a0a 78%,transparent 82%);filter:drop-shadow(0 0 30px #ff8a2a);animation:chama .7s ease-in-out infinite alternate,sv-sobe 2.8s ease both;transform-origin:50% 100%}
+.sua-vez b{font-weight:normal;font-size:clamp(2rem,7vw,3.4rem);color:#ffe2b0;text-shadow:0 0 30px #ff8a2a,0 4px 20px #000;animation:sv-sobe 2.8s ease both}
+.sua-vez small{font-size:.8rem;letter-spacing:.3em;text-transform:uppercase;color:#f0d8b8;animation:sv-sobe 2.8s ease both}
+@keyframes sv-fundo{0%,100%{opacity:0}12%,75%{opacity:1}}
+@keyframes sv-sobe{0%{opacity:0;transform:translateY(24px)}14%,72%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-16px)}}
+
+/* Duelo na tela do jogador */
+.duelo-cena{position:fixed;inset:0;z-index:95;display:grid;place-items:center;padding:20px;background:radial-gradient(ellipse at center,#1a0a08f2 0%,#030208fd 72%);animation:sus-entra .4s ease both}
+.duelo-cena.saindo{animation:sus-sai .22s ease both}
+.dc-core{width:min(520px,100%);text-align:center}
+.dc-olho{display:block;font-size:.66rem;letter-spacing:.32em;text-transform:uppercase;color:#ffb48a}
+.dc-core h2{margin:8px 0 14px;font-weight:normal;font-size:clamp(1.4rem,5vw,2rem);color:var(--gold2)}
+.duelo-cena .du{margin-bottom:18px}
+.duelo-cena .du-lado:first-child{animation:du-a .6s .2s cubic-bezier(.2,.9,.3,1.2) both}
+.duelo-cena .du-lado:last-child{animation:du-b .6s .2s cubic-bezier(.2,.9,.3,1.2) both}
+.duelo-cena .du-x{animation:du-choque .5s .6s both}
+.duelo-cena .du-fim{animation:sus-surge .5s 1s both}
+@media (max-width:520px){
+  .roda-jog{left:10px;right:86px;max-width:none;padding:8px 10px 8px 8px;gap:8px}
+  .rj-cab small{display:none}
+}
+@media (max-width:520px){.m-abas{flex-wrap:nowrap;overflow-x:auto;padding-top:6px;margin-top:-6px;scrollbar-width:none}.m-abas::-webkit-scrollbar{display:none}.m-aba{flex:none}}
