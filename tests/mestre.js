@@ -126,11 +126,36 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
   ok('código em minúsculas e com espaço funciona', await ate(() => j.isVisible('.on-status.ligado')), await j.textContent('#online').catch(() => ''));
   ok('o mestre vê o jogador entrar ao vivo', await ate(() => m.isVisible('.m-carta-j')));
   const esperado = await j.evaluate(() => ({ mods: Object.fromEntries(ATTRS.map(a => [a.key, mod(total(a.key))])), pv: P.pv, pvMax: pvMax(), san: P.san, sanMax: sanMax() }));
-  const naTela = await m.evaluate(() => ({ nome: document.querySelector('.m-carta-j header b').textContent, mods: [...document.querySelectorAll('.m-carta-j .m-mods b')].map(b => b.textContent), pv: document.querySelector('.m-carta-j .m-barra b').textContent }));
+  const naTela = await m.evaluate(() => ({ nome: document.querySelector('.m-carta-j .m-cj-id b').textContent, mods: [...document.querySelectorAll('.m-carta-j .m-mods b')].map(b => b.textContent), pv: document.querySelector('.m-carta-j .m-barra b').textContent }));
   ok('nome do personagem no painel', naTela.nome === 'Klein', naTela.nome);
   ok('modificadores da ficha no painel', naTela.mods.join(' ') === Object.values(esperado.mods).map(v => (v >= 0 ? '+' : '−') + Math.abs(v)).join(' '), naTela.mods.join(' '));
   ok('PV atual / máximo no painel', naTela.pv === `${esperado.pv}/${esperado.pvMax}`, naTela.pv);
   { const v = await axe(m); ok('painel do mestre sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+
+  console.log('\n4b) Carta com identidade e ficha completa');
+  { const carta = await m.evaluate(() => { const c = document.querySelector('.m-carta-j'); return { img: (c.querySelector('.m-cj-selo img') || {}).getAttribute && c.querySelector('.m-cj-selo img').getAttribute('src'), seq: (c.querySelector('.m-cj-seq') || {}).textContent, txt: c.textContent.replace(/\s+/g, ' '), cam: [...c.querySelectorAll('.m-mods li.cam')].map(l => l.title), est: [...c.querySelectorAll('.m-est')].map(e => e.textContent) }; });
+    ok('a carta mostra o sigilo do Caminho', carta.img === 'img/sigilos/louco.webp', carta.img);
+    ok('a carta mostra a Sequência no medalhão', carta.seq === '7', carta.seq);
+    ok('a carta mostra Caminho, raça e origem', /Caminho Louco/.test(carta.txt) && /Humano · Nobre Decaído/.test(carta.txt), carta.txt.slice(0, 160));
+    ok('o atributo do Caminho fica em destaque', carta.cam.length === 1 && /Espiritualidade/.test(carta.cam[0]), carta.cam.join());
+    ok('vida e mente aparecem em palavras', carta.est.length === 2 && /Ileso|Arranhado|Ferido|Grave|Caído/.test(carta.est[0]) && /Lúcido|Inquieto|Abalado|Vacilando|Rompido/.test(carta.est[1]), carta.est.join(' / '));
+    const art = await j.evaluate(() => ARTEFATOS[P.artefato].n), hab = await j.evaluate(() => caminhoPorId(P.caminho).hab[0]);
+    await m.click('.m-cj-ver');
+    ok('"Ver ficha" abre a ficha completa', await ate(() => m.isVisible('#m-ficha .m-ficha')));
+    const ficha = (await m.textContent('#m-ficha')).replace(/\s+/g, ' ');
+    ok('a ficha tem nome, Sequência e patamar', /Klein/.test(ficha) && /Sequência 7/.test(ficha) && /Baixa Sequência/.test(ficha), ficha.slice(0, 120));
+    ok('a ficha mostra as habilidades do Caminho', ficha.includes(hab), hab);
+    ok('a ficha mostra o artefato com dádiva e maldição', ficha.includes(art) && /Dádiva/.test(ficha) && /Maldição/.test(ficha), art);
+    ok('a ficha mostra os testes desse jogador nesta mesa', /Testes nesta mesa/.test(ficha));
+    { const v = await axe(m); ok('ficha aberta sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    ok('o foco fica preso na ficha (Tab não escapa)', await (async () => { for (let i = 0; i < 12; i++) await m.keyboard.press('Tab'); return m.evaluate(() => !!document.activeElement.closest('#m-ficha')); })());
+    await m.keyboard.press('Escape');
+    ok('Esc fecha a ficha', await ate(async () => !(await m.$('#m-ficha'))));
+    ok('o foco volta para o botão "Ver ficha"', await m.evaluate(() => document.activeElement.classList.contains('m-cj-ver')));
+    await m.click('.m-cj-ver'); await m.waitForSelector('#mf-pedir'); await m.click('#mf-pedir');
+    ok('"Pedir teste" da ficha já escolhe o jogador', await ate(() => m.evaluate(u => !document.querySelector('#m-ficha') && document.querySelector('#t-para').value === u && document.activeElement.id === 't-rotulo', srv.db.jogadores[0].user_id)), await m.inputValue('#t-para'));
+    const tam = await j.evaluate(() => { const g = { h: P.historia, n: P.notas, b: P.habilidades }; P.historia = 'á'.repeat(8000); P.notas = 'ção '.repeat(5000); P.habilidades = Array.from({ length: 40 }, (_, i) => ({ nome: 'Habilidade ' + i, desc: 'é'.repeat(600) })); const n = new TextEncoder().encode(JSON.stringify(Jogador.fichaParaMestre())).length; P.historia = g.h; P.notas = g.n; P.habilidades = g.b; return n; });
+    ok('ficha enorme encolhe para caber no banco (≤ 6,5 KB)', tam <= 6500, tam + ' bytes'); }
 
   console.log('\n5) Teste ABERTO');
   const uidJ = srv.db.jogadores[0].user_id;
@@ -209,10 +234,10 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     await c.close(); }
 
   console.log('\n10) Robustez');
-  srv.db.jogadores.push({ mesa_id: srv.db.mesas[0].id, user_id: 'estranho', nome: '<img src=x onerror=alert(1)>', ficha: { mods: { forca: 'muito', agil: 999 }, pv: null, pvMax: 'x', san: -4 }, atualizado_em: '' });
+  srv.db.jogadores.push({ mesa_id: srv.db.mesas[0].id, user_id: 'estranho', nome: '<img src=x onerror=alert(1)>', ficha: { mods: { forca: 'muito', agil: 999 }, pv: null, pvMax: 'x', san: -4, caminhoId: '../../x', cor: 'red;background:url(x)', seqNome: '<img src=y onerror=alert(2)>', hab: [{ nome: '<b>x</b>' }, 'lixo', null], raca: 'humano' }, atualizado_em: '' });
   await m.evaluate(() => document.querySelector('#m-voltar').click()); await m.waitForSelector('.m-mesa'); await m.click('.m-mesa');
   ok('ficha estranha não quebra o painel', await ate(() => m.isVisible('.m-carta-j')));
-  ok('nome com HTML é mostrado como texto', await m.evaluate(() => !document.querySelector('.m-carta-j img') && document.querySelector('.m-carta-j header b').textContent.startsWith('<img')));
+  ok('nome com HTML é mostrado como texto', await m.evaluate(() => ![...document.querySelectorAll('.m-carta-j img')].some(i => !/^img\/sigilos\/[a-z]+\.webp$/.test(i.getAttribute('src'))) && document.querySelector('.m-carta-j .m-cj-id b').textContent.startsWith('<img')));
   ok('modificador absurdo é limitado a ±30', (await m.$$eval('.m-carta-j .m-mods b', b => b.map(x => x.textContent))).includes('+30'));
   ok('nenhum erro de script no mestre', m.erros.length === 0, m.erros[0] || '');
   ok('nenhum erro de script no jogador', j.erros.length === 0, j.erros[0] || '');

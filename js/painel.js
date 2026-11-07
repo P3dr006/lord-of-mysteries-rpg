@@ -9,7 +9,7 @@
   const hora = t => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const anunciar = t => { const r = $('#anuncio'); if (!r) return; r.textContent = ''; setTimeout(() => { r.textContent = t; }, 30); };
 
-  const S = { user: null, mesa: null, jogadores: [], resultados: [], pendentes: [], pararDeOuvir: [], ultimoSecreto: null };
+  const S = { user: null, mesa: null, jogadores: [], resultados: [], pendentes: [], pararDeOuvir: [], ultimoSecreto: null, fichaAberta: null, fichaGatilho: null };
   const tela = html => { $('#m-tela').innerHTML = html; if (typeof decorarTudo === 'function') decorarTudo(); };
   const erroEm = (sel, e) => { const el = $(sel); if (el) { el.textContent = Rede.mensagem(e); el.hidden = false; } };
   const ocupado = async (botao, fn) => { if (botao.disabled) return; botao.disabled = true; botao.setAttribute('aria-busy', 'true'); try { await fn(); } finally { if (botao.isConnected) { botao.disabled = false; botao.removeAttribute('aria-busy'); } } };
@@ -162,16 +162,49 @@
     return `<div class="m-barra ${baixo ? 'baixo' : ''} ${vv === 0 ? 'zero' : ''}" style="--bc:${cor}"><span>${rotulo}</span><div class="m-trilho" role="meter" aria-label="${rotulo}" aria-valuemin="0" aria-valuemax="${mm || 0}" aria-valuenow="${vv}" aria-valuetext="${vv} de ${mm || '?'}"><div style="transform:scaleX(${pct / 100})"></div></div><b>${vv}<small>/${mm || '?'}</small></b></div>`;
   }
 
+  // ---------- leitura segura da ficha que o jogador mandou (pode vir de versão antiga ou adulterada) ----------
+  const obj = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  const txt = (v, n = 200) => (typeof v === 'string' ? v : '').slice(0, n);
+  const corOk = v => /^#[0-9a-f]{6}$/i.test(v || '') ? v : '#8a84b0';
+  const idOk = v => /^[a-z]{2,20}$/.test(v || '') ? v : '';
+  const fichaDe = j => obj(j && j.ficha);
+  // estado em palavras: o mestre lê "Grave" mais rápido que "3/20"
+  function estado(v, m, nomes) {
+    const vv = num(v, 0, 999), mm = num(m, 1, 999); if (vv == null || mm == null) return null;
+    const r = vv / mm; const i = vv <= 0 ? 0 : r <= .3 ? 1 : r < .7 ? 2 : r < 1 ? 3 : 4;
+    return { txt: nomes[i], cls: ['zero', 'grave', 'medio', 'leve', 'ok'][i] };
+  }
+  const EST_PV = ['Caído', 'Grave', 'Ferido', 'Arranhado', 'Ileso'], EST_SAN = ['Rompido', 'Vacilando', 'Abalado', 'Inquieto', 'Lúcido'];
+  function haQuanto(t) { const s = (Date.now() - new Date(t).getTime()) / 1000; if (!Number.isFinite(s)) return ''; if (s < 60) return 'agora'; if (s < 3600) return `há ${Math.floor(s / 60)} min`; if (s < 86400) return `há ${Math.floor(s / 3600)} h`; return `há ${Math.floor(s / 86400)} d`; }
+  const selo = (f, nome, tam) => { const id = idOk(f.caminhoId); return id ? `<img src="img/sigilos/${id}.webp" alt="" width="${tam}" height="${tam}" loading="lazy">` : `<span class="m-sem-selo" aria-hidden="true">${esc((nome || '?').trim().charAt(0).toUpperCase())}</span>`; };
+  const linhaSeq = f => { const s = num(f.seq, 0, 9); return [txt(f.seqNome, 60), s != null ? `Sequência ${s}` : '', txt(f.patamar, 40)].filter(Boolean).join(' · '); };
+  const linhaOrigem = f => [txt(obj(f.raca).nome, 40), txt(obj(f.origem).nome, 40)].filter(Boolean).join(' · ');
+
+  function cartaJogador(j) {
+    const f = fichaDe(j), mods = obj(f.mods), attrs = obj(f.attrs), cor = corOk(f.cor), cam = txt(f.caminho, 40);
+    const ePV = estado(f.pv, f.pvMax, EST_PV), eSan = estado(f.san, f.sanMax, EST_SAN);
+    return `<article class="m-carta-j ${ePV && ePV.cls === 'zero' ? 'caido' : ''} ${eSan && (eSan.cls === 'zero' || eSan.cls === 'grave') ? 'mente' : ''}" data-u="${esc(j.user_id)}" style="--cc:${cor}">
+      <div class="m-cj-marca" aria-hidden="true">${idOk(f.caminhoId) ? `<img src="img/sigilos/${idOk(f.caminhoId)}.webp" alt="">` : ''}</div>
+      <header class="m-cj-cab">
+        <div class="m-cj-selo">${selo(f, j.nome, 46)}${num(f.seq, 0, 9) != null ? `<b class="m-cj-seq" aria-hidden="true">${num(f.seq, 0, 9)}</b>` : ''}</div>
+        <div class="m-cj-id"><b>${esc(j.nome)}</b>
+          <small class="m-cj-cam">${cam ? `${esc(txt(f.seqNome, 60) || cam)} <i>· Caminho ${esc(cam)}${num(f.seq, 0, 9) != null ? ` · Seq. ${num(f.seq, 0, 9)}` : ''}</i>` : 'Ficha em construção'}</small>
+          ${linhaOrigem(f) ? `<small class="m-cj-orig">${esc(linhaOrigem(f))}</small>` : ''}</div>
+      </header>
+      <div class="m-cj-estados">${ePV ? `<span class="m-est pv ${ePV.cls}">${ePV.txt}</span>` : ''}${eSan ? `<span class="m-est san ${eSan.cls}">${eSan.txt}</span>` : ''}</div>
+      ${barra('PV', f.pv, f.pvMax, '#e05a6a')}${barra('Sanidade', f.san, f.sanMax, '#6fb4ff')}
+      <ul class="m-mods" aria-label="Modificadores">${ATTRS.map(a => { const v = num(mods[a.key], -30, 30), t = num(attrs[a.key], 1, 60), principal = f.attrCaminho === a.key;
+        return `<li class="${principal ? 'cam' : ''}" style="--ac:${a.cor}" title="${a.nome}${t != null ? ` ${t}` : ''}${principal ? ' · atributo do Caminho' : ''}"><span>${a.nome.slice(0, 3)}</span><b>${v == null ? '—' : sinal(v)}</b></li>`; }).join('')}</ul>
+      <footer class="m-cj-pe"><span class="m-cj-hora" data-t="${esc(j.atualizado_em || '')}">${haQuanto(j.atualizado_em)}</span>
+        <button type="button" class="ghost m-cj-ver" data-u="${esc(j.user_id)}">Ver ficha <span class="sr-only">de ${esc(j.nome)}</span></button></footer>
+    </article>`;
+  }
+
   function desenharJogadores() {
     const c = $('#m-jogadores'); if (!c) return;
-    c.innerHTML = S.jogadores.length ? S.jogadores.map(j => {
-      const f = j.ficha && typeof j.ficha === 'object' ? j.ficha : {}, mods = f.mods && typeof f.mods === 'object' ? f.mods : {};
-      return `<article class="m-carta-j" data-u="${esc(j.user_id)}">
-        <header><b>${esc(j.nome)}</b>${f.caminho ? `<small>${esc(f.caminho)}${num(f.seq, 0, 9) != null ? ` · Seq. ${num(f.seq, 0, 9)}` : ''}</small>` : ''}</header>
-        ${barra('PV', f.pv, f.pvMax, '#e05a6a')}${barra('Sanidade', f.san, f.sanMax, '#6fb4ff')}
-        <ul class="m-mods" aria-label="Modificadores">${ATTRS.map(a => { const v = num(mods[a.key], -30, 30); return `<li style="--ac:${a.cor}" title="${a.nome}"><span>${a.nome.slice(0, 3)}</span><b>${v == null ? '—' : sinal(v)}</b></li>`; }).join('')}</ul>
-      </article>`;
-    }).join('') : `<p class="hint">Ninguém entrou ainda. Passe o código <b>${esc(S.mesa.codigo)}</b> para os jogadores.</p>`;
+    c.innerHTML = S.jogadores.length ? S.jogadores.map(cartaJogador).join('') : `<p class="hint">Ninguém entrou ainda. Passe o código <b>${esc(S.mesa.codigo)}</b> para os jogadores.</p>`;
+    c.querySelectorAll('.m-cj-ver').forEach(b => b.addEventListener('click', () => abrirFicha(b.dataset.u, b)));
+    if (S.fichaAberta) desenharFicha();
     const sel = $('#t-para'); if (sel) {
       const atual = sel.value;
       sel.innerHTML = (S.jogadores.length > 1 ? '<option value="*">Todos os jogadores</option>' : '') + S.jogadores.map(j => `<option value="${esc(j.user_id)}">${esc(j.nome)}</option>`).join('');
@@ -179,6 +212,89 @@
       sel.disabled = !S.jogadores.length;
     }
   }
+
+  // ---------- ficha completa do jogador (janela) ----------
+  function abrirFicha(uid, gatilho) {
+    fecharFicha(false);
+    S.fichaAberta = uid; S.fichaGatilho = gatilho || null;
+    const fundo = document.createElement('div'); fundo.className = 'm-ficha-fundo'; fundo.id = 'm-ficha';
+    fundo.innerHTML = '<section class="m-ficha" role="dialog" aria-modal="true" aria-labelledby="mf-nome" tabindex="-1"></section>';
+    document.body.appendChild(fundo); document.body.classList.add('m-com-ficha');
+    fundo.addEventListener('mousedown', e => { if (e.target === fundo) fecharFicha(); });
+    fundo.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { e.preventDefault(); fecharFicha(); return; }
+      if (e.key !== 'Tab') return;
+      const foc = [...fundo.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')].filter(x => !x.disabled && x.offsetParent);
+      if (!foc.length) return; const a = foc[0], z = foc[foc.length - 1];
+      if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); } else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+    });
+    desenharFicha();
+    fundo.querySelector('.m-ficha-x').focus();
+  }
+  function fecharFicha(devolverFoco = true) {
+    const f = $('#m-ficha'); if (!f) return;
+    f.remove(); document.body.classList.remove('m-com-ficha');
+    const g = S.fichaGatilho; S.fichaAberta = null; S.fichaGatilho = null;
+    if (devolverFoco) { const alvo = g && g.isConnected ? g : document.querySelector(`.m-cj-ver[data-u="${CSS.escape((g && g.dataset.u) || '')}"]`); if (alvo) alvo.focus(); }
+  }
+  function desenharFicha() {
+    const caixa = document.querySelector('#m-ficha .m-ficha'); if (!caixa) return;
+    const j = S.jogadores.find(x => x.user_id === S.fichaAberta);
+    if (!j) { caixa.innerHTML = `<button type="button" class="icon m-ficha-x" aria-label="Fechar a ficha">✕</button><h2 id="mf-nome">Jogador saiu da mesa</h2><p class="hint">Esta ficha não está mais disponível.</p>`; caixa.querySelector('.m-ficha-x').addEventListener('click', () => fecharFicha()); return; }
+    const f = fichaDe(j), mods = obj(f.mods), attrs = obj(f.attrs), cor = corOk(f.cor), rolagem = caixa.scrollTop;
+    const focoDentro = caixa.contains(document.activeElement), idFoco = focoDentro ? document.activeElement.id : '';
+    const dig = num(f.digestao, 0, 99), digMax = num(f.digMax, 1, 99), tr = obj(f.traco), ar = obj(f.artefato);
+    const habC = Array.isArray(f.habCaminho) ? f.habCaminho.filter(h => typeof h === 'string').slice(0, 8) : [];
+    const habJ = Array.isArray(f.hab) ? f.hab.map(obj).filter(h => txt(h.nome)).slice(0, 20) : [];
+    const meus = S.resultados.filter(r => r.user_id === j.user_id).slice(0, 8);
+    const par = (rot, v) => v ? `<div class="mf-par"><dt>${rot}</dt><dd>${esc(v)}</dd></div>` : '';
+    const vazio = t => `<p class="hint">${t}</p>`;
+    caixa.style.setProperty('--cc', cor);
+    caixa.innerHTML = `
+      <button type="button" class="icon m-ficha-x" aria-label="Fechar a ficha">✕</button>
+      <div class="mf-cab">
+        <div class="mf-selo">${selo(f, j.nome, 92)}</div>
+        <div class="mf-id">
+          <small class="mf-eyebrow">${f.caminho ? `Caminho ${esc(txt(f.caminho, 40))}` : 'Ficha em construção'}</small>
+          <h2 id="mf-nome">${esc(j.nome)}</h2>
+          <p class="mf-seq">${esc(linhaSeq(f)) || '—'}</p>
+          <p class="mf-orig">${esc(linhaOrigem(f))}${txt(f.jogador, 60) ? `<span> · jogado por ${esc(txt(f.jogador, 60))}</span>` : ''}</p>
+          ${dig != null && digMax ? `<div class="mf-dig" title="Digestão da poção"><span>Digestão da poção</span><div class="m-trilho" role="meter" aria-label="Digestão da poção" aria-valuemin="0" aria-valuemax="${digMax}" aria-valuenow="${Math.min(dig, digMax)}"><div style="transform:scaleX(${Math.min(1, dig / digMax)})"></div></div><b>${dig}/${digMax}</b></div>` : ''}
+        </div>
+      </div>
+      <div class="mf-grade">
+        <section class="mf-bloco"><h3>Vitais</h3>
+          ${barra('PV', f.pv, f.pvMax, '#e05a6a')}${barra('Sanidade', f.san, f.sanMax, '#6fb4ff')}
+          ${num(f.espMax, 0, 999) != null ? `<p class="mf-esp">Espiritualidade máxima <b>${num(f.espMax, 0, 999)}</b></p>` : ''}</section>
+        <section class="mf-bloco"><h3>Atributos</h3>
+          <ul class="mf-attrs">${ATTRS.map(a => { const t = num(attrs[a.key], 1, 60), v = num(mods[a.key], -30, 30), p = f.attrCaminho === a.key;
+            return `<li class="${p ? 'cam' : ''}" style="--ac:${a.cor}"><span>${a.nome}${p ? ' <i title="atributo do Caminho">✦</i>' : ''}</span><b>${t == null ? '—' : t}</b><em>${v == null ? '' : sinal(v)}</em></li>`; }).join('')}</ul></section>
+        <section class="mf-bloco"><h3>Habilidades</h3>
+          ${habC.length || habJ.length ? `<ul class="mf-hab">${habC.map(h => `<li class="cam"><b>${esc(txt(h, 80))}</b><small>do Caminho</small></li>`).join('')}${habJ.map(h => `<li><b>${esc(txt(h.nome, 60))}</b>${txt(h.desc) ? `<small>${esc(txt(h.desc, 200))}</small>` : ''}</li>`).join('')}</ul>` : vazio('Nenhuma habilidade ainda.')}</section>
+        <section class="mf-bloco"><h3>Carta do Destino</h3>
+          ${txt(tr.nome) || txt(ar.nome) ? `${txt(tr.nome) ? `<div class="mf-carta"><small>Traço</small><b>${esc(txt(tr.nome, 60))}</b><p>${esc(txt(tr.desc, 240))}</p></div>` : ''}
+          ${txt(ar.nome) ? `<div class="mf-carta art"><small>Artefato</small><b>${esc(txt(ar.nome, 60))}</b><p><span class="mf-dadiva">Dádiva</span> ${esc(txt(ar.dadiva, 240))}</p><p><span class="mf-maldicao">Maldição</span> ${esc(txt(ar.maldicao, 240))}</p></div>` : ''}` : vazio('Ainda não tirou as cartas.')}</section>
+        <section class="mf-bloco mf-largo"><h3>Quem é</h3>
+          ${par('Idade', txt(f.idade, 20)) || par('Gênero', txt(f.genero, 40)) || txt(f.aparencia) || txt(f.historia) ? `<dl class="mf-pares">${par('Idade', txt(f.idade, 20))}${par('Gênero', txt(f.genero, 40))}${par('Aparência', txt(f.aparencia, 400))}${par('História', txt(f.historia, 900))}</dl>` : vazio('O jogador ainda não descreveu o personagem.')}</section>
+        ${txt(f.notas) ? `<section class="mf-bloco mf-largo"><h3>Notas do jogador</h3><p class="mf-notas">${esc(txt(f.notas, 900))}</p></section>` : ''}
+        <section class="mf-bloco mf-largo"><h3>Testes nesta mesa</h3>
+          ${meus.length ? `<ol class="m-resultados mf-res">${meus.map(linhaResultado).join('')}</ol>` : vazio('Nenhum teste ainda.')}</section>
+      </div>
+      <div class="mf-acoes"><button type="button" class="primary" id="mf-pedir" data-ic="dado">Pedir teste para ${esc(j.nome)}</button>
+        <span class="mf-hora">Ficha atualizada ${esc(haQuanto(j.atualizado_em))}</span></div>`;
+    caixa.scrollTop = rolagem;
+    caixa.querySelector('.m-ficha-x').addEventListener('click', () => fecharFicha());
+    caixa.querySelector('#mf-pedir').addEventListener('click', () => {
+      const uid = j.user_id; fecharFicha(false);
+      const sel = $('#t-para'); if (sel) sel.value = uid;
+      const r = $('#t-rotulo'); if (r) { r.scrollIntoView({ block: 'center', behavior: 'smooth' }); r.focus(); }
+    });
+    if (typeof decorarTudo === 'function') decorarTudo();
+    // atualização ao vivo não pode jogar o foco para fora da janela
+    if (focoDentro) (idFoco && caixa.querySelector('#' + CSS.escape(idFoco)) || caixa.querySelector('.m-ficha-x')).focus({ preventScroll: true });
+  }
+  // "há 3 min" continua certo sem recarregar
+  setInterval(() => document.querySelectorAll('.m-cj-hora[data-t]').forEach(s => { s.textContent = haQuanto(s.dataset.t); }), 30000);
 
   function linhaResultado(r) {
     const nat = r.lados === 20 ? (r.dado === 20 ? 'crit' : r.dado === 1 ? 'fumble' : '') : '';
@@ -193,6 +309,7 @@
     const l = $('#m-resultados'), p = $('#m-pendentes'); if (!l) return;
     p.innerHTML = S.pendentes.length ? `<ul class="m-pend">${S.pendentes.map(x => `<li><span class="m-ampulheta" aria-hidden="true"></span><b>${esc(nomeDe(x.para))}</b> ainda vai rolar: ${esc(x.rotulo)} <small>${x.lados === 100 ? 'd%' : 'd' + x.lados}</small></li>`).join('')}</ul>` : '';
     l.innerHTML = S.resultados.length ? S.resultados.map(linhaResultado).join('') : '<li class="hint m-vazio">Os resultados aparecem aqui, com a dificuldade e o veredito.</li>';
+    if (S.fichaAberta) desenharFicha();   // a lista de testes da ficha aberta também se atualiza
   }
 
   // ---------- testes ----------
@@ -220,7 +337,7 @@
   }
 
   // ---------- tempo real ----------
-  function pararTempoReal() { S.pararDeOuvir.forEach(f => f()); S.pararDeOuvir = []; }
+  function pararTempoReal() { S.pararDeOuvir.forEach(f => f()); S.pararDeOuvir = []; if (typeof fecharFicha === 'function') fecharFicha(false); }
   const adiar = (fn, ms = 250) => { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
   async function ouvirMesa() {
     pararTempoReal(); const id = S.mesa.id, f = 'mesa_id=eq.' + id;
