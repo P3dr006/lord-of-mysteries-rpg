@@ -5,6 +5,7 @@ const Jogador = (() => {
   const CODIGO = /^[A-HJ-NP-Z2-9]{6}$/;          // o mesmo alfabeto do servidor (sem I, O, 0, 1)
   let con = lerConexao();                         // { mesa, codigo, nome, slot } ou null
   let estado = con ? 'desligado' : 'fora';        // fora | entrando | ligando | ligado | desligado
+  let codigoDigitado = '', nomeDigitado = '';      // o que foi digitado sobrevive aos redesenhos
   let pedidos = [], erro = '', uid = null, parar = [], ultimaFicha = '', rolandoPedido = false;
 
   function lerConexao() { try { const c = JSON.parse(localStorage.getItem(K)); return c && c.mesa && c.codigo ? c : null; } catch (e) { return null; } }
@@ -16,19 +17,23 @@ const Jogador = (() => {
 
   // O que o mestre vê: modificadores, PV e Sanidade (nada além disso sai do navegador).
   function ficha() {
-    const mods = {}; ATTRS.forEach(a => { const t = total(a.key); mods[a.key] = t == null ? 0 : mod(t); });
-    const c = P.caminho && caminhoPorId(P.caminho);
-    return { mods, pv: P.pv == null ? pvMax() : P.pv, pvMax: pvMax(), san: P.san == null ? sanMax() : P.san, sanMax: sanMax(), seq: P.sequencia, caminho: c ? c.nome : '' };
+    // atributo ainda não rolado não vai (o mestre vê "—"; no teste secreto o servidor usa 0)
+    const mods = {}; ATTRS.forEach(a => { const t = total(a.key); if (t != null) mods[a.key] = mod(t); });
+    const c = P.caminho && caminhoPorId(P.caminho), temVigor = total('vigor') != null, temPres = total('pres') != null;
+    return { mods, pv: temVigor ? (P.pv == null ? pvMax() : P.pv) : null, pvMax: temVigor ? pvMax() : null,
+      san: temPres ? (P.san == null ? sanMax() : P.san) : null, sanMax: temPres ? sanMax() : null, seq: P.sequencia, caminho: c ? c.nome : '' };
   }
 
   // ---------- entrar / sair ----------
-  async function entrar(codigoBruto) {
+  // Só o nome é obrigatório: dá para sentar à mesa antes de terminar a ficha.
+  async function entrar(codigoBruto, nomeBruto) {
     const codigo = String(codigoBruto || '').toUpperCase().replace(/[\s-]/g, '');
+    const nomeNovo = String(nomeBruto || '').trim().slice(0, 40);
     erro = '';
-    if (!P.nome || !P.nome.trim()) erro = 'Dê um nome ao personagem antes de entrar.';
-    else if (!temAtributos()) erro = 'Role os atributos do personagem antes de entrar.';
+    if ((!P.nome || !P.nome.trim()) && nomeNovo) P.nome = nomeNovo;
+    if (!P.nome || !P.nome.trim()) erro = 'Escreva o nome do seu personagem.';
     else if (!CODIGO.test(codigo)) erro = 'O código tem 6 letras e números, como o mestre passou.';
-    if (erro) return redesenhar();
+    if (erro) { codigoDigitado = codigoBruto || ''; return redesenhar(); }
     salvar();                                      // garante que a ficha tem lugar na biblioteca
     estado = 'entrando'; redesenhar();
     try {
@@ -38,6 +43,8 @@ const Jogador = (() => {
       ultimaFicha = JSON.stringify(ficha());
       await ligar();
       anunciar('Você entrou na mesa ' + codigo.split('').join(' '));
+      // entrou pela capa com um nome novo: a capa passa a oferecer "Continuar" para terminar essa ficha
+      const capa = document.querySelector('#cover'); if (capa && !capa.hidden && typeof montarCapa === 'function') { try { montarCapa(); } catch (e) { /* a capa antiga continua */ } }
     } catch (e) { estado = con ? 'desligado' : 'fora'; erro = Rede.mensagem(e); redesenhar(); }
   }
 
@@ -83,7 +90,7 @@ const Jogador = (() => {
   let timerFicha = null;
   function fichaMudou() { if (estado !== 'ligado' || !minhaFicha()) return; clearTimeout(timerFicha); timerFicha = setTimeout(enviarFicha, 1200); }
   async function enviarFicha() {
-    if (estado !== 'ligado' || !minhaFicha() || !temAtributos()) return;
+    if (estado !== 'ligado' || !minhaFicha()) return;
     const f = ficha(), json = JSON.stringify(f); if (json === ultimaFicha) return;
     try {
       const r = await (await Rede.tabela('jogador', 'jogadores')).update({ ficha: f, nome: P.nome.trim().slice(0, 40) || con.nome }).eq('mesa_id', con.mesa).eq('user_id', uid).select('user_id');
@@ -113,16 +120,20 @@ const Jogador = (() => {
     if (!el || !Rede.configurada()) return;
     const msgErro = erro ? `<p class="on-erro" role="alert">${esc2(erro)}</p>` : '';
     if (!con || estado === 'fora' || estado === 'entrando') {
-      const pronto = P.nome && P.nome.trim() && temAtributos();
+      // nunca bloqueado: sem nome, pede o nome aqui mesmo; sem atributos, entra e o mestre vê "—" até rolar
+      const temNome = !!(P.nome && P.nome.trim()), ocupado = estado === 'entrando';
       el.innerHTML = `<div class="lbl">Mesa online <i>com o mestre</i></div>
         <form class="on-entrar" id="on-form" novalidate>
+          ${temNome ? '' : `<label for="on-nome">Nome do personagem</label><input type="text" id="on-nome" class="on-nome" maxlength="40" placeholder="Ex.: Klein Moretti" autocomplete="off" value="${esc2(nomeDigitado)}">`}
           <label for="on-cod">Código da mesa</label>
-          <div class="on-linha"><input type="text" id="on-cod" maxlength="7" placeholder="ABC123" autocomplete="off" autocapitalize="characters" spellcheck="false" ${pronto ? '' : 'disabled'}>
-          <button type="submit" class="primary" id="on-entrar" ${pronto && estado !== 'entrando' ? '' : 'disabled'}>${estado === 'entrando' ? 'Entrando…' : 'Entrar'}</button></div>
-          <small class="on-dica">${pronto ? `Você entra sem conta, como <b>${esc2(P.nome.trim())}</b>. O mestre vê só seus modificadores, PV e Sanidade.` : 'Termine o nome e os atributos do personagem para entrar numa mesa.'}</small>
+          <div class="on-linha"><input type="text" id="on-cod" maxlength="7" placeholder="ABC123" autocomplete="off" autocapitalize="characters" spellcheck="false" value="${esc2(codigoDigitado)}">
+          <button type="submit" class="primary" id="on-entrar" ${ocupado ? 'disabled' : ''}>${ocupado ? 'Entrando…' : 'Entrar'}</button></div>
+          <small class="on-dica">${temNome ? `Você entra sem conta, como <b>${esc2(P.nome.trim())}</b>. ` : 'Você entra sem conta. '}O mestre vê só seus modificadores, PV e Sanidade${temAtributos() ? '' : ', que aparecem quando você rolar os atributos'}.</small>
           ${msgErro}</form>`;
-      const f = el.querySelector('#on-form');
-      f.addEventListener('submit', ev => { ev.preventDefault(); entrar(el.querySelector('#on-cod').value); });
+      const f = el.querySelector('#on-form'), n = el.querySelector('#on-nome'), cod = el.querySelector('#on-cod');
+      if (n) n.addEventListener('input', () => { nomeDigitado = n.value; });
+      cod.addEventListener('input', () => { codigoDigitado = cod.value; });
+      f.addEventListener('submit', ev => { ev.preventDefault(); if (n) nomeDigitado = n.value; codigoDigitado = cod.value; entrar(cod.value, n ? n.value : ''); });
       return;
     }
     const outra = !minhaFicha();
@@ -165,9 +176,9 @@ const Jogador = (() => {
     // atalho da capa: abre a ficha salva e leva direto ao campo do código
     const atalho = document.querySelector('#btn-entrar-mesa');
     if (atalho) atalho.addEventListener('click', () => {
+      // com ficha salva, abre a ficha; sem ficha, abre a mesa aqui mesmo e o nome é pedido junto com o código
       if (idAtivoSalvo()) document.querySelector('#btn-continue').click();
-      else { avisar('Primeiro, seu personagem', 'Para entrar numa mesa você precisa de um personagem: o mestre vê o nome, os modificadores, PV e Sanidade. Clique em “Iniciar a jornada” e, com a ficha pronta, use este atalho de novo.'); return; }
-      setTimeout(() => { Mesa.irParaTestes(); setTimeout(() => { const i = document.querySelector('#on-cod'); if (i && !i.disabled) i.focus(); }, 150); }, 250);
+      setTimeout(() => { Mesa.irParaTestes(); setTimeout(() => { const i = document.querySelector('#on-nome') || document.querySelector('#on-cod'); if (i) i.focus(); }, 150); }, 250);
     });
     // com pedido esperando, abrir a mesa já leva para a aba Testes
     const fab = document.querySelector('#fab-mesa');

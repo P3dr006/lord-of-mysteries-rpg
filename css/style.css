@@ -1117,3 +1117,4 @@ button.ghost.m-secreto{--edge:linear-gradient(135deg,#b08cff,#4a2f9a 50%,#b08cff
 .cm-link span{color:var(--gold);border-bottom:1px solid #d9b86a55;margin-left:4px}
 .cm-link:hover span,.cm-link:focus-visible span{color:var(--gold2);border-bottom-color:var(--gold2)}
 .cm-link:focus-visible{outline:2px solid var(--gold2);outline-offset:3px;border-radius:4px}
+.on-nome{margin-bottom:4px;font-size:1rem}
