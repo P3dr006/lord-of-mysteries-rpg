@@ -46,6 +46,8 @@ const Rede = (() => {
     if (!e) return 'Algo deu errado.';
     if (e instanceof ErroRede) return e.message;
     const m = String(e.message || e.error_description || e);
+    if (/Anonymous sign-ins are disabled/i.test(m)) return 'A mesa online ainda não aceita jogadores sem conta. Avise o mestre: no Supabase, ligar “Allow anonymous sign-ins”.';
+    if (/Signups not allowed|Email signups are disabled/i.test(m)) return 'O cadastro por e-mail está desligado no Supabase (Authentication → Sign In / Providers → Email).';
     if (/Invalid login credentials/i.test(m)) return 'E-mail ou senha incorretos.';
     if (/Email not confirmed/i.test(m)) return 'Confirme o e-mail pelo link que enviamos antes de entrar.';
     if (/User already registered/i.test(m)) return 'Este e-mail já tem conta. Use “Entrar”.';
