@@ -1808,3 +1808,33 @@ button.ghost.c-cura.san{--edge:linear-gradient(135deg,#9ac8ff,#2a4a8a 50%,#9ac8f
 .bs-ficha .bf-id{padding-right:44px}
 .bs-acoes{grid-template-columns:1fr 1fr}.bs-acoes .bs-chamar{grid-column:1/-1}.bs-acoes button{letter-spacing:.08em;white-space:nowrap}
 @media (max-width:640px){.bs-ficha .bf-id{padding-right:0}}
+
+/* ---------- campos do Grimório: sem setinhas do navegador, seletor escuro com a seta dourada ---------- */
+.m-painel input[type=number]::-webkit-inner-spin-button,.m-painel input[type=number]::-webkit-outer-spin-button,
+.m-ficha-fundo input[type=number]::-webkit-inner-spin-button,.m-ficha-fundo input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.m-painel input[type=number],.m-ficha-fundo input[type=number]{-moz-appearance:textfield;appearance:textfield}
+.m-painel select,.m-ficha-fundo select{color-scheme:dark}
+.m-painel select option,.m-ficha-fundo select option{background:#0e0c24;color:var(--text)}
+.m-painel select option:checked,.m-ficha-fundo select option:checked{background:#3a2a10;color:var(--gold2)}
+.bf-aplicar select{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:34px;
+  background-image:linear-gradient(45deg,transparent 50%,#d9b86a 50%),linear-gradient(135deg,#d9b86a 50%,transparent 50%),linear-gradient(180deg,#0a0820,#0e0c24);
+  background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%,0 0;background-size:5px 5px,5px 5px,100% 100%;background-repeat:no-repeat;border-color:#7a2a34}
+.bf-aplicar select:hover{border-color:#b04050}
+
+/* modificadores da criatura: − valor + (como os botões de PV das figuras) */
+.be-mods{grid-template-columns:repeat(6,minmax(0,1fr))}
+.be-mod label{display:block;text-align:center;font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.be-passo{display:grid;grid-template-columns:30px minmax(0,1fr) 30px;align-items:stretch;border-radius:6px;border:1px solid #2f2a5c;background:linear-gradient(180deg,#0a0820,#0e0c24);overflow:hidden;transition:border-color .2s,box-shadow .2s}
+.be-passo:focus-within{border-color:var(--gold);box-shadow:0 0 0 1px #d9b86a55,0 0 14px #d9b86a33}
+.be-passo input[type=number]{min-height:42px;border:0!important;background:none!important;box-shadow:none!important;text-align:center;font-size:1.15rem;padding:0;color:var(--text);border-radius:0}
+.be-passo input[type=number]:focus{outline:none}
+.be-passo[data-s=pos] input{color:#9fe0b0}.be-passo[data-s=neg] input{color:#ff9a9a}
+.be-d{all:unset;box-sizing:border-box;cursor:pointer;display:grid;place-items:center;font-size:1.05rem;color:var(--gold);background:#14102e;transition:background .15s,color .15s}
+.be-d:first-child{border-right:1px solid #2f2a5c}.be-d:last-child{border-left:1px solid #2f2a5c}
+.be-d:hover{background:#2a2050;color:var(--gold2)}.be-d:active{background:#3a2a10}
+.be-d:focus-visible{outline:2px solid var(--gold2);outline-offset:-2px}
+@media (max-width:640px){.be-mods{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.be-passo button.be-d{clip-path:none!important;border:0!important;border-radius:0!important;padding:0!important;margin:0!important;min-width:0!important;min-height:0!important;height:auto!important;box-shadow:none!important;background:#14102e!important;color:var(--gold)!important;font-size:1.05rem!important;letter-spacing:0!important;text-transform:none!important}
+.be-passo button.be-d::before,.be-passo button.be-d::after{display:none!important}
+.be-passo button.be-d:first-child{border-right:1px solid #2f2a5c!important}.be-passo button.be-d:last-child{border-left:1px solid #2f2a5c!important}
+.be-passo button.be-d:hover{background:#2a2050!important;color:var(--gold2)!important}.be-passo button.be-d:active{background:#3a2a10!important}
