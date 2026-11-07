@@ -78,14 +78,18 @@ const Mesa = (() => {
       $('#rolar').addEventListener('click', () => rolar({ lados: k.lados, qtd: k.qtd, mod: k.mod, rotulo: rotuloLivre() }));
     } else if (aba === 'testes') {
       const tem = ATTRS.every(a => P.attrs && P.attrs[a.key]);
-      c.innerHTML = `
+      const pedidoNoTopo = typeof Jogador === 'object' && Jogador.pedidos.length > 0;   // o pedido do mestre vem primeiro
+      c.innerHTML = `${pedidoNoTopo ? '<div class="online topo" id="online"></div>' : ''}
         <div class="lbl">Teste de atributo <i>d20 + modificador${k.mod ? ` ${sinal(k.mod)}` : ''}</i></div>
         ${tem ? '' : '<p class="hint">Role os atributos do personagem para liberar os testes.</p>'}
         <div class="attrs-mesa">${ATTRS.map(a => `<button type="button" class="attr-b" data-a="${a.key}" style="--ac:${a.cor}" ${tem ? '' : 'disabled'}>${iconeAttr(a, 22)}<span>${a.nome}</span><b>${tem ? sinal(mod(total(a.key))) : '—'}</b></button>`).join('')}</div>
         <div class="lbl">Mente</div>
         <div class="san-teste"><div><b>Teste de Sanidade</b><small>d20 + Presença. A dificuldade e o que acontece com sua Sanidade quem decide é o mestre.</small></div><button type="button" class="primary" id="t-san" ${tem ? '' : 'disabled'} data-ic="olho">Rolar</button></div>
-        <p class="hint">O mestre define a dificuldade e o resultado. Em breve ele poderá pedir testes direto para você.</p>`;
+        <p class="hint">O mestre define a dificuldade e o resultado.</p>
+        ${pedidoNoTopo ? '' : '<div class="online" id="online"></div>'}`;
       const ts = $('#t-san'); if (ts) ts.addEventListener('click', testeSanidade);
+      if (typeof Jogador === 'object') Jogador.desenhar($('#online'));
+      if (pedidoNoTopo) c.scrollTop = 0;
     } else {
       const h = P.historico || [];
       c.innerHTML = `<div class="lbl">Últimas rolagens ${h.length ? `<button type="button" class="link-remover" id="h-limpar">Limpar</button>` : ''}</div>` +
@@ -100,7 +104,8 @@ const Mesa = (() => {
   const sorteio = (l, n) => Array.from({ length: n }, () => d(l));
   async function rolar(o) {
     if (rolando) return; rolando = true;
-    const k = cfg(), modo = k.modo, A = sorteio(o.lados, o.qtd), B = modo === 'normal' ? null : sorteio(o.lados, o.qtd);
+    // o.fixo: números já decididos (dado rolado no servidor a pedido do mestre); a animação só chega até eles
+    const k = cfg(), modo = o.fixo ? 'normal' : k.modo, A = o.fixo ? o.fixo.slice(0, o.qtd) : sorteio(o.lados, o.qtd), B = modo === 'normal' ? null : sorteio(o.lados, o.qtd);
     let esc2 = 0; if (B) { const sa = soma(A), sb = soma(B); esc2 = modo === 'vantagem' ? (sb > sa ? 1 : 0) : (sb < sa ? 1 : 0); if (sa === sb) esc2 = 0; }
     const grupos = B ? [A, B] : [A], sel = grupos[esc2], sm = soma(sel), total = sm + o.mod;
     const nat = o.lados === 20 && o.qtd === 1 ? sel[0] : null, crit = nat === 20, fumble = nat === 1;
@@ -133,6 +138,9 @@ const Mesa = (() => {
 
   // Teste de Sanidade: apenas rola d20 + Presença. O mestre decide a dificuldade e a perda.
   function testeSanidade() { const k = cfg(); return rolar({ lados: 20, qtd: 1, mod: mod(total('pres')) + k.mod, rotulo: 'Teste de Sanidade', nota: `Presença ${sinal(mod(total('pres')))}` }); }
-  return { montar, alternar, rolar };
+  // abre a mesa na aba Testes (pedido do mestre) e redesenha a aba quando está à vista
+  function irParaTestes() { aba = 'testes'; document.querySelectorAll('#mesa .aba').forEach(x => x.classList.toggle('on', x.dataset.aba === 'testes')); if (!aberta) alternar(true); else corpo(); }
+  const atualizar = () => { if (aberta && aba === 'testes') corpo(); };
+  return { montar, alternar, rolar, irParaTestes, atualizar, get rolando() { return rolando; } };
 })();
 document.addEventListener('DOMContentLoaded', () => Mesa.montar());
