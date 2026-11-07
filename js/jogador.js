@@ -5,6 +5,7 @@ const Jogador = (() => {
   const CODIGO = /^[A-HJ-NP-Z2-9]{6}$/;          // o mesmo alfabeto do servidor (sem I, O, 0, 1)
   let con = lerConexao();                         // { mesa, codigo, nome, slot } ou null
   let estado = con ? 'desligado' : 'fora';        // fora | entrando | ligando | ligado | desligado
+  let sussurros = [], lidos = new Set(), fila = [], aberto = null;   // sussurros do mestre
   let codigoDigitado = '', nomeDigitado = '';      // o que foi digitado sobrevive aos redesenhos
   let pedidos = [], erro = '', uid = null, parar = [], ultimaFicha = '', rolandoPedido = false;
 
@@ -72,7 +73,7 @@ const Jogador = (() => {
   }
 
   async function sairDaMesa() {
-    const c = con; desligar(); con = null; gravarConexao(null); pedidos = []; estado = 'fora'; erro = ''; redesenhar();
+    const c = con; desligar(); con = null; gravarConexao(null); pedidos = []; sussurros = []; lidos = new Set(); fila = []; estado = 'fora'; erro = ''; redesenhar();
     if (c && uid) { try { await (await Rede.tabela('jogador', 'jogadores')).delete().eq('mesa_id', c.mesa).eq('user_id', uid); } catch (e) { /* sem rede: o mestre remove depois */ } }
   }
 
@@ -87,8 +88,13 @@ const Jogador = (() => {
       uid = u.id;
       await carregarPedidos();
       parar.push(await Rede.ouvir('jogador', 'pedidos', 'pedidos', 'para=eq.' + uid, aoMudarPedidos));
+      try {   // sussurros: se falharem, os testes continuam funcionando
+        await carregarSussurros();
+        parar.push(await Rede.ouvir('jogador', 'sussurros', 'sussurros', 'mesa_id=eq.' + con.mesa, aoMudarSussurros));
+      } catch (e) { /* sem sussurros nesta conexão */ }
       estado = 'ligado'; redesenhar();
       enviarFicha();
+      enfileirarNaoLidos();   // o que chegou enquanto estava fora aparece agora
     } catch (e) { estado = 'desligado'; erro = Rede.mensagem(e); redesenhar(); }
   }
 
@@ -107,6 +113,69 @@ const Jogador = (() => {
       anunciar('O mestre pede: ' + novos.map(p => p.rotulo).join(', '));
     }
     redesenhar();
+  }
+
+  // ---------- sussurros e pistas do mestre ----------
+  const IMG_OK = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/;
+  async function carregarSussurros() {
+    const [s, l] = await Promise.all([
+      (await Rede.tabela('jogador', 'sussurros')).select('id,para,titulo,texto,imagem,criado_em').eq('mesa_id', con.mesa).order('criado_em', { ascending: false }).limit(30),
+      (await Rede.tabela('jogador', 'sussurros_leituras')).select('sussurro_id').eq('user_id', uid),
+    ]);
+    if (s.error || l.error) throw s.error || l.error;
+    sussurros = (s.data || []).map(x => ({ ...x, imagem: typeof x.imagem === 'string' && IMG_OK.test(x.imagem) ? x.imagem : null }));
+    lidos = new Set((l.data || []).map(x => x.sussurro_id));
+  }
+  async function aoMudarSussurros() {
+    try { await carregarSussurros(); } catch (e) { return; }
+    redesenhar(); enfileirarNaoLidos();
+  }
+  function enfileirarNaoLidos() {
+    sussurros.slice().reverse().forEach(s => { if (!lidos.has(s.id) && !fila.includes(s.id) && aberto !== s.id) fila.push(s.id); });
+    mostrarProximo();
+  }
+  function mostrarProximo() {
+    if (aberto || !fila.length) return;
+    const s = sussurros.find(x => x.id === fila.shift()); if (!s) return mostrarProximo();
+    mostrarSussurro(s, false);
+  }
+  // A cena do sussurro: névoa, as palavras surgindo uma a uma, a pista como papel envelhecido.
+  function mostrarSussurro(s, relendo) {
+    aberto = s.id;
+    const titulo = s.titulo || (s.imagem ? 'Uma pista' : 'Um sussurro');
+    const palavras = (s.texto || '').split(/(\s+)/).map((w, i) => /^\s+$/.test(w) ? w : `<span style="--i:${Math.min(i, 120)}">${esc2(w)}</span>`).join('');
+    const m = document.createElement('div');
+    m.className = 'sussurro' + (relendo ? ' relendo' : '');
+    m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'sus-t');
+    m.innerHTML = `<div class="sus-nevoa" aria-hidden="true"></div>
+      <div class="sus-core">
+        <small class="sus-olho">${relendo ? 'Você relembra' : (s.para ? 'Só você ouve' : 'A mesa inteira ouve')}</small>
+        <h2 id="sus-t">${esc2(titulo)}</h2>
+        ${s.texto ? `<p class="sus-texto">${palavras}</p>` : ''}
+        ${s.imagem ? `<figure class="sus-pista"><img src="${s.imagem}" alt="${esc2(s.titulo ? 'Pista: ' + s.titulo : 'Pista enviada pelo mestre')}"></figure>` : ''}
+        <button type="button" class="primary" id="sus-ok">${relendo ? 'Fechar' : 'Guardar na memória'}</button>
+      </div>`;
+    document.body.appendChild(m); document.body.classList.add('com-sussurro');
+    if (typeof decorarTudo === 'function') decorarTudo();
+    if (!relendo && typeof Som === 'object') Som.carta();
+    anunciar((relendo ? '' : 'O mestre sussurra. ') + titulo + (s.texto ? ': ' + s.texto : ''));
+    let soltar = () => {};
+    const fechar = () => {
+      m.classList.add('saindo'); soltar(); document.body.classList.remove('com-sussurro');
+      setTimeout(() => { m.remove(); aberto = null; redesenhar(); mostrarProximo(); }, 260);
+      if (!relendo && !lidos.has(s.id)) { lidos.add(s.id); Rede.rpc('jogador', 'ler_sussurro', { p_id: s.id }).catch(() => lidos.delete(s.id)); }
+    };
+    m.querySelector('#sus-ok').addEventListener('click', fechar);
+    soltar = typeof prenderFoco === 'function' ? prenderFoco(m, fechar) : () => {};
+    setTimeout(() => { const b = m.querySelector('#sus-ok'); if (b && b.isConnected) b.focus(); }, 60);
+  }
+  function listaPistas() {
+    if (!sussurros.length) return '';
+    return `<div class="lbl pistas-lbl">Sussurros e pistas <i>${sussurros.length}</i></div><ul class="pistas">${sussurros.slice(0, 12).map(s => `<li>
+      <button type="button" class="pista-b ${lidos.has(s.id) ? '' : 'nova'}" data-sus="${esc2(s.id)}">
+        ${s.imagem ? `<img src="${s.imagem}" alt="" width="40" height="40">` : '<span class="pista-ico" aria-hidden="true">❦</span>'}
+        <span><b>${esc2(s.titulo || (s.imagem ? 'Uma pista' : 'Um sussurro'))}</b><small>${esc2((s.texto || 'imagem').slice(0, 70))}${(s.texto || '').length > 70 ? '…' : ''}</small></span>
+      </button></li>`).join('')}</ul>`;
   }
 
   // ---------- ficha ao vivo (debounce: só envia quando algo mudou) ----------
@@ -173,11 +242,12 @@ const Jogador = (() => {
           return `<li class="pedido" style="--ac:${a ? a.cor : '#d9b86a'}"><div><small>O mestre pede</small><b>${esc2(p.rotulo)}</b><i>${p.lados === 100 ? 'd%' : 'd' + p.lados}${a ? ` + ${a.nome} ${sinal(m)}` : ''}</i></div>
             <button type="button" class="primary rolar-pedido" data-id="${esc2(p.id)}" data-ic="dado" ${outra ? 'disabled' : ''}>Rolar</button></li>`;
         }).join('')}</ul>` : '<p class="hint on-espera">Aguardando o mestre. Os testes que ele pedir aparecem aqui.</p>'}
-        ${msgErro}<button type="button" class="link-remover" id="on-sair">Sair da mesa</button>`;
+        ${listaPistas()}${msgErro}<button type="button" class="link-remover" id="on-sair">Sair da mesa</button>`;
     }
     const b = el.querySelector('#on-religar'); if (b) b.addEventListener('click', ligar);
     el.querySelector('#on-sair').addEventListener('click', sairDaMesa);
     el.querySelectorAll('.rolar-pedido').forEach(x => x.addEventListener('click', () => rolarPedido(x.dataset.id)));
+    el.querySelectorAll('.pista-b').forEach(x => x.addEventListener('click', () => { const s = sussurros.find(y => y.id === x.dataset.sus); if (s && !aberto) mostrarSussurro(s, lidos.has(s.id)); }));
   }
 
   // Selo de pedido no botão da mesa (quando ela está fechada)

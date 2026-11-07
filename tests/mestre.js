@@ -206,6 +206,59 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
   ok('consultar a visão do mestre como jogador não devolve nada', (await j.evaluate(async () => (await (await Rede.tabela('jogador', 'resultados_mestre')).select('*')).data.length)) === 0);
   ok('o jogador não consegue pedir teste (só o mestre)', /Só o mestre/.test(await j.evaluate(async m2 => { try { await Rede.rpc('jogador', 'pedir_teste', { p_mesa: m2, p_para: 'x', p_rotulo: 'x', p_atributo: '', p_lados: 20, p_dificuldade: 1 }); return 'aceitou'; } catch (e) { return Rede.mensagem(e); } }, srv.db.mesas[0].id)));
 
+  console.log('\n7b) Sussurros e pistas');
+  { const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+    const uidM = srv.db.mesas[0].mestre_id;
+    ok('o Grimório tem a seção de sussurros', await m.isVisible('#m-form-sus'));
+    await m.click('#s-enviar');
+    ok('sussurro vazio é barrado antes do servidor', await ate(async () => /Escreva algo/.test(await m.textContent('#m-erro-sus'))));
+    // pista com imagem para TODOS, enquanto só o Klein está na mesa
+    await m.selectOption('#s-para', ''); await m.fill('#s-titulo', 'O mapa rasgado'); await m.fill('#s-texto', 'Alguém deixou isto sob a porta.');
+    await m.setInputFiles('#s-img', { name: 'mapa.png', mimeType: 'image/png', buffer: PNG });
+    ok('a imagem é reduzida e mostrada antes de enviar', await ate(() => m.evaluate(() => /^data:image\/(webp|jpeg);base64,/.test(document.querySelector('#s-prev img').getAttribute('src') || ''))));
+    await m.click('#s-enviar');
+    ok('o jogador recebe a pista na hora, com a cena do sussurro', await ate(() => j.isVisible('.sussurro')));
+    ok('a cena mostra título, texto e a imagem', await j.evaluate(() => { const s = document.querySelector('.sussurro'); return /O mapa rasgado/.test(s.textContent) && /sob a porta/.test(s.textContent) && /^data:image\/(webp|jpeg);base64,/.test(s.querySelector('.sus-pista img').getAttribute('src')); }));
+    ok('o foco vai para o botão da cena', await ate(() => j.evaluate(() => document.activeElement.id === 'sus-ok')));
+    { const v = await axe(j); ok('cena do sussurro sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    await j.click('#sus-ok');
+    ok('"Guardar na memória" fecha a cena', await ate(async () => !(await j.$('.sussurro'))));
+    ok('o mestre vê que o Klein leu', await ate(async () => /lido por Klein/.test(await m.textContent('#m-sussurros'))));
+    ok('a lista do mestre marca "pista com imagem"', /pista com imagem/.test(await m.textContent('#m-sussurros')));
+    ok('a lista do mestre NÃO baixa as imagens (painel leve)', !JSON.stringify(srv.entregue[uidM] || []).includes('data:image'));
+    ok('a pista enviada "para todos" foi guardada uma vez só', srv.db.sussurros.length === 1);
+    // uma jogadora que entra DEPOIS recebe o que foi para todos
+    const cA = await contexto(browser, srv), a = await pagina(cA, URL_SITE);
+    await a.evaluate(f => { novoSlot(); P = sanear(f); salvar(); iniciarPasso(); }, FICHA({ nome: 'Audrey', caminho: 'visionario' })); await a.waitForTimeout(300);
+    await a.evaluate(c => Jogador.entrar(c), codigo);
+    ok('quem entra depois recebe a pista que estava esperando', await ate(() => a.isVisible('.sussurro'), 6000));
+    await a.click('#sus-ok'); await ate(async () => !(await a.$('.sussurro')));
+    const uidA = srv.db.jogadores.find(x => x.nome === 'Audrey').user_id;
+    // sussurro PRIVADO para o Klein
+    await ate(async () => (await m.$$('#s-para option')).length === 3);
+    await m.selectOption('#s-para', { label: 'Klein' }); await m.fill('#s-titulo', 'Visão'); await m.fill('#s-texto', 'O relógio de bolso para às 3h.'); await m.click('#s-enviar');
+    ok('o sussurro privado chega ao Klein', await ate(async () => /relógio de bolso/.test(await j.textContent('.sussurro').catch(() => ''))));
+    await espera(1200);
+    ok('a Audrey não recebe o sussurro do Klein', !(await a.$('.sussurro')));
+    ok('nada do sussurro do Klein chegou ao navegador da Audrey', !JSON.stringify(srv.entregue[uidA] || []).includes('relógio de bolso'));
+    ok('a Audrey não consegue marcar o sussurro do Klein', /inválido/.test(await a.evaluate(async id => { try { await Rede.rpc('jogador', 'ler_sussurro', { p_id: id }); return 'aceitou'; } catch (e) { return Rede.mensagem(e); } }, srv.db.sussurros[1].id)));
+    ok('jogador não consegue sussurrar', /Só o mestre/.test(await a.evaluate(async mesa => { try { await Rede.rpc('jogador', 'sussurrar', { p_mesa: mesa, p_para: null, p_titulo: '', p_texto: 'golpe', p_imagem: null }); return 'aceitou'; } catch (e) { return Rede.mensagem(e); } }, srv.db.mesas[0].id)));
+    await j.click('#sus-ok'); await ate(async () => !(await j.$('.sussurro')));
+    // reler pelas pistas guardadas
+    await j.evaluate(() => Mesa.irParaTestes()); await j.waitForTimeout(200);
+    ok('o jogador guarda as pistas na aba Testes', await ate(async () => (await j.$$('.pista-b')).length === 2));
+    await j.click('.pista-b >> nth=1');
+    ok('tocar numa pista abre de novo (modo relembrar)', await ate(() => j.evaluate(() => !!document.querySelector('.sussurro.relendo'))));
+    await j.keyboard.press('Escape');
+    ok('Esc fecha a pista', await ate(async () => !(await j.$('.sussurro'))));
+    // apagar
+    await m.click('#m-sussurros [data-apagar] >> nth=0');
+    ok('o mestre apaga um sussurro', await ate(() => srv.db.sussurros.length === 1));
+    ok('a pista apagada some da lista do jogador', await ate(async () => (await j.$$('.pista-b')).length === 1));
+    ok('sussurros: nenhum erro de script', m.erros.length === 0 && j.erros.length === 0 && a.erros.length === 0, [m.erros[0], j.erros[0], a.erros[0]].filter(Boolean).join(' | '));
+    await a.evaluate(() => Jogador.sairDaMesa()); await ate(async () => !(await m.textContent('#m-jogadores')).includes('Audrey'));
+    await cA.close(); }
+
   console.log('\n8) Ficha ao vivo');
   await j.click('#mesa-x'); await j.click('.adj[data-c="pv"][data-d="-5"]');
   const pvNovo = await j.evaluate(() => P.pv);

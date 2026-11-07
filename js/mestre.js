@@ -54,7 +54,7 @@ const Rede = (() => {
     if (/Password should be/i.test(m)) return 'A senha precisa ter pelo menos 6 caracteres.';
     if (/rate limit|too many/i.test(m)) return 'Muitas tentativas seguidas. Espere um pouco e tente de novo.';
     if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Sem conexão com a mesa online. Tente de novo em instantes.';
-    if (/[áéíóúâêôãõç]/i.test(m) || /^(Entre|Limite|Mesa|A mesa|Pedido|Este|Jogador|Só)\b/.test(m)) return m;   // frases das nossas funções
+    if (/[áéíóúâêôãõç]/i.test(m) || /^(Entre|Limite|Mesa|A mesa|Pedido|Este|Jogador|Só|Escreva|Sussurro)\b/.test(m)) return m;   // frases das nossas funções
     return 'Não deu certo: ' + m.slice(0, 120);
   }
 

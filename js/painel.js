@@ -9,7 +9,7 @@
   const hora = t => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const anunciar = t => { const r = $('#anuncio'); if (!r) return; r.textContent = ''; setTimeout(() => { r.textContent = t; }, 30); };
 
-  const S = { user: null, mesa: null, jogadores: [], resultados: [], pendentes: [], pararDeOuvir: [], ultimoSecreto: null, fichaAberta: null, fichaGatilho: null };
+  const S = { user: null, mesa: null, jogadores: [], resultados: [], pendentes: [], sussurros: [], leituras: [], pararDeOuvir: [], ultimoSecreto: null, fichaAberta: null, fichaGatilho: null };
   const tela = html => { $('#m-tela').innerHTML = html; if (typeof decorarTudo === 'function') decorarTudo(); };
   const erroEm = (sel, e) => { const el = $(sel); if (el) { el.textContent = Rede.mensagem(e); el.hidden = false; } };
   const ocupado = async (botao, fn) => { if (botao.disabled) return; botao.disabled = true; botao.setAttribute('aria-busy', 'true'); try { await fn(); } finally { if (botao.isConnected) { botao.disabled = false; botao.removeAttribute('aria-busy'); } } };
@@ -121,6 +121,20 @@
         </form>
         <div id="m-secreto-res" class="m-secreto-res" role="status" aria-live="polite"></div>
       </section>
+      <section class="m-cartao m-sus" aria-labelledby="t-sus"><h2 id="t-sus">Sussurros e pistas</h2>
+        <form id="m-form-sus" class="m-form" novalidate>
+          <div class="m-grade">
+            <div class="m-campo"><label for="s-para">Para</label><select id="s-para"></select></div>
+            <div class="m-campo"><label for="s-titulo">Título <i>(opcional)</i></label><input type="text" id="s-titulo" maxlength="80" placeholder="Ex.: Carta sem remetente" autocomplete="off"></div>
+            <div class="m-campo m-largo"><label for="s-texto">Mensagem</label><textarea id="s-texto" maxlength="1000" rows="3" placeholder="O que só quem recebe vai ouvir…"></textarea></div>
+            <div class="m-campo m-largo"><label for="s-img">Imagem da pista <i>(opcional: carta, mapa, retrato)</i></label><div class="s-escolher"><input type="file" id="s-img" accept="image/*" class="s-arquivo"><span class="s-botao" aria-hidden="true">Escolher imagem</span><span class="s-nome" id="s-nome" aria-hidden="true">nenhuma imagem</span></div>
+              <div id="s-prev" class="s-prev" hidden><img alt="Prévia da pista"><div><small></small><button type="button" class="link-remover" id="s-tirar">Tirar imagem</button></div></div></div>
+          </div>
+          <p class="m-erro" id="m-erro-sus" role="alert" hidden></p>
+          <div class="m-acoes"><button type="submit" class="ghost m-secreto" id="s-enviar" data-ic="olho">Sussurrar</button></div>
+        </form>
+        <ol id="m-sussurros" class="m-sussurros" aria-label="Sussurros enviados"></ol>
+      </section>
       <section class="m-cartao m-res" aria-labelledby="t-res"><h2 id="t-res">Resultados</h2><div id="m-pendentes"></div><ol id="m-resultados" class="m-resultados"></ol></section>
     </div>`);
     $('#m-voltar').addEventListener('click', listaMesas);
@@ -129,7 +143,8 @@
     $('#t-rotulo').addEventListener('input', e => { e.target.dataset.auto = ''; });
     $('#m-form-teste').addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#t-aberto'), () => testar('aberto')); });
     $('#t-secreto').addEventListener('click', e => ocupado(e.currentTarget, () => testar('secreto')));
-    await Promise.all([carregarJogadores(), carregarResultados()]);
+    ligarFormSussurro();
+    await Promise.all([carregarJogadores(), carregarResultados(), carregarSussurros()]);
     ouvirMesa();
   }
 
@@ -211,6 +226,93 @@
       if ([...sel.options].some(o => o.value === atual)) sel.value = atual;
       sel.disabled = !S.jogadores.length;
     }
+    const ss = $('#s-para'); if (ss) {        // sussurro: "Todos" é guardado uma vez só (para = vazio)
+      const atual = ss.value;
+      ss.innerHTML = '<option value="">Todos os jogadores</option>' + S.jogadores.map(j => `<option value="${esc(j.user_id)}">${esc(j.nome)}</option>`).join('');
+      if ([...ss.options].some(o => o.value === atual)) ss.value = atual;
+      ss.disabled = !S.jogadores.length;
+    }
+    desenharSussurros();
+  }
+
+  // ---------- sussurros e pistas ----------
+  // A imagem é reduzida no navegador do mestre (até 1280 px, WebP) para caber no banco (~330 KB) sem perder a leitura.
+  async function comprimirImagem(arquivo) {
+    if (!arquivo || !/^image\//.test(arquivo.type)) throw new Rede.ErroRede('Escolha um arquivo de imagem.');
+    if (arquivo.size > 25e6) throw new Rede.ErroRede('Imagem grande demais (máx. 25 MB).');
+    const url = URL.createObjectURL(arquivo);
+    try {
+      const img = await new Promise((ok2, falha) => { const i = new Image(); i.onload = () => ok2(i); i.onerror = () => falha(new Rede.ErroRede('Não consegui abrir essa imagem.')); i.src = url; });
+      for (const [lado, q] of [[1280, .82], [1280, .7], [1024, .7], [900, .6], [720, .55], [560, .5]]) {
+        const k = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight));
+        const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(img.naturalWidth * k)); cv.height = Math.max(1, Math.round(img.naturalHeight * k));
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        let d = cv.toDataURL('image/webp', q); if (!d.startsWith('data:image/webp')) d = cv.toDataURL('image/jpeg', q);
+        if (d.length <= 440000) return d;
+      }
+      throw new Rede.ErroRede('Não consegui reduzir essa imagem o bastante. Tente outra.');
+    } finally { URL.revokeObjectURL(url); }
+  }
+
+  async function carregarSussurros() {
+    if (!S.mesa) return;
+    try {
+      const [s, l] = await Promise.all([
+        (await Rede.tabela('mestre', 'sussurros')).select('id,para,titulo,texto,tem_imagem,criado_em').eq('mesa_id', S.mesa.id).order('criado_em', { ascending: false }).limit(30),
+        (await Rede.tabela('mestre', 'sussurros_leituras')).select('sussurro_id,user_id,lido_em').eq('mesa_id', S.mesa.id),
+      ]);
+      if (s.error || l.error) throw s.error || l.error;
+      S.sussurros = s.data || []; S.leituras = l.data || [];
+    } catch (e) { return; }
+    desenharSussurros();
+  }
+
+  function desenharSussurros() {
+    const l = $('#m-sussurros'); if (!l) return;
+    const lista = S.sussurros || [], leit = S.leituras || [];
+    l.innerHTML = lista.length ? lista.map(s => {
+      const quem = leit.filter(x => x.sussurro_id === s.id);
+      let status;
+      if (s.para) { const x = quem.find(q => q.user_id === s.para); status = x ? `<span class="s-lido">lido ${esc(haQuanto(x.lido_em))}</span>` : '<span class="s-nao">ainda não lido</span>'; }
+      else { const lidos = S.jogadores.filter(j => quem.some(q => q.user_id === j.user_id)), faltam = S.jogadores.filter(j => !quem.some(q => q.user_id === j.user_id));
+        status = `<span class="s-lido">${lidos.length ? 'lido por ' + esc(lidos.map(j => j.nome).join(', ')) : ''}</span>${faltam.length ? `<span class="s-nao">${lidos.length ? ' · ' : ''}falta ${esc(faltam.map(j => j.nome).join(', '))}</span>` : ''}`; }
+      return `<li class="m-s ${s.tem_imagem ? 'com-img' : ''}">
+        <div class="m-s-cab"><b>${esc(s.titulo || (s.tem_imagem ? 'Pista' : 'Sussurro'))}</b><small>para ${esc(s.para ? nomeDe(s.para) : 'todos')} · ${esc(hora(s.criado_em))}</small></div>
+        ${s.texto ? `<p>${esc(s.texto)}</p>` : ''}${s.tem_imagem ? '<span class="m-s-img">pista com imagem</span>' : ''}
+        <div class="m-s-pe">${status}<button type="button" class="link-remover" data-apagar="${esc(s.id)}">Apagar<span class="sr-only"> ${esc(s.titulo || 'sussurro')}</span></button></div></li>`;
+    }).join('') : '<li class="hint m-vazio">Nada sussurrado ainda. Uma carta, um mapa, uma visão: só quem recebe vê.</li>';
+    l.querySelectorAll('[data-apagar]').forEach(b => b.addEventListener('click', async () => {
+      b.disabled = true;
+      try { const r = await (await Rede.tabela('mestre', 'sussurros')).delete().eq('id', b.dataset.apagar); if (r.error) throw r.error; carregarSussurros(); }
+      catch (e) { b.disabled = false; erroEm('#m-erro-sus', e); }
+    }));
+  }
+
+  function ligarFormSussurro() {
+    let imagem = null;
+    const arq = $('#s-img'), prev = $('#s-prev');
+    const tirar = () => { imagem = null; arq.value = ''; prev.hidden = true; prev.querySelector('img').removeAttribute('src'); $('#s-nome').textContent = 'nenhuma imagem'; };
+    arq.addEventListener('change', async () => {
+      const f = arq.files && arq.files[0]; $('#m-erro-sus').hidden = true; if (!f) return tirar();
+      $('#s-nome').textContent = f.name;
+      prev.hidden = false; prev.classList.add('carregando');
+      try { imagem = await comprimirImagem(f); prev.querySelector('img').src = imagem; prev.querySelector('small').textContent = `${Math.round(imagem.length * .75 / 1024)} KB depois de reduzida`; }
+      catch (e) { tirar(); erroEm('#m-erro-sus', e); }
+      finally { prev.classList.remove('carregando'); }
+    });
+    $('#s-tirar').addEventListener('click', tirar);
+    $('#m-form-sus').addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#s-enviar'), async () => {
+      $('#m-erro-sus').hidden = true;
+      const para = $('#s-para').value || null, titulo = $('#s-titulo').value.trim(), texto = $('#s-texto').value.trim();
+      if (!S.jogadores.length) return erroEm('#m-erro-sus', new Rede.ErroRede('Espere um jogador entrar na mesa.'));
+      if (!texto && !imagem) return erroEm('#m-erro-sus', new Rede.ErroRede('Escreva algo ou escolha uma imagem.'));
+      try {
+        await Rede.rpc('mestre', 'sussurrar', { p_mesa: S.mesa.id, p_para: para, p_titulo: titulo, p_texto: texto, p_imagem: imagem });
+        $('#s-titulo').value = ''; $('#s-texto').value = ''; tirar();
+        anunciar('Sussurro enviado para ' + (para ? nomeDe(para) : 'todos'));
+        carregarSussurros();
+      } catch (e) { erroEm('#m-erro-sus', e); }
+    }); });
   }
 
   // ---------- ficha completa do jogador (janela) ----------
@@ -280,7 +382,8 @@
         <section class="mf-bloco mf-largo"><h3>Testes nesta mesa</h3>
           ${meus.length ? `<ol class="m-resultados mf-res">${meus.map(linhaResultado).join('')}</ol>` : vazio('Nenhum teste ainda.')}</section>
       </div>
-      <div class="mf-acoes"><button type="button" class="primary" id="mf-pedir" data-ic="dado">Pedir teste para ${esc(j.nome)}</button>
+      <div class="mf-acoes"><div class="mf-botoes"><button type="button" class="primary" id="mf-pedir" data-ic="dado">Pedir teste para ${esc(j.nome)}</button>
+        <button type="button" class="ghost m-secreto" id="mf-sussurrar" data-ic="olho">Sussurrar</button></div>
         <span class="mf-hora">Ficha atualizada ${esc(haQuanto(j.atualizado_em))}</span></div>`;
     caixa.scrollTop = rolagem;
     caixa.querySelector('.m-ficha-x').addEventListener('click', () => fecharFicha());
@@ -288,6 +391,11 @@
       const uid = j.user_id; fecharFicha(false);
       const sel = $('#t-para'); if (sel) sel.value = uid;
       const r = $('#t-rotulo'); if (r) { r.scrollIntoView({ block: 'center', behavior: 'smooth' }); r.focus(); }
+    });
+    caixa.querySelector('#mf-sussurrar').addEventListener('click', () => {
+      const uid = j.user_id; fecharFicha(false);
+      const sel = $('#s-para'); if (sel) sel.value = uid;
+      const t = $('#s-texto'); if (t) { t.scrollIntoView({ block: 'center', behavior: 'smooth' }); t.focus(); }
     });
     if (typeof decorarTudo === 'function') decorarTudo();
     // atualização ao vivo não pode jogar o foco para fora da janela
@@ -346,6 +454,9 @@
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'jog', 'jogadores', f, j));
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'res', 'resultados', f, r));
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'ped', 'pedidos', f, r));
+      const su = adiar(carregarSussurros);
+      S.pararDeOuvir.push(await Rede.ouvir('mestre', 'sus', 'sussurros', f, su));
+      S.pararDeOuvir.push(await Rede.ouvir('mestre', 'lei', 'sussurros_leituras', f, su));
     } catch (e) { const v = $('#m-ao-vivo'); if (v) { v.textContent = 'sem tempo real'; v.classList.add('off'); } }
   }
 
