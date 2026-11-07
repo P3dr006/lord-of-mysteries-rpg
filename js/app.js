@@ -420,10 +420,14 @@ function renderFicha(body) {
 
     <section class="blk habs" style="--pc:${c.cor}"><h3>Habilidades</h3>
       <div class="hab-caminho">${sigilo(c, 52)}<div><b>Caminho ${c.nome}</b><small>Sequência 9 · ${esc(c.seq9)}</small><p>${c.desc}</p></div></div>
+      <div id="hab-mesa" class="hab-mesa"></div>
       <ul class="hab-lista" id="hab-lista"></ul>
       <form class="hab-form" id="hab-form" autocomplete="off"><h4 class="sub" id="hab-tt">Anotar uma habilidade</h4>
         <input type="text" id="hab-nome" maxlength="60" placeholder="Nome da habilidade" aria-label="Nome da habilidade">
         <textarea id="hab-desc" rows="2" maxlength="600" placeholder="O que ela faz, alcance, custo… (opcional)" aria-label="Descrição da habilidade"></textarea>
+        <div class="hab-extra" id="hab-extra" hidden><input type="text" id="hab-efeito" maxlength="60" placeholder="Efeito (ex.: 2d6 de dano)" aria-label="Efeito da habilidade"><input type="text" id="hab-custo" maxlength="60" placeholder="Custo (ex.: 3 de Espiritualidade)" aria-label="Custo da habilidade">
+          <small class="hab-dica">Vai para o mestre. Ele pode aprovar, modificar ou recusar, conforme o seu nível e a história.</small></div>
+        <p class="hab-msg" id="hab-msg" role="status" hidden></p>
         <div class="hab-btns"><button type="submit" class="primary" id="hab-ok" data-ic="mais">Adicionar</button><button type="button" class="ghost" id="hab-cancela" hidden>Cancelar edição</button></div></form>
     </section>
 
@@ -495,13 +499,23 @@ function renderFicha(body) {
         <span class="hab-ac"><button type="button" class="mini hab-ed" data-i="${i}" aria-label="Editar ${esc(h.nome)}" title="Editar">✎</button><button type="button" class="mini hab-rm" data-i="${i}" aria-label="Remover ${esc(h.nome)}" title="Remover">×</button></span></li>`).join('');
     $('#hab-lista').querySelectorAll('.hab-rm').forEach(b => b.addEventListener('click', () => { const i = +b.dataset.i; P.habilidades.splice(i, 1); if (editando === i) fimEdicao(); salvar(); desenharHabs(); }));
     $('#hab-lista').querySelectorAll('.hab-ed').forEach(b => b.addEventListener('click', () => { const i = +b.dataset.i, h = P.habilidades[i]; editando = i; $('#hab-nome').value = h.nome; $('#hab-desc').value = h.desc;
-      $('#hab-tt').textContent = 'Editar habilidade'; $('#hab-ok').lastChild.textContent = 'Salvar'; $('#hab-cancela').hidden = false; $('#hab-nome').focus(); }));
+      $('#hab-tt').textContent = 'Editar habilidade'; $('#hab-ok').lastChild.textContent = 'Salvar'; $('#hab-cancela').hidden = false; if (typeof Jogador === 'object') Jogador.desenharHabsMesa(); $('#hab-nome').focus(); }));
+    if (typeof Jogador === 'object') Jogador.desenharHabsMesa();
   };
-  const fimEdicao = () => { editando = -1; $('#hab-nome').value = ''; $('#hab-desc').value = ''; $('#hab-tt').textContent = 'Anotar uma habilidade'; $('#hab-ok').lastChild.textContent = 'Adicionar'; $('#hab-cancela').hidden = true; };
+  const fimEdicao = () => { editando = -1; $('#hab-nome').value = ''; $('#hab-desc').value = ''; $('#hab-tt').textContent = 'Anotar uma habilidade'; $('#hab-ok').lastChild.textContent = 'Adicionar'; $('#hab-cancela').hidden = true; if (typeof Jogador === 'object') Jogador.desenharHabsMesa(); };
   $('#hab-cancela').addEventListener('click', fimEdicao);
   $('#hab-form').addEventListener('submit', e => {
     e.preventDefault(); const nome = $('#hab-nome').value.trim(), desc = $('#hab-desc').value.trim();
     if (!nome) { $('#hab-nome').focus(); return; }
+    // na mesa online, a habilidade nova é uma proposta ao mestre (editar uma anotação antiga continua local)
+    if (editando < 0 && typeof Jogador === 'object' && Jogador.podePropor()) {
+      const msg = $('#hab-msg'), ok = $('#hab-ok'); msg.hidden = true; ok.disabled = true;
+      Jogador.propor({ nome, desc, efeito: $('#hab-efeito').value, custo: $('#hab-custo').value })
+        .then(() => { fimEdicao(); $('#hab-efeito').value = ''; $('#hab-custo').value = ''; Som.carta(); msg.textContent = 'Proposta enviada. O mestre vai analisar.'; msg.hidden = false; })
+        .catch(er => { msg.textContent = Rede.mensagem(er); msg.hidden = false; })
+        .finally(() => { ok.disabled = false; });
+      return;
+    }
     if (editando >= 0) P.habilidades[editando] = { nome, desc }; else if (P.habilidades.length < 40) P.habilidades.push({ nome, desc });
     salvar(); fimEdicao(); desenharHabs(); if (editando < 0) Som.carta();
   });

@@ -9,7 +9,7 @@
   const hora = t => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const anunciar = t => { const r = $('#anuncio'); if (!r) return; r.textContent = ''; setTimeout(() => { r.textContent = t; }, 30); };
 
-  const S = { user: null, mesa: null, jogadores: [], resultados: [], pendentes: [], sussurros: [], leituras: [], ordens: [], notas: {}, figuras: [], encontro: null, disputas: [], cronica: [], online: new Set(), pararDeOuvir: [], ultimoSecreto: null, fichaAberta: null, fichaGatilho: null };
+  const S = { user: null, mesa: null, jogadores: [], resultados: [], pendentes: [], sussurros: [], leituras: [], ordens: [], notas: {}, figuras: [], encontro: null, disputas: [], cronica: [], bestiario: [], habs: [], habModo: {}, keep: {}, habsCarregadas: false, online: new Set(), pararDeOuvir: [], ultimoSecreto: null, fichaAberta: null, fichaGatilho: null };
   const tela = html => { $('#m-tela').innerHTML = html; if (typeof decorarTudo === 'function') decorarTudo(); };
   const erroEm = (sel, e) => { const el = $(sel); if (el) { el.textContent = Rede.mensagem(e); el.hidden = false; } };
   // desativa o botão enquanto espera o servidor; o foco do teclado volta para ele depois (desativar tira o foco)
@@ -106,7 +106,7 @@
   // ---------- painel da mesa ----------
   async function abrirMesa(m, nova = false) {
     if (!m || !m.id) return listaMesas();
-    S.mesa = m; S.ultimoSecreto = null;
+    S.mesa = m; S.ultimoSecreto = null; S.habs = []; S.habsCarregadas = false; S.habModo = {}; S.keep = {};
     tela(`<div class="m-painel">
       <section class="m-cartao m-cab">
         <button type="button" class="link-remover m-voltar" id="m-voltar">← Suas mesas</button>
@@ -119,9 +119,9 @@
         ${nova ? '<p class="m-ok m-dica">Mesa criada. Os jogadores abrem a Mesa do Destino, aba Testes, e digitam este código.</p>' : ''}
       </section>
       <section class="m-roda" id="m-roda" aria-label="Roda do Destino" hidden></section>
-      <section class="m-cartao m-jog" aria-labelledby="t-jog"><h2 id="t-jog">Jogadores <small id="m-ao-vivo" class="m-vivo">ao vivo</small></h2><div id="m-jogadores" class="m-jogadores"></div></section>
+      <section class="m-cartao m-jog" aria-labelledby="t-jog"><h2 id="t-jog">Jogadores <small id="m-ao-vivo" class="m-vivo">ao vivo</small></h2><div id="m-jogadores" class="m-jogadores"></div><div id="m-propostas" class="hp-fila" aria-label="Pedidos de poder dos jogadores" hidden></div></section>
       <div class="m-lado">
-        <nav class="m-abas" role="tablist" aria-label="Seções do grimório"><button type="button" role="tab" class="m-aba on" id="aba-acoes" data-aba="acoes" aria-controls="p-acoes" aria-selected="true" tabindex="0">Ações</button><button type="button" role="tab" class="m-aba" id="aba-cena" data-aba="cena" aria-controls="p-cena" aria-selected="false" tabindex="-1">Cena</button><button type="button" role="tab" class="m-aba" id="aba-segredos" data-aba="segredos" aria-controls="p-segredos" aria-selected="false" tabindex="-1">Segredos</button><button type="button" role="tab" class="m-aba" id="aba-cronica" data-aba="cronica" aria-controls="p-cronica" aria-selected="false" tabindex="-1">Crônica</button><button type="button" role="tab" class="m-aba" id="aba-dados" data-aba="dados" aria-controls="p-dados" aria-selected="false" tabindex="-1">Dados</button></nav>
+        <nav class="m-abas" role="tablist" aria-label="Seções do grimório"><button type="button" role="tab" class="m-aba on" id="aba-acoes" data-aba="acoes" aria-controls="p-acoes" aria-selected="true" tabindex="0">Ações</button><button type="button" role="tab" class="m-aba" id="aba-cena" data-aba="cena" aria-controls="p-cena" aria-selected="false" tabindex="-1">Cena</button><button type="button" role="tab" class="m-aba" id="aba-bestiario" data-aba="bestiario" aria-controls="p-bestiario" aria-selected="false" tabindex="-1">Bestiário</button><button type="button" role="tab" class="m-aba" id="aba-segredos" data-aba="segredos" aria-controls="p-segredos" aria-selected="false" tabindex="-1">Segredos</button><button type="button" role="tab" class="m-aba" id="aba-cronica" data-aba="cronica" aria-controls="p-cronica" aria-selected="false" tabindex="-1">Crônica</button><button type="button" role="tab" class="m-aba" id="aba-dados" data-aba="dados" aria-controls="p-dados" aria-selected="false" tabindex="-1">Dados</button></nav>
         <div class="m-aba-p" role="tabpanel" id="p-acoes" aria-labelledby="aba-acoes" data-p="acoes">
       <section class="m-cartao m-teste" aria-labelledby="t-teste"><h2 id="t-teste">Teste</h2>
         <form id="m-form-teste" class="m-form" novalidate>
@@ -166,6 +166,9 @@ ${secaoDuelo()}
 ${secaoRoda()}
 ${secaoFiguras()}
         </div>
+        <div class="m-aba-p" role="tabpanel" id="p-bestiario" aria-labelledby="aba-bestiario" data-p="bestiario">
+${secaoBestiario()}
+        </div>
         <div class="m-aba-p" role="tabpanel" id="p-segredos" aria-labelledby="aba-segredos" data-p="segredos">
       <section class="m-cartao m-sus" aria-labelledby="t-sus"><h2 id="t-sus">Sussurros e pistas</h2>
         <form id="m-form-sus" class="m-form" novalidate>
@@ -197,8 +200,8 @@ ${secaoDados()}
     $('#t-rotulo').addEventListener('input', e => { e.target.dataset.auto = ''; });
     $('#m-form-teste').addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#t-aberto'), () => testar('aberto')); });
     $('#t-secreto').addEventListener('click', e => ocupado(e.currentTarget, () => testar('secreto')));
-    ligarFormSussurro(); ligarControle(); ligarAbas(); ligarDuelo(); ligarFiguras(); ligarCronica(); ligarDadosMestre();
-    await Promise.all([carregarJogadores(), carregarResultados(), carregarSussurros(), carregarOrdens(), carregarNotas(), carregarFiguras(), carregarEncontro(), carregarDisputas(), carregarCronica()]);
+    ligarFormSussurro(); ligarControle(); ligarAbas(); ligarDuelo(); ligarFiguras(); ligarCronica(); ligarDadosMestre(); ligarBestiario();
+    await Promise.all([carregarJogadores(), carregarResultados(), carregarSussurros(), carregarOrdens(), carregarNotas(), carregarFiguras(), carregarEncontro(), carregarDisputas(), carregarCronica(), carregarBestiario(), carregarHabs()]);
     ouvirMesa();
   }
 
@@ -266,6 +269,7 @@ ${secaoDados()}
         return `<li class="${principal ? 'cam' : ''}" style="--ac:${a.cor}" title="${a.nome}${t != null ? ` ${t}` : ''}${principal ? ' · atributo do Caminho' : ''}"><span>${a.nome.slice(0, 3)}</span><b>${v == null ? '—' : sinal(v)}</b></li>`; }).join('')}</ul>
       <footer class="m-cj-pe"><span class="m-cj-hora" data-t="${esc(j.atualizado_em || '')}">${haQuanto(j.atualizado_em)}</span>
         <span class="m-cj-nota" title="Você tem uma nota secreta sobre este jogador" ${S.notas && S.notas[j.user_id] && S.notas[j.user_id].texto.trim() ? '' : 'hidden'}>✎ nota secreta</span>
+        ${pendentesDe(j.user_id).length ? `<span class="m-cj-prop" title="Habilidades esperando a sua decisão">✦ ${pendentesDe(j.user_id).length} ${pendentesDe(j.user_id).length === 1 ? 'proposta' : 'propostas'}</span>` : ''}
         <button type="button" class="ghost m-cj-ver" data-u="${esc(j.user_id)}">Ver ficha <span class="sr-only">de ${esc(j.nome)}</span></button></footer>
     </article>`;
   }
@@ -536,12 +540,14 @@ ${secaoDados()}
   // ---------- quem pode entrar em duelo / roda: jogadores e figuras ----------
   const opcoesLados = () => `<optgroup label="Jogadores">${S.jogadores.map(j => `<option value="jogador:${esc(j.user_id)}">${esc(j.nome)}</option>`).join('')}</optgroup>`
     + ((S.figuras || []).length ? `<optgroup label="Figuras da cena">${S.figuras.map(f => `<option value="figura:${esc(f.id)}">${esc(f.nome)}</option>`).join('')}</optgroup>` : '');
+  // figura sem ficha (só bônus) não tem atributo; a que veio do bestiário tem os modificadores dela
+  const semAttr = v => { if (!String(v).startsWith('figura:')) return false; const f = (S.figuras || []).find(x => 'figura:' + x.id === v); return !f || !Object.keys(obj(f.mods)).length; };
   function preencherLados() {
     ['#d-a', '#d-b'].forEach((sel, i) => {
       const el = $(sel); if (!el) return; const atual = el.value;
       el.innerHTML = opcoesLados();
       if ([...el.options].some(o => o.value === atual)) el.value = atual; else if (el.options[i]) el.value = el.options[i].value;
-      const attr = $(sel + '-attr'); if (attr) attr.disabled = el.value.startsWith('figura:');
+      const attr = $(sel + '-attr'); if (attr) attr.disabled = semAttr(el.value);
     });
   }
 
@@ -557,14 +563,14 @@ ${secaoDados()}
       <p class="du-fim">${venc ? `<b>${esc((venc === 'a' ? A : B).nome)}</b> leva a melhor` : '<b>Empate</b> — o mestre decide'}${paraMestre && d.visivel === false ? ' · <i>só você viu</i>' : ''}</p></div>`;
   }
   function ligarDuelo() {
-    ['#d-a', '#d-b'].forEach(sel => $(sel).addEventListener('change', () => { $(sel + '-attr').disabled = $(sel).value.startsWith('figura:'); }));
+    ['#d-a', '#d-b'].forEach(sel => $(sel).addEventListener('change', () => { $(sel + '-attr').disabled = semAttr($(sel).value); }));
     $('#m-form-duelo').addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#d-rolar'), async () => {
       $('#m-erro-duelo').hidden = true;
       const [ta, ia] = ($('#d-a').value || ':').split(':'), [tb, ib] = ($('#d-b').value || ':').split(':');
       if (!ia || !ib) return erroEm('#m-erro-duelo', new Rede.ErroRede('Escolha os dois lados.'));
       if (ta === tb && ia === ib) return erroEm('#m-erro-duelo', new Rede.ErroRede('Escolha dois lados diferentes.'));
       try {
-        const r = await Rede.rpc('mestre', 'disputar', { p_mesa: S.mesa.id, p_rotulo: $('#d-rotulo').value.trim(), p_a_tipo: ta, p_a_id: ia, p_a_attr: ta === 'jogador' ? $('#d-a-attr').value : '', p_b_tipo: tb, p_b_id: ib, p_b_attr: tb === 'jogador' ? $('#d-b-attr').value : '', p_visivel: $('#d-visivel').checked });
+        const r = await Rede.rpc('mestre', 'disputar', { p_mesa: S.mesa.id, p_rotulo: $('#d-rotulo').value.trim(), p_a_tipo: ta, p_a_id: ia, p_a_attr: $('#d-a-attr').disabled ? '' : $('#d-a-attr').value, p_b_tipo: tb, p_b_id: ib, p_b_attr: $('#d-b-attr').disabled ? '' : $('#d-b-attr').value, p_visivel: $('#d-visivel').checked });
         const box = $('#m-duelo-res'); box.innerHTML = duelHTML({ ...r, visivel: $('#d-visivel').checked }); box.classList.remove('vem'); void box.offsetWidth; box.classList.add('vem');
         const A = r.a, B = r.b; anunciar(`${r.rotulo}: ${A.nome} ${A.total}, ${B.nome} ${B.total}`);
         carregarDisputas();
@@ -633,16 +639,17 @@ ${secaoDados()}
   // ---------- Figuras da cena ----------
   async function carregarFiguras() {
     if (!S.mesa) return;
-    try { const r = await (await Rede.tabela('mestre', 'figuras')).select('id,nome,bonus,pv,pv_max,criado_em').eq('mesa_id', S.mesa.id).order('criado_em'); if (r.error) throw r.error; S.figuras = r.data || []; } catch (e) { return; }
+    try { const r = await (await Rede.tabela('mestre', 'figuras')).select('id,nome,bonus,pv,pv_max,ficha_id,mods,defesa,criado_em').eq('mesa_id', S.mesa.id).order('criado_em'); if (r.error) throw r.error; S.figuras = r.data || []; } catch (e) { return; }
     desenharFiguras(); preencherLados(); if (!(S.encontro && S.encontro.ativo)) desenharRoda();
   }
   function desenharFiguras() {
     const l = $('#m-figuras'); if (!l) return;
     l.innerHTML = (S.figuras || []).map(f => {
       const temPV = f.pv_max != null, pv = num(f.pv, 0, 9999), mx = num(f.pv_max, 1, 9999), e = temPV ? estado(pv, mx, EST_PV) : null;
-      return `<li class="m-fig ${e && e.cls === 'zero' ? 'caida' : ''}" data-f="${esc(f.id)}"><div class="fg-id"><b>${esc(f.nome)}</b><small>bônus ${sinal(f.bonus)}${e ? ` · <span class="m-est pv ${e.cls}">${e.txt}</span>` : ''}</small></div>
+      const fb = f.ficha_id && (S.bestiario || []).find(x => x.id === f.ficha_id), im = fb && imgOk(fb.imagem);
+      return `<li class="m-fig ${e && e.cls === 'zero' ? 'caida' : ''} ${fb ? 'com-ficha' : ''}" data-f="${esc(f.id)}">${fb ? `<span class="fg-ret">${im ? `<img src="${im}" alt="">` : sombra(fb.nome)}</span>` : ''}<div class="fg-id"><b>${esc(f.nome)}</b><small>${fb ? `${esc(txt(fb.tipo, 40) || 'Criatura')} · ` : ''}inic. ${sinal(f.bonus)}${f.defesa != null ? ` · def ${num(f.defesa, 0, 99)}` : ''}${e ? ` · <span class="m-est pv ${e.cls}">${e.txt}</span>` : ''}</small></div>
         ${temPV ? `<div class="fg-pv">${barra('PV', pv, mx, '#e05a6a')}<div class="fg-bts" role="group" aria-label="PV de ${esc(f.nome)}">${[-5, -1, 1, 5].map(d => `<button type="button" class="c-chip fg-d" data-d="${d}" aria-label="${d < 0 ? 'Tirar' : 'Dar'} ${Math.abs(d)} PV de ${esc(f.nome)}">${d < 0 ? '−' : '+'}${Math.abs(d)}</button>`).join('')}</div></div>` : ''}
-        <button type="button" class="link-remover fg-x">Dispensar<span class="sr-only"> ${esc(f.nome)}</span></button></li>`;
+        ${fb ? `<button type="button" class="ghost fg-ficha" data-ic="livro">Ficha<span class="sr-only"> de ${esc(f.nome)}</span></button>` : ''}<button type="button" class="link-remover fg-x">Dispensar<span class="sr-only"> ${esc(f.nome)}</span></button></li>`;
     }).join('') || '<li class="hint m-vazio">Nenhuma figura. Lobos, cultistas, um bispo suspeito: chame quem estiver em cena.</li>';
     l.querySelectorAll('.m-fig').forEach(li => {
       const f = S.figuras.find(x => x.id === li.dataset.f); if (!f) return;
@@ -651,6 +658,7 @@ ${secaoDados()}
         try { const r = await (await Rede.tabela('mestre', 'figuras')).update({ pv: novo }).eq('id', f.id); if (r.error) throw r.error; } catch (e) { erroEm('#m-erro-fig', e); carregarFiguras(); }
         const de = document.querySelector(`.m-fig[data-f="${CSS.escape(f.id)}"] .fg-d[data-d="${b.dataset.d}"]`); if (de) de.focus();
       }));
+      const fbt = li.querySelector('.fg-ficha'); if (fbt) fbt.addEventListener('click', () => abrirCriatura(f.ficha_id, fbt, f.nome));
       li.querySelector('.fg-x').addEventListener('click', async () => {
         try { const r = await (await Rede.tabela('mestre', 'figuras')).delete().eq('id', f.id); if (r.error) throw r.error; anunciar(f.nome + ' sai de cena'); carregarFiguras(); } catch (e) { erroEm('#m-erro-fig', e); }
       });
@@ -754,6 +762,344 @@ ${secaoDados()}
     });
   }
 
+  // =====================================================================================================
+  // BESTIÁRIO (criaturas prontas do mestre, valem em todas as mesas dele) e HABILIDADES DA MESA (conceder e aprovar)
+  // =====================================================================================================
+  const PERIGO = ['Incômodo', 'Ameaça', 'Perigoso', 'Mortal', 'Calamidade'];
+  const IMG_OK = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/;
+  const imgOk = v => typeof v === 'string' && IMG_OK.test(v) ? v : '';
+  const lista = v => Array.isArray(v) ? v : [];
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const modDe = (mods, k) => num(obj(mods)[k], -10, 20) || 0;
+  const olhos = n => `<span class="bs-perigo" role="img" aria-label="Perigo ${n} de 5: ${PERIGO[n - 1]}">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}<b aria-hidden="true">${PERIGO[n - 1]}</b></span>`;
+  const sombra = nome => `<span class="bs-sombra" aria-hidden="true">${esc(txt(nome, 1).toUpperCase() || '?')}</span>`;
+  // "2d6+3", "1d8 de dano", "d20 - 1": o primeiro dado escrito no efeito vira botão de rolar
+  const DADO_RX = /(\d{0,2})d(\d{1,3})(?:\s*([+\-−])\s*(\d{1,3}))?/i;
+  function rolarEfeito(ef) {
+    const m = DADO_RX.exec(ef || ''); if (!m) return null;
+    const q = Math.max(1, Math.min(20, +m[1] || 1)), l = Math.max(2, Math.min(100, +m[2])), mo = m[3] ? (m[3] === '+' ? 1 : -1) * +m[4] : 0;
+    const vs = Array.from({ length: q }, () => rolarLocal(l));
+    return { rot: `${q}d${l}${mo ? sinal(mo) : ''}`, vs, mo, total: Math.max(0, vs.reduce((a, b) => a + b, 0) + mo) };
+  }
+  // janela modal com foco preso (Esc e clique fora fecham; o foco volta para quem abriu)
+  function janela(id, cls, html, gatilho, aoFechar) {
+    const velha = document.getElementById(id); if (velha) velha.remove();
+    const fundo = document.createElement('div'); fundo.className = 'm-ficha-fundo ' + cls; fundo.id = id; fundo.innerHTML = html;
+    document.body.appendChild(fundo); document.body.classList.add('m-com-ficha');
+    const fechar = (devolver = true) => { if (!fundo.isConnected) return; fundo.remove(); if (!document.querySelector('.m-ficha-fundo')) document.body.classList.remove('m-com-ficha'); if (aoFechar) aoFechar(); if (devolver && gatilho && gatilho.isConnected) gatilho.focus(); };
+    fundo.addEventListener('mousedown', e => { if (e.target === fundo) fechar(); });
+    fundo.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { e.preventDefault(); fechar(); return; }
+      if (e.key !== 'Tab') return;
+      const foc = [...fundo.querySelectorAll('button,[href],input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')].filter(x => !x.disabled && x.offsetParent);
+      if (!foc.length) return; const a = foc[0], z = foc[foc.length - 1];
+      if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); } else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+    });
+    if (typeof decorarTudo === 'function') decorarTudo();
+    return { fundo, fechar };
+  }
+
+  function secaoBestiario() {
+    return `<section class="m-cartao m-bes" aria-labelledby="t-bes"><h2 id="t-bes">Bestiário ${sub('suas criaturas · valem em todas as mesas')}</h2>
+      <div class="bs-barra"><label class="sr-only" for="bs-busca">Procurar no bestiário</label><input type="search" id="bs-busca" placeholder="Procurar criatura ou tipo…" autocomplete="off">
+        <button type="button" class="primary" id="bs-nova" data-ic="mais">Nova criatura</button></div>
+      <p class="m-erro" id="m-erro-bes" role="alert" hidden></p>
+      <ul id="m-bestiario" class="bs-grade" aria-label="Criaturas do bestiário"></ul></section>`;
+  }
+  function ligarBestiario() {
+    $('#bs-nova').addEventListener('click', e => editarCriatura(null, e.currentTarget));
+    $('#bs-busca').addEventListener('input', desenharBestiario);
+  }
+  async function carregarBestiario() {
+    try { const r = await (await Rede.tabela('mestre', 'bestiario')).select('*').order('nome'); if (r.error) throw r.error; S.bestiario = r.data || []; } catch (e) { return; }
+    desenharBestiario(); desenharFiguras();
+  }
+  function desenharBestiario() {
+    const l = $('#m-bestiario'); if (!l) return;
+    const q = norm(($('#bs-busca') || {}).value);
+    const vis = (S.bestiario || []).filter(b => !q || norm(b.nome + ' ' + (b.tipo || '')).includes(q));
+    l.innerHTML = vis.map(b => { const p = num(b.perigo, 1, 5) || 1, im = imgOk(b.imagem);
+      return `<li class="bs-carta p${p}" data-b="${esc(b.id)}">
+        <div class="bs-retrato">${im ? `<img src="${im}" alt="">` : sombra(b.nome)}</div>
+        <div class="bs-corpo"><small class="bs-tipo">${esc(txt(b.tipo, 60) || 'Criatura')}</small><b class="bs-nome">${esc(b.nome)}</b>${olhos(p)}
+          <p class="bs-num">${b.pv_max != null ? `<span><i>PV</i>${num(b.pv_max, 1, 9999)}</span>` : ''}${b.defesa != null ? `<span><i>Def</i>${num(b.defesa, 0, 99)}</span>` : ''}<span><i>Inic</i>${sinal(modDe(b.mods, 'agil'))}</span><span><i>Poderes</i>${lista(b.habilidades).length}</span></p></div>
+        <div class="bs-acoes"><button type="button" class="primary bs-chamar" data-ic="mais">Chamar<span class="sr-only"> ${esc(b.nome)} à cena</span></button><button type="button" class="ghost bs-ver" data-ic="livro">Ficha<span class="sr-only"> de ${esc(b.nome)}</span></button><button type="button" class="ghost bs-revelar" data-ic="olho">Revelar<span class="sr-only"> ${esc(b.nome)} aos jogadores</span></button></div></li>`;
+    }).join('') || `<li class="hint m-vazio">${q ? 'Nenhuma criatura com esse nome.' : 'O bestiário está vazio. Crie a primeira criatura: um lobo de olhos de vidro, um cultista da Aurora, o espectro do cais.'}</li>`;
+    l.querySelectorAll('.bs-carta').forEach(li => {
+      const b = S.bestiario.find(x => x.id === li.dataset.b); if (!b) return;
+      li.querySelector('.bs-chamar').addEventListener('click', e => ocupado(e.currentTarget, () => chamarCriatura(b, '#m-erro-bes')));
+      li.querySelector('.bs-ver').addEventListener('click', e => abrirCriatura(b.id, e.currentTarget));
+      li.querySelector('.bs-revelar').addEventListener('click', e => { const bt = e.currentTarget; ocupado(bt, () => revelarCriatura(b, '#m-erro-bes')); });
+    });
+  }
+  // a criatura entra na cena como figura: PV cheio, iniciativa = Agilidade, modificadores para o Duelo ("Lobo", "Lobo 2"…)
+  async function chamarCriatura(b, erroSel) {
+    const e0 = $(erroSel); if (e0) e0.hidden = true;
+    const usados = new Set((S.figuras || []).map(f => f.nome)); let nome = txt(b.nome, 40), n = 1;
+    while (usados.has(nome)) nome = `${txt(b.nome, 36).trim()} ${++n}`;
+    const pv = b.pv_max != null ? num(b.pv_max, 1, 9999) : null;
+    try {
+      const r = await (await Rede.tabela('mestre', 'figuras')).insert({ mesa_id: S.mesa.id, nome, bonus: modDe(b.mods, 'agil'), pv, pv_max: pv, ficha_id: b.id, mods: obj(b.mods), defesa: b.defesa == null ? null : num(b.defesa, 0, 99) }).select('id');
+      if (r.error) throw r.error;
+      anunciar(nome + ' entra em cena'); await carregarFiguras(); return true;
+    } catch (e) { erroEm(erroSel, e); return false; }
+  }
+  // revelar = um sussurro para todos com o retrato, o nome e a descrição (números e notas ficam com o mestre)
+  async function revelarCriatura(b, erroSel) {
+    const e0 = $(erroSel); if (e0) e0.hidden = true;
+    if (!S.jogadores.length) return erroEm(erroSel, new Rede.ErroRede('Ninguém na mesa para ver a criatura.'));
+    const ok2 = await confirmar({ titulo: `Revelar ${b.nome} aos jogadores?`, texto: 'Todos recebem o retrato, o nome e a descrição. Números, poderes e suas notas ficam só com você.', botao: 'Revelar' });
+    if (!ok2) return;
+    try {
+      await Rede.rpc('mestre', 'sussurrar', { p_mesa: S.mesa.id, p_para: null, p_titulo: txt(b.nome, 80), p_texto: txt(b.descricao, 1000) || 'Algo surge diante de vocês.', p_imagem: imgOk(b.imagem) || null });
+      anunciar(b.nome + ' foi revelada aos jogadores'); carregarSussurros();
+    } catch (e) { erroEm(erroSel, e); }
+  }
+
+  // ---------- ficha da criatura (leitura, rolar poderes, dano direto nos jogadores) ----------
+  function abrirCriatura(id, gatilho, figNome) {
+    const b = (S.bestiario || []).find(x => x.id === id); if (!b) return;
+    const p = num(b.perigo, 1, 5) || 1, im = imgOk(b.imagem), hs = lista(b.habilidades).map(obj).filter(h => txt(h.nome)), quem = figNome || b.nome;
+    const { fundo, fechar } = janela('m-criatura', 'bs-fundo', `<section class="bs-ficha p${p}" role="dialog" aria-modal="true" aria-labelledby="bf-nome" tabindex="-1">
+      <button type="button" class="icon bf-x" aria-label="Fechar a ficha da criatura">✕</button>
+      <div class="bf-cab">
+        <figure class="bf-retrato">${im ? `<img src="${im}" alt="Retrato de ${esc(b.nome)}">` : sombra(b.nome)}</figure>
+        <div class="bf-id"><small class="bf-tipo">${esc(txt(b.tipo, 60) || 'Criatura')}${figNome ? ` · <i>em cena como ${esc(figNome)}</i>` : ''}</small><h2 id="bf-nome">${esc(b.nome)}</h2>${olhos(p)}
+          <dl class="bf-vit">${b.pv_max != null ? `<div><dt>PV</dt><dd>${num(b.pv_max, 1, 9999)}</dd></div>` : ''}${b.defesa != null ? `<div><dt>Defesa</dt><dd>${num(b.defesa, 0, 99)}</dd></div>` : ''}<div><dt>Iniciativa</dt><dd>${sinal(modDe(b.mods, 'agil'))}</dd></div></dl>
+          ${txt(b.horror) ? `<p class="bf-horror"><span>Horror</span> ${esc(txt(b.horror, 120))}</p>` : ''}</div>
+      </div>
+      <ul class="bf-attrs" aria-label="Modificadores">${ATTRS.map(a => `<li style="--ac:${a.cor}"><span>${a.nome}</span><b>${sinal(modDe(b.mods, a.key))}</b></li>`).join('')}</ul>
+      <section class="bf-bloco"><h3>Poderes</h3>${hs.length ? `<ol class="bf-hab">${hs.map((h, i) => `<li data-i="${i}"><div class="bf-h-txt"><b>${esc(txt(h.nome, 60))}</b>${txt(h.efeito) ? `<em>${esc(txt(h.efeito, 60))}</em>` : ''}${txt(h.desc) ? `<p>${esc(txt(h.desc, 400))}</p>` : ''}</div>
+        ${DADO_RX.test(txt(h.efeito)) ? `<button type="button" class="ghost bf-rolar" id="bf-rolar-${i}" data-i="${i}" data-ic="dado">Rolar<span class="sr-only"> ${esc(txt(h.nome, 60))}</span></button>` : ''}<div class="bf-res" id="bf-res-${i}" role="status" aria-live="polite"></div></li>`).join('')}</ol>` : '<p class="hint">Sem poderes anotados.</p>'}</section>
+      ${txt(b.descricao) ? `<section class="bf-bloco"><h3>O que os jogadores veem</h3><p class="bf-desc">${esc(txt(b.descricao, 1000))}</p></section>` : ''}
+      ${txt(b.notas) ? `<section class="bf-bloco bf-segredo"><h3>Notas secretas <i>só você vê</i></h3><p class="bf-desc">${esc(txt(b.notas, 1500))}</p></section>` : ''}
+      <p class="m-erro" id="bf-erro" role="alert" hidden></p>
+      <footer class="bf-pe"><button type="button" class="primary" id="bf-chamar" data-ic="mais">Chamar à cena</button><button type="button" class="ghost" id="bf-revelar" data-ic="olho">Revelar aos jogadores</button>
+        <button type="button" class="ghost" id="bf-editar" data-ic="ajuste">Editar</button><button type="button" class="link-remover" id="bf-apagar">Apagar do bestiário</button></footer></section>`, gatilho);
+    fundo.querySelector('.bf-x').addEventListener('click', () => fechar());
+    fundo.querySelectorAll('.bf-rolar').forEach(bt => bt.addEventListener('click', () => {
+      const i = +bt.dataset.i, h = hs[i], r = rolarEfeito(h.efeito); if (!r) return;
+      const box = fundo.querySelector('#bf-res-' + i); box.classList.remove('vem'); void box.offsetWidth; box.classList.add('vem');
+      box.innerHTML = `<span class="bf-tot">${r.total}</span><small>${esc(r.rot)} · ${r.vs.join(' + ')}${r.mo ? ' ' + sinal(r.mo) : ''}</small>
+        ${S.jogadores.length ? `<span class="bf-aplicar"><label class="sr-only" for="bf-alvo-${i}">Em quem</label><select id="bf-alvo-${i}">${S.jogadores.map(j => `<option value="${esc(j.user_id)}">${esc(j.nome)}</option>`).join('')}</select>
+          <button type="button" class="ghost c-dano bf-pv" id="bf-pv-${i}">Ferir</button><button type="button" class="ghost bf-san" id="bf-san-${i}">Abalar a mente</button></span>` : ''}`;
+      anunciar(`${h.nome}: ${r.total}`);
+      const aplicar = (tipo, botao) => ocupado(botao, async () => {
+        const para = fundo.querySelector('#bf-alvo-' + i).value;
+        try { await Rede.rpc('mestre', 'ordenar', { p_mesa: S.mesa.id, p_para: para, p_tipo: tipo, p_valor: -Math.max(1, r.total), p_motivo: txt(`${quem}: ${h.nome}`, 80) }); botao.textContent = 'Feito'; anunciar(`${nomeDe(para)} ${tipo === 'pv' ? 'perde ' + r.total + ' PV' : 'perde ' + r.total + ' de Sanidade'}`); carregarOrdens(); }
+        catch (e) { erroEm('#bf-erro', e); }
+      });
+      const bp = box.querySelector('.bf-pv'), bs = box.querySelector('.bf-san');
+      if (bp) bp.addEventListener('click', () => aplicar('pv', bp)); if (bs) bs.addEventListener('click', () => aplicar('san', bs));
+    }));
+    fundo.querySelector('#bf-chamar').addEventListener('click', e => ocupado(e.currentTarget, async () => { if (await chamarCriatura(b, '#bf-erro')) { fechar(false); irParaAba('cena'); const f = $('#m-figuras'); if (f) f.scrollIntoView({ block: 'nearest' }); } }));
+    fundo.querySelector('#bf-revelar').addEventListener('click', e => ocupado(e.currentTarget, () => revelarCriatura(b, '#bf-erro')));
+    fundo.querySelector('#bf-editar').addEventListener('click', () => { fechar(false); editarCriatura(b, gatilho); });
+    fundo.querySelector('#bf-apagar').addEventListener('click', async () => {
+      const ok2 = await confirmar({ titulo: `Apagar ${b.nome} do bestiário?`, texto: 'A ficha some de todas as suas mesas. As figuras que já estão em cena continuam, só sem a ficha.', botao: 'Apagar', perigo: true });
+      if (!ok2) return;
+      try { const r = await (await Rede.tabela('mestre', 'bestiario')).delete().eq('id', b.id); if (r.error) throw r.error; fechar(false); anunciar(b.nome + ' saiu do bestiário'); await carregarBestiario(); carregarFiguras(); const nv = $('#bs-nova'); if (nv) nv.focus(); }
+      catch (e) { erroEm('#bf-erro', e); }
+    });
+    fundo.querySelector('.bf-x').focus();
+  }
+
+  // ---------- criar / editar uma criatura ----------
+  function editarCriatura(b0, gatilho) {
+    const novo = !b0, b = b0 || { nome: '', tipo: '', perigo: 2, pv_max: null, defesa: null, horror: '', mods: {}, habilidades: [], descricao: '', notas: '', imagem: null };
+    let imagem = imgOk(b.imagem) || null;
+    const habs = lista(b.habilidades).map(obj).map(h => ({ nome: txt(h.nome, 60), efeito: txt(h.efeito, 60), desc: txt(h.desc, 400) }));
+    const v = x => esc(x == null ? '' : x);
+    const { fundo, fechar } = janela('m-bes-editor', 'bs-fundo', `<section class="bs-editor" role="dialog" aria-modal="true" aria-labelledby="be-tit" tabindex="-1"><form id="be-form" novalidate>
+      <button type="button" class="icon bf-x" aria-label="Fechar sem salvar">✕</button>
+      <small class="bf-tipo">Bestiário</small><h2 id="be-tit">${novo ? 'Nova criatura' : 'Editar ' + esc(b.nome)}</h2>
+      <div class="be-topo">
+        <div class="be-retrato"><div class="be-img" id="be-img"></div>
+          <div class="s-escolher"><input type="file" id="be-arq" accept="image/*" class="s-arquivo" aria-label="Escolher retrato da criatura"><span class="s-botao" aria-hidden="true">Escolher retrato</span></div>
+          <button type="button" class="link-remover" id="be-tirar">Tirar retrato</button></div>
+        <div class="m-grade be-grade">
+          <div class="m-campo m-largo"><label for="be-nome">Nome</label><input type="text" id="be-nome" maxlength="60" value="${v(b.nome)}" placeholder="Ex.: Lobo de olhos de vidro" autocomplete="off"></div>
+          <div class="m-campo m-largo"><label for="be-tipo">Tipo <i>(opcional)</i></label><input type="text" id="be-tipo" maxlength="60" value="${v(b.tipo)}" placeholder="Ex.: Fera corrompida · Beyonder Seq. 8" autocomplete="off"></div>
+          <fieldset class="m-campo m-largo be-perigo"><legend>Perigo</legend><div class="be-olhos">${PERIGO.map((t, i) => `<label><input type="radio" name="be-perigo" value="${i + 1}" ${(num(b.perigo, 1, 5) || 2) === i + 1 ? 'checked' : ''}><span><i aria-hidden="true"></i>${t}</span></label>`).join('')}</div></fieldset>
+          <div class="m-campo"><label for="be-pv">PV</label><input type="number" id="be-pv" min="1" max="9999" value="${v(b.pv_max)}" placeholder="opcional" inputmode="numeric"></div>
+          <div class="m-campo"><label for="be-def">Defesa</label><input type="number" id="be-def" min="0" max="99" value="${v(b.defesa)}" placeholder="opcional" inputmode="numeric"></div>
+        </div>
+      </div>
+      <fieldset class="be-mods"><legend>Modificadores <i>usados no Duelo · Agilidade é a iniciativa</i></legend>
+        ${ATTRS.map(a => `<div class="m-campo" style="--ac:${a.cor}"><label for="be-m-${a.key}">${a.nome}</label><input type="number" id="be-m-${a.key}" min="-10" max="20" value="${modDe(b.mods, a.key)}" inputmode="numeric"></div>`).join('')}</fieldset>
+      <div class="m-campo"><label for="be-horror">Horror <i>(opcional: o que ver a criatura causa)</i></label><input type="text" id="be-horror" maxlength="120" value="${v(b.horror)}" placeholder="Ex.: Quem a encara perde 1d4 de Sanidade" autocomplete="off"></div>
+      <fieldset class="be-habs"><legend>Poderes <i>até 12 · um dado no efeito (2d6+3) vira botão de rolar</i></legend><ol id="be-habs"></ol>
+        <button type="button" class="ghost" id="be-hab-mais" data-ic="mais">Adicionar poder</button></fieldset>
+      <div class="m-campo"><label for="be-desc">O que os jogadores veem <i>(vai junto quando você revela)</i></label><textarea id="be-desc" maxlength="1000" rows="3" placeholder="Pelagem empapada de névoa, olhos que refletem a luz como vidro de lampião…">${v(b.descricao)}</textarea></div>
+      <div class="m-campo"><label for="be-notas">Notas secretas <i>(só você: táticas, fraquezas, segredos)</i></label><textarea id="be-notas" maxlength="1500" rows="3" placeholder="Foge do fogo. Obedece a quem segura o apito de osso.">${v(b.notas)}</textarea></div>
+      <p class="m-erro" id="be-erro" role="alert" hidden></p>
+      <div class="m-acoes"><button type="submit" class="primary" id="be-salvar">${novo ? 'Guardar no bestiário' : 'Salvar'}</button><button type="button" class="ghost" id="be-cancelar">Cancelar</button></div></form></section>`, gatilho);
+    const forma = fundo.querySelector('form');
+    const desenharImg = () => { fundo.querySelector('#be-img').innerHTML = imagem ? `<img src="${imagem}" alt="Retrato escolhido">` : `${sombra(fundo.querySelector('#be-nome').value || b.nome)}<small>sem retrato</small>`; fundo.querySelector('#be-tirar').hidden = !imagem; };
+    const desenharHabs = foco => {
+      const ol = fundo.querySelector('#be-habs');
+      ol.innerHTML = habs.map((h, i) => `<li class="be-hab" data-i="${i}"><span class="be-n" aria-hidden="true">${i + 1}</span>
+        <div class="m-campo"><label for="be-h-nome-${i}">Nome do poder ${i + 1}</label><input type="text" id="be-h-nome-${i}" data-k="nome" data-i="${i}" maxlength="60" value="${v(h.nome)}" placeholder="Ex.: Mordida de névoa" autocomplete="off"></div>
+        <div class="m-campo"><label for="be-h-efeito-${i}">Efeito</label><input type="text" id="be-h-efeito-${i}" data-k="efeito" data-i="${i}" maxlength="60" value="${v(h.efeito)}" placeholder="Ex.: 2d6+2 de dano" autocomplete="off"></div>
+        <div class="m-campo be-h-desc"><label for="be-h-desc-${i}">Como funciona</label><input type="text" id="be-h-desc-${i}" data-k="desc" data-i="${i}" maxlength="400" value="${v(h.desc)}" placeholder="Ex.: Ignora armadura de couro" autocomplete="off"></div>
+        <button type="button" class="link-remover be-h-x" data-i="${i}">Tirar<span class="sr-only"> o poder ${i + 1}</span></button></li>`).join('') || '<li class="hint m-vazio">Nenhum poder. Mordidas, maldições, gritos que racham a mente…</li>';
+      ol.querySelectorAll('input[data-k]').forEach(inp => inp.addEventListener('input', () => { habs[+inp.dataset.i][inp.dataset.k] = inp.value; }));
+      ol.querySelectorAll('.be-h-x').forEach(bt => bt.addEventListener('click', () => { habs.splice(+bt.dataset.i, 1); desenharHabs(); fundo.querySelector('#be-hab-mais').focus(); }));
+      fundo.querySelector('#be-hab-mais').disabled = habs.length >= 12;
+      if (foco != null) { const f = ol.querySelector('#be-h-nome-' + foco); if (f) f.focus(); }
+    };
+    desenharImg(); desenharHabs();
+    fundo.querySelector('#be-hab-mais').addEventListener('click', () => { if (habs.length < 12) { habs.push({ nome: '', efeito: '', desc: '' }); desenharHabs(habs.length - 1); } });
+    fundo.querySelector('#be-arq').addEventListener('change', async e => {
+      const arq = e.target.files && e.target.files[0]; if (!arq) return; fundo.querySelector('#be-erro').hidden = true;
+      try { imagem = await comprimirImagem(arq); desenharImg(); } catch (er) { erroEm('#be-erro', er); } e.target.value = '';
+    });
+    fundo.querySelector('#be-tirar').addEventListener('click', () => { imagem = null; desenharImg(); fundo.querySelector('#be-arq').focus(); });
+    fundo.querySelector('.bf-x').addEventListener('click', () => fechar());
+    fundo.querySelector('#be-cancelar').addEventListener('click', () => fechar());
+    forma.addEventListener('submit', ev => { ev.preventDefault(); ocupado(fundo.querySelector('#be-salvar'), async () => {
+      fundo.querySelector('#be-erro').hidden = true;
+      const val = id => fundo.querySelector(id).value.trim(), nome = val('#be-nome'), pvT = val('#be-pv'), defT = val('#be-def');
+      const falha = (m, sel) => { erroEm('#be-erro', new Rede.ErroRede(m)); if (sel) fundo.querySelector(sel).focus(); };
+      if (!nome) return falha('Dê um nome à criatura.', '#be-nome');
+      const pv = pvT ? num(pvT, 1, 9999) : null, def = defT ? num(defT, 0, 99) : null;
+      if (pvT && (pv == null || +pvT < 1)) return falha('PV vai de 1 a 9999.', '#be-pv');
+      if (defT && def == null) return falha('Defesa vai de 0 a 99.', '#be-def');
+      const mods = Object.fromEntries(ATTRS.map(a => [a.key, num(fundo.querySelector('#be-m-' + a.key).value, -10, 20) || 0]));
+      const dados = { nome, tipo: val('#be-tipo') || null, perigo: +((fundo.querySelector('input[name=be-perigo]:checked') || {}).value || 2), pv_max: pv, defesa: def,
+        horror: val('#be-horror') || null, mods, habilidades: habs.map(h => ({ nome: h.nome.trim().slice(0, 60), efeito: h.efeito.trim().slice(0, 60), desc: h.desc.trim().slice(0, 400) })).filter(h => h.nome),
+        descricao: val('#be-desc') || null, notas: val('#be-notas') || null, imagem };
+      try {
+        const t = await Rede.tabela('mestre', 'bestiario');
+        const r = novo ? await t.insert(dados).select('id') : await t.update(dados).eq('id', b.id);
+        if (r.error) throw r.error;
+        fechar(false); anunciar(nome + (novo ? ' entrou no bestiário' : ' foi atualizada')); await carregarBestiario();
+        const id = novo ? (r.data && r.data[0] && r.data[0].id) : b.id, alvo = id && document.querySelector(`.bs-carta[data-b="${CSS.escape(id)}"] .bs-ver`);
+        (alvo || $('#bs-nova') || document.body).focus();
+      } catch (e) { erroEm('#be-erro', e); }
+    }); });
+    fundo.querySelector('#be-nome').focus();
+  }
+
+  // ---------- habilidades da mesa: o mestre concede e edita; o jogador propõe e o mestre decide ----------
+  const pendentesDe = uid => (S.habs || []).filter(h => h.estado === 'pendente' && (!uid || h.user_id === uid));
+  function linhaNivel(uid) {
+    const j = S.jogadores.find(x => x.user_id === uid); if (!j) return '';
+    const f = fichaDe(j), n = (S.habs || []).filter(h => h.user_id === uid && h.estado === 'aprovada').length;
+    return [linhaSeq(f), txt(f.caminho, 40) ? 'Caminho ' + txt(f.caminho, 40) : '', `${n} ${n === 1 ? 'habilidade aprovada' : 'habilidades aprovadas'}`].filter(Boolean).join(' · ');
+  }
+  async function carregarHabs() {
+    if (!S.mesa) return; let novas = [];
+    try {
+      const r = await (await Rede.tabela('mestre', 'habilidades')).select('*').eq('mesa_id', S.mesa.id).order('criado_em'); if (r.error) throw r.error;
+      const antes = new Set((S.habs || []).map(h => h.id)); S.habs = r.data || [];
+      if (S.habsCarregadas) novas = S.habs.filter(h => h.estado === 'pendente' && !antes.has(h.id)); S.habsCarregadas = true;
+    } catch (e) { return; }
+    desenharJogadores(); desenharPropostas();
+    if (novas.length) { anunciar(`${nomeDe(novas[0].user_id)} propõe uma habilidade: ${novas[0].nome}`); const c = $('#m-propostas'); if (c) { c.classList.remove('chegou'); void c.offsetWidth; c.classList.add('chegou'); } }
+  }
+  const corpoHab = h => `${txt(h.descricao) ? `<p class="hp-desc">${esc(txt(h.descricao, 600))}</p>` : ''}${txt(h.efeito) || txt(h.custo) ? `<p class="hp-tags">${txt(h.efeito) ? `<span><i>Efeito</i>${esc(txt(h.efeito, 60))}</span>` : ''}${txt(h.custo) ? `<span><i>Custo</i>${esc(txt(h.custo, 60))}</span>` : ''}</p>` : ''}`;
+  // campos de habilidade; o que foi digitado sobrevive às atualizações ao vivo (S.keep)
+  function camposHab(k, h = {}) {
+    const val = (c, d) => esc(S.keep[k + c] ?? d ?? '');
+    return `<div class="m-grade hp-campos">
+      <div class="m-campo m-largo"><label for="${k}-nome">Nome</label><input type="text" id="${k}-nome" data-keep="${k}nome" maxlength="60" value="${val('nome', h.nome)}" placeholder="Ex.: Passo sem sombra" autocomplete="off"></div>
+      <div class="m-campo"><label for="${k}-efeito">Efeito <i>(ex.: 2d6 de dano)</i></label><input type="text" id="${k}-efeito" data-keep="${k}efeito" maxlength="60" value="${val('efeito', h.efeito)}" autocomplete="off"></div>
+      <div class="m-campo"><label for="${k}-custo">Custo <i>(ex.: 3 de Espiritualidade)</i></label><input type="text" id="${k}-custo" data-keep="${k}custo" maxlength="60" value="${val('custo', h.custo)}" autocomplete="off"></div>
+      <div class="m-campo m-largo"><label for="${k}-desc">O que faz</label><textarea id="${k}-desc" data-keep="${k}desc" maxlength="600" rows="3">${val('desc', h.descricao)}</textarea></div></div>`;
+  }
+  const lerCampos = (raiz, k) => { const v = c => ((raiz.querySelector('#' + CSS.escape(k + '-' + c)) || {}).value || '').trim(); return { nome: v('nome').slice(0, 60), efeito: v('efeito').slice(0, 60) || null, custo: v('custo').slice(0, 60) || null, descricao: v('desc').slice(0, 600) || null }; };
+  const esquecer = k => Object.keys(S.keep).forEach(x => { if (x.startsWith(k)) delete S.keep[x]; });
+  // proposta do jogador: Aprovar · Modificar (e aprovar) · Rejeitar com motivo. pre: 'q' (fila) ou 'f' (ficha), para os ids não repetirem
+  function propostaHTML(h, pre) {
+    const k = pre + h.id, modo = S.habModo[h.id] || '', val = (c, d) => esc(S.keep[k + c] ?? d ?? '');
+    const cab = `<header class="hp-cab"><span class="hp-selo" aria-hidden="true"></span><div><small>${esc(nomeDe(h.user_id))} propõe · ${esc(haQuanto(h.criado_em))}</small><b>${esc(h.nome)}</b><span class="hp-nivel">${esc(linhaNivel(h.user_id))}</span></div></header>`;
+    const erro = `<p class="m-erro hp-erro" role="alert" hidden></p>`;
+    if (modo === 'mudar') return `<article class="hp-prop mudando" data-h="${esc(h.id)}" data-k="${esc(k)}">${cab}${camposHab(k, h)}
+      <div class="m-campo"><label for="${k}-resp">Recado para o jogador <i>(opcional)</i></label><input type="text" id="${k}-resp" data-keep="${k}resp" maxlength="300" value="${val('resp', '')}" placeholder="Ex.: Forte demais para a Sequência 9: reduzi o dano." autocomplete="off"></div>${erro}
+      <div class="hp-acoes"><button type="button" class="primary hp-ok-mudar" id="${k}-okm">Aprovar com mudanças</button><button type="button" class="ghost hp-voltar" id="${k}-volta">Voltar</button></div></article>`;
+    if (modo === 'rejeitar') return `<article class="hp-prop rejeitando" data-h="${esc(h.id)}" data-k="${esc(k)}">${cab}${corpoHab(h)}
+      <div class="m-campo"><label for="${k}-mot">Motivo <i>(o jogador vê; opcional)</i></label><input type="text" id="${k}-mot" data-keep="${k}mot" maxlength="300" value="${val('mot', '')}" placeholder="Ex.: Isso não combina com o Caminho do Vidente." autocomplete="off"></div>${erro}
+      <div class="hp-acoes"><button type="button" class="ghost c-dano hp-ok-rej" id="${k}-okr">Rejeitar</button><button type="button" class="ghost hp-voltar" id="${k}-volta">Voltar</button></div></article>`;
+    return `<article class="hp-prop" data-h="${esc(h.id)}" data-k="${esc(k)}">${cab}${corpoHab(h)}${erro}
+      <div class="hp-acoes"><button type="button" class="primary hp-aprovar" id="${k}-apr">Aprovar</button><button type="button" class="ghost hp-mudar" id="${k}-mud" data-ic="ajuste">Modificar</button><button type="button" class="ghost c-dano hp-rejeitar" id="${k}-rej">Rejeitar</button></div></article>`;
+  }
+  async function mudarHab(id, valores, botao, el) {
+    await ocupado(botao, async () => {
+      try { const r = await (await Rede.tabela('mestre', 'habilidades')).update(valores).eq('id', id); if (r.error) throw r.error; }
+      catch (e) { const er = el && el.querySelector('.hp-erro'); if (er) { er.textContent = Rede.mensagem(e); er.hidden = false; } throw e; }
+    });
+  }
+  function ligarPropostas(raiz) {
+    raiz.querySelectorAll('.hp-prop').forEach(el => {
+      const h = (S.habs || []).find(x => x.id === el.dataset.h); if (!h) return;
+      const k = el.dataset.k, redesenhar = foco => { redesenharHabs(); const f = foco && document.getElementById(foco); if (f) f.focus(); };
+      const pronto = msg => { delete S.habModo[h.id]; esquecer('q' + h.id); esquecer('f' + h.id); anunciar(msg); carregarHabs(); };
+      const on = (sel, fn) => { const b = el.querySelector(sel); if (b) b.addEventListener('click', () => fn(b)); };
+      on('.hp-aprovar', b => mudarHab(h.id, { estado: 'aprovada', resposta: null }, b, el).then(() => pronto(`${h.nome} aprovada para ${nomeDe(h.user_id)}`), () => {}));
+      on('.hp-mudar', () => { S.habModo[h.id] = 'mudar'; redesenhar(k + '-nome'); });
+      on('.hp-rejeitar', () => { S.habModo[h.id] = 'rejeitar'; redesenhar(k + '-mot'); });
+      on('.hp-voltar', () => { delete S.habModo[h.id]; esquecer(k); redesenhar(k + '-apr'); });
+      on('.hp-ok-mudar', b => { const c = lerCampos(el, k), resp = ((el.querySelector('#' + CSS.escape(k + '-resp')) || {}).value || '').trim().slice(0, 300);
+        if (!c.nome) { const er = el.querySelector('.hp-erro'); er.textContent = 'A habilidade precisa de um nome.'; er.hidden = false; return; }
+        mudarHab(h.id, { ...c, estado: 'aprovada', alterada: true, resposta: resp || null }, b, el).then(() => pronto(`${c.nome} aprovada com mudanças`), () => {}); });
+      on('.hp-ok-rej', b => { const mot = ((el.querySelector('#' + CSS.escape(k + '-mot')) || {}).value || '').trim().slice(0, 300);
+        mudarHab(h.id, { estado: 'rejeitada', resposta: mot || null }, b, el).then(() => pronto(`${h.nome} rejeitada`), () => {}); });
+    });
+  }
+  function desenharPropostas() {
+    const c = $('#m-propostas'); if (!c) return;
+    const ps = pendentesDe(), idFoco = c.contains(document.activeElement) ? document.activeElement.id : '';
+    c.hidden = !ps.length;
+    c.innerHTML = ps.length ? `<h3 class="hp-tit"><span>Pedidos de poder</span><b aria-label="${ps.length} esperando">${ps.length}</b></h3><p class="hint hp-dica">Os jogadores propõem; você decide se cabe no nível e na história.</p>${ps.map(h => propostaHTML(h, 'q')).join('')}` : '';
+    ligarPropostas(c);
+    if (typeof decorarTudo === 'function') decorarTudo();
+    if (idFoco) { const el = document.getElementById(idFoco); if (el) el.focus({ preventScroll: true }); }
+  }
+  function redesenharHabs() { desenharPropostas(); if (S.fichaAberta) desenharFicha(); }
+  // bloco de habilidades na ficha do jogador (dentro da janela)
+  function habsFichaHTML(j, habC, habJ) {
+    const minhas = (S.habs || []).filter(h => h.user_id === j.user_id), apr = minhas.filter(h => h.estado === 'aprovada'), pend = minhas.filter(h => h.estado === 'pendente'), k = 'c' + j.user_id;
+    const item = h => {
+      if (S.habModo[h.id] === 'editar') { const ke = 'e' + h.id; return `<li class="hab-da-mesa editando" data-h="${esc(h.id)}">${camposHab(ke, h)}<p class="m-erro hp-erro" role="alert" hidden></p><div class="hp-acoes"><button type="button" class="primary mf-h-salvar" id="${ke}-ok">Salvar</button><button type="button" class="ghost mf-h-cancela" id="${ke}-volta">Cancelar</button></div></li>`; }
+      const de = h.origem === 'mestre' ? 'concedida por você' : h.alterada ? 'proposta do jogador · aprovada com mudanças' : 'proposta do jogador · aprovada';
+      return `<li class="hab-da-mesa ${h.origem}" data-h="${esc(h.id)}"><div><b>${esc(h.nome)}</b><small>${de}</small>${corpoHab(h)}</div>
+        <span class="mf-h-ac"><button type="button" class="mini mf-h-ed" id="e${esc(h.id)}-ed" aria-label="Editar ${esc(h.nome)}" title="Editar">✎</button><button type="button" class="mini mf-h-x" id="e${esc(h.id)}-x" aria-label="Tirar ${esc(h.nome)} de ${esc(j.nome)}" title="Tirar">×</button></span></li>`;
+    };
+    return `<section class="mf-bloco mf-largo mf-habs"><h3>Habilidades <i>${apr.length ? `${apr.length} da mesa` : 'o que você concede vale na mesa'}</i></h3>
+      ${habC.length || habJ.length || apr.length ? `<ul class="mf-hab">${habC.map(h => `<li class="cam"><b>${esc(txt(h, 80))}</b><small>do Caminho</small></li>`).join('')}${apr.map(item).join('')}${habJ.map(h => `<li class="anot"><b>${esc(txt(h.nome, 60))}</b><small>anotação do jogador${txt(h.desc) ? ' · ' + esc(txt(h.desc, 200)) : ''}</small></li>`).join('')}</ul>` : '<p class="hint">Nenhuma habilidade ainda.</p>'}
+      ${pend.map(h => propostaHTML(h, 'f')).join('')}
+      <details class="mf-conceder" id="${k}-det" ${S.keep[k + 'aberto'] ? 'open' : ''}><summary>Conceder uma habilidade a ${esc(j.nome)}</summary>${camposHab(k)}<p class="m-erro" id="mf-erro-hab" role="alert" hidden></p>
+        <div class="hp-acoes"><button type="button" class="primary" id="mf-conceder" data-ic="estrela">Conceder</button></div></details></section>`;
+  }
+  function ligarHabsFicha(caixa, j) {
+    const bloco = caixa.querySelector('.mf-habs'); if (!bloco) return; const k = 'c' + j.user_id;
+    ligarPropostas(bloco);
+    const det = bloco.querySelector('.mf-conceder'); det.addEventListener('toggle', () => { S.keep[k + 'aberto'] = det.open ? '1' : ''; });
+    bloco.querySelector('#mf-conceder').addEventListener('click', e => ocupado(e.currentTarget, async () => {
+      const er = bloco.querySelector('#mf-erro-hab'); er.hidden = true; const c = lerCampos(bloco, k);
+      if (!c.nome) { erroEm('#mf-erro-hab', new Rede.ErroRede('Dê um nome à habilidade.')); bloco.querySelector('#' + CSS.escape(k + '-nome')).focus(); return; }
+      try { const r = await (await Rede.tabela('mestre', 'habilidades')).insert({ mesa_id: S.mesa.id, user_id: j.user_id, ...c, origem: 'mestre', estado: 'aprovada' }).select('id'); if (r.error) throw r.error;
+        esquecer(k); S.keep[k + 'aberto'] = '1'; anunciar(`${c.nome} concedida a ${j.nome}`); await carregarHabs(); const n = document.getElementById(k + '-nome'); if (n) n.focus(); }
+      catch (e2) { erroEm('#mf-erro-hab', e2); }
+    }));
+    bloco.querySelectorAll('li.hab-da-mesa').forEach(li => {
+      const h = (S.habs || []).find(x => x.id === li.dataset.h); if (!h) return; const ke = 'e' + h.id;
+      const on = (sel, fn) => { const b = li.querySelector(sel); if (b) b.addEventListener('click', () => fn(b)); };
+      on('.mf-h-ed', () => { S.habModo[h.id] = 'editar'; redesenharHabs(); const f = document.getElementById(ke + '-nome'); if (f) f.focus(); });
+      on('.mf-h-cancela', () => { delete S.habModo[h.id]; esquecer(ke); redesenharHabs(); const f = document.getElementById(ke + '-ed'); if (f) f.focus(); });
+      on('.mf-h-salvar', b => { const c = lerCampos(li, ke); if (!c.nome) { const er = li.querySelector('.hp-erro'); er.textContent = 'A habilidade precisa de um nome.'; er.hidden = false; return; }
+        mudarHab(h.id, c, b, li).then(() => { delete S.habModo[h.id]; esquecer(ke); anunciar(c.nome + ' atualizada'); carregarHabs().then(() => { const f = document.getElementById(ke + '-ed'); if (f) f.focus(); }); }, () => {}); });
+      on('.mf-h-x', async () => {
+        const ok2 = await confirmar({ titulo: `Tirar ${h.nome} de ${j.nome}?`, texto: 'A habilidade some da ficha do jogador na hora.', botao: 'Tirar', perigo: true }); if (!ok2) return;
+        try { const r = await (await Rede.tabela('mestre', 'habilidades')).delete().eq('id', h.id); if (r.error) throw r.error; anunciar(h.nome + ' foi tirada'); carregarHabs(); }
+        catch (e) { erroEm('#mf-erro-hab', e); }
+      });
+    });
+  }
+  // o que o mestre digita nos campos de habilidade sobrevive aos redesenhos ao vivo
+  document.addEventListener('input', e => { const k = e.target && e.target.dataset && e.target.dataset.keep; if (k) S.keep[k] = e.target.value; });
+
   // ---------- confirmação forte (apagar mesa, tirar jogador, encerrar) ----------
   function confirmar({ titulo, texto, botao = 'Confirmar', exigir = '', perigo = false }) {
     return new Promise(ok2 => {
@@ -839,13 +1185,12 @@ ${secaoDados()}
         <section class="mf-bloco"><h3>Atributos</h3>
           <ul class="mf-attrs">${ATTRS.map(a => { const t = num(attrs[a.key], 1, 60), v = num(mods[a.key], -30, 30), p = f.attrCaminho === a.key;
             return `<li class="${p ? 'cam' : ''}" style="--ac:${a.cor}"><span>${a.nome}${p ? ' <i title="atributo do Caminho">✦</i>' : ''}</span><b>${t == null ? '—' : t}</b><em>${v == null ? '' : sinal(v)}</em></li>`; }).join('')}</ul></section>
-        <section class="mf-bloco"><h3>Habilidades</h3>
-          ${habC.length || habJ.length ? `<ul class="mf-hab">${habC.map(h => `<li class="cam"><b>${esc(txt(h, 80))}</b><small>do Caminho</small></li>`).join('')}${habJ.map(h => `<li><b>${esc(txt(h.nome, 60))}</b>${txt(h.desc) ? `<small>${esc(txt(h.desc, 200))}</small>` : ''}</li>`).join('')}</ul>` : vazio('Nenhuma habilidade ainda.')}</section>
         <section class="mf-bloco"><h3>Carta do Destino</h3>
           ${txt(tr.nome) || txt(ar.nome) ? `${txt(tr.nome) ? `<div class="mf-carta"><small>Traço</small><b>${esc(txt(tr.nome, 60))}</b><p>${esc(txt(tr.desc, 240))}</p></div>` : ''}
           ${txt(ar.nome) ? `<div class="mf-carta art"><small>Artefato</small><b>${esc(txt(ar.nome, 60))}</b><p><span class="mf-dadiva">Dádiva</span> ${esc(txt(ar.dadiva, 240))}</p><p><span class="mf-maldicao">Maldição</span> ${esc(txt(ar.maldicao, 240))}</p></div>` : ''}` : vazio('Ainda não tirou as cartas.')}</section>
         <section class="mf-bloco mf-largo"><h3>Quem é</h3>
           ${par('Idade', txt(f.idade, 20)) || par('Gênero', txt(f.genero, 40)) || txt(f.aparencia) || txt(f.historia) ? `<dl class="mf-pares">${par('Idade', txt(f.idade, 20))}${par('Gênero', txt(f.genero, 40))}${par('Aparência', txt(f.aparencia, 400))}${par('História', txt(f.historia, 900))}</dl>` : vazio('O jogador ainda não descreveu o personagem.')}</section>
+        ${habsFichaHTML(j, habC, habJ)}
         ${txt(f.notas) ? `<section class="mf-bloco mf-largo"><h3>Notas do jogador</h3><p class="mf-notas">${esc(txt(f.notas, 900))}</p></section>` : ''}
         <section class="mf-bloco mf-largo mf-segredo"><h3><label for="mf-nota">Notas secretas</label> <i>só você vê · o jogador nunca recebe</i></h3>
           <textarea id="mf-nota" data-u="${esc(j.user_id)}" maxlength="4000" rows="4" placeholder="O que você sabe e ele não: segredos, ganchos, dívidas, mentiras…">${esc(((S.notas || {})[j.user_id] || {}).texto || '')}</textarea>
@@ -879,6 +1224,7 @@ ${secaoDados()}
     const nota = caixa.querySelector('#mf-nota'), notaSt = caixa.querySelector('#mf-nota-st');
     if (notaViva) { nota.value = notaViva.v; notaSt.textContent = notaViva.st || ''; if (focoDentro && idFoco === 'mf-nota') nota.setSelectionRange(notaViva.a, notaViva.b); }
     nota.addEventListener('input', () => salvarNota(j.user_id, nota.value));
+    ligarHabsFicha(caixa, j);
     caixa.querySelector('#mf-sussurrar').addEventListener('click', () => {
       const uid = j.user_id; fecharFicha(false);
       const sel = $('#s-para'); if (sel) sel.value = uid;
@@ -947,6 +1293,7 @@ ${secaoDados()}
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'ord', 'ordens', f, adiar(carregarOrdens)));
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'enc', 'encontros', f, adiar(carregarEncontro)));
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'due', 'disputas', f, adiar(carregarDisputas)));
+      S.pararDeOuvir.push(await Rede.ouvir('mestre', 'hab', 'habilidades', f, adiar(carregarHabs)));
       S.pararDeOuvir.push(await Rede.presenca('mestre', id, 'mestre', null, st => { S.online = new Set(Object.keys(st || {}).filter(k => k !== 'mestre')); atualizarVelas(); }));
     } catch (e) { const v = $('#m-ao-vivo'); if (v) { v.textContent = 'sem tempo real'; v.classList.add('off'); } }
   }
