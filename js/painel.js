@@ -926,7 +926,8 @@ ${secaoDados()}
         </div>
       </div>
       <fieldset class="be-mods"><legend>Modificadores <i>usados no Duelo · Agilidade é a iniciativa</i></legend>
-        ${ATTRS.map(a => `<div class="m-campo" style="--ac:${a.cor}"><label for="be-m-${a.key}">${a.nome}</label><input type="number" id="be-m-${a.key}" min="-10" max="20" value="${modDe(b.mods, a.key)}" inputmode="numeric"></div>`).join('')}</fieldset>
+        ${ATTRS.map(a => `<div class="m-campo be-mod" style="--ac:${a.cor}"><label for="be-m-${a.key}" title="${a.nome}"><span aria-hidden="true">${a.nome.slice(0, 3)}</span><span class="sr-only">${a.nome}</span></label>
+          <div class="be-passo"><button type="button" class="be-d" data-k="${a.key}" data-d="-1" aria-label="Diminuir ${a.nome}">−</button><input type="number" id="be-m-${a.key}" min="-10" max="20" value="${modDe(b.mods, a.key)}" inputmode="numeric"><button type="button" class="be-d" data-k="${a.key}" data-d="1" aria-label="Aumentar ${a.nome}">+</button></div></div>`).join('')}</fieldset>
       <div class="m-campo"><label for="be-horror">Horror <i>(opcional: o que ver a criatura causa)</i></label><input type="text" id="be-horror" maxlength="120" value="${v(b.horror)}" placeholder="Ex.: Quem a encara perde 1d4 de Sanidade" autocomplete="off"></div>
       <fieldset class="be-habs"><legend>Poderes <i>até 12 · um dado no efeito (2d6+3) vira botão de rolar</i></legend><ol id="be-habs"></ol>
         <button type="button" class="ghost" id="be-hab-mais" data-ic="mais">Adicionar poder</button></fieldset>
@@ -949,6 +950,10 @@ ${secaoDados()}
       if (foco != null) { const f = ol.querySelector('#be-h-nome-' + foco); if (f) f.focus(); }
     };
     desenharImg(); desenharHabs();
+    // − e + próprios no lugar das setinhas do navegador (−10 a +20); o valor mostra o sinal, como na carta
+    const pintarMod = inp => { const v = num(inp.value, -10, 20) || 0; inp.closest('.be-passo').dataset.s = v > 0 ? 'pos' : v < 0 ? 'neg' : ''; };
+    fundo.querySelectorAll('.be-passo input').forEach(inp => { pintarMod(inp); inp.addEventListener('input', () => pintarMod(inp)); });
+    fundo.querySelectorAll('.be-d').forEach(bt => bt.addEventListener('click', () => { const inp = fundo.querySelector('#be-m-' + bt.dataset.k); inp.value = Math.max(-10, Math.min(20, (num(inp.value, -10, 20) || 0) + +bt.dataset.d)); pintarMod(inp); }));
     fundo.querySelector('#be-hab-mais').addEventListener('click', () => { if (habs.length < 12) { habs.push({ nome: '', efeito: '', desc: '' }); desenharHabs(habs.length - 1); } });
     fundo.querySelector('#be-arq').addEventListener('change', async e => {
       const arq = e.target.files && e.target.files[0]; if (!arq) return; fundo.querySelector('#be-erro').hidden = true;
