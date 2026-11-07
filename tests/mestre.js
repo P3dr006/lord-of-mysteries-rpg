@@ -68,7 +68,10 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('atalho: nenhum erro de script', p.erros.length === 0, p.erros[0] || ''); await ctx.close(); }
   { const ctx = await contexto(browser, null); const p = await pagina(ctx, URL_SITE);
     await p.click('#btn-entrar-mesa');
-    ok('sem personagem, o atalho explica que é preciso criar um', await ate(async () => /Primeiro, seu personagem/.test(await p.textContent('body'))));
+    ok('sem personagem, o atalho abre a mesa pedindo o nome', await ate(() => p.evaluate(() => document.activeElement && document.activeElement.id === 'on-nome')));
+    ok('o campo do código não fica bloqueado', await p.evaluate(() => !document.querySelector('#on-cod').disabled && !document.querySelector('#on-entrar').disabled));
+    await p.fill('#on-cod', 'ABC234'); await p.click('#on-entrar');
+    ok('sem nome, pede o nome (e guarda o código digitado)', await ate(async () => /nome/.test(await p.textContent('.on-erro'))) && (await p.inputValue('#on-cod')) === 'ABC234');
     await ctx.close(); }
 
   console.log('\n2) Sem rede, o site continua funcionando');
@@ -192,6 +195,17 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
   await j.click('#fab-mesa'); await ate(() => j.isVisible('#on-sair')); await j.click('#on-sair');
   ok('sair da mesa tira o jogador do painel do mestre', await ate(async () => (await m.$$('.m-carta-j')).length === 0));
   ok('depois de sair, volta o campo do código', await ate(() => j.isVisible('#on-cod')));
+
+  console.log('\n9b) Entrar pela capa, sem ficha pronta');
+  { const c = await contexto(browser, srv); const p = await pagina(c, URL_SITE);
+    await p.click('#btn-entrar-mesa'); await p.waitForSelector('#on-nome');
+    await p.fill('#on-nome', 'Audrey'); await p.fill('#on-cod', codigo); await p.click('#on-entrar');
+    ok('entra só com nome e código', await ate(() => p.evaluate(() => Jogador.estado === 'ligado')), await p.evaluate(() => Jogador.estado));
+    ok('o mestre vê a jogadora nova', await ate(async () => (await m.textContent('#m-jogadores')).includes('Audrey')));
+    ok('sem atributos, o mestre vê "—" (nada inventado)', await m.evaluate(() => { const c2 = [...document.querySelectorAll('.m-carta-j')].find(x => x.textContent.includes('Audrey')); return [...c2.querySelectorAll('.m-mods b')].every(b => b.textContent === '—'); }));
+    ok('a capa passa a oferecer "Continuar" com essa ficha', await ate(async () => /Audrey/.test(await p.textContent('#btn-continue')) && await p.isVisible('#btn-continue')));
+    ok('sem erros de script', p.erros.length === 0, p.erros[0] || '');
+    await c.close(); }
 
   console.log('\n10) Robustez');
   srv.db.jogadores.push({ mesa_id: srv.db.mesas[0].id, user_id: 'estranho', nome: '<img src=x onerror=alert(1)>', ficha: { mods: { forca: 'muito', agil: 999 }, pv: null, pvMax: 'x', san: -4 }, atualizado_em: '' });
