@@ -40,7 +40,7 @@ h2,h3{color:var(--gold);font-weight:normal;margin-top:0}
 
 /* Botões — cantos chanfrados, filete dourado, brilho ao pairar */
 .opt{font-family:inherit;cursor:pointer;color:var(--text)}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b){
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip){
   --cut:10px; --edge:linear-gradient(135deg,#4b4480,#2f2a5c); --fill:linear-gradient(180deg,#1f1b40,#15122e);
   --clip:polygon(var(--cut) 0,calc(100% - var(--cut)) 0,100% var(--cut),100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,var(--cut) 100%,0 calc(100% - var(--cut)),0 var(--cut));
   position:relative;isolation:isolate;border:0;border-radius:0;cursor:pointer;
@@ -48,17 +48,17 @@ button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not
   padding:11px 24px;font-family:Georgia,'Times New Roman',serif;font-size:.85rem;
   letter-spacing:.09em;text-transform:uppercase;color:var(--text);
   background:var(--edge);clip-path:var(--clip);transition:color .2s,transform .15s,filter .2s}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b)::before{content:'';position:absolute;inset:1.5px;z-index:-1;background:var(--fill);
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip)::before{content:'';position:absolute;inset:1.5px;z-index:-1;background:var(--fill);
   clip-path:polygon(calc(var(--cut) - 1px) 0,calc(100% - var(--cut) + 1px) 0,100% calc(var(--cut) - 1px),100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,calc(var(--cut) - 1px) 100%,0 calc(100% - var(--cut) + 1px),0 calc(var(--cut) - 1px));
   transition:filter .2s}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b)::after{content:'';position:absolute;inset:0;pointer-events:none;
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip)::after{content:'';position:absolute;inset:0;pointer-events:none;
   background:linear-gradient(105deg,transparent 35%,rgba(255,240,200,.38) 50%,transparent 65%);
   background-size:260% 100%;background-position:130% 0;opacity:0}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):hover:not(:disabled){--edge:linear-gradient(135deg,#f3dd9c,#b8913f 50%,#f3dd9c);color:var(--gold2);transform:translateY(-1px)}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):hover:not(:disabled)::before{filter:brightness(1.35)}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):hover:not(:disabled)::after{opacity:1;animation:brilho .9s ease}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):active:not(:disabled){transform:translateY(1px)}
-button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):focus-visible{outline:2px solid var(--gold2);outline-offset:3px}
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):hover:not(:disabled){--edge:linear-gradient(135deg,#f3dd9c,#b8913f 50%,#f3dd9c);color:var(--gold2);transform:translateY(-1px)}
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):hover:not(:disabled)::before{filter:brightness(1.35)}
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):hover:not(:disabled)::after{opacity:1;animation:brilho .9s ease}
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):active:not(:disabled){transform:translateY(1px)}
+button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip):focus-visible{outline:2px solid var(--gold2);outline-offset:3px}
 button:disabled{opacity:.42;cursor:not-allowed;filter:grayscale(.5)}
 @keyframes brilho{from{background-position:130% 0}to{background-position:-30% 0}}
 button .bi{flex:none;transition:transform .25s}
@@ -635,7 +635,7 @@ body.terror .stepper::after{background:linear-gradient(90deg,#a01020,#e8c9a0)}
   #btn-asc{width:100%;white-space:normal;line-height:1.3}
   .toolbar{width:100%}
   /* toque confortável */
-  button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b){min-height:44px}
+  button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip){min-height:44px}
   .counter button{min-height:42px;min-width:54px}
   .tarot{padding-left:60px}
   .sheet-actions button{width:100%}
@@ -654,7 +654,7 @@ body.terror .stepper::after{background:linear-gradient(90deg,#a01020,#e8c9a0)}
   .opt:not(.sel){padding:10px 12px}
 }
 @media(max-width:560px){
-  .topnav button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b){padding:9px 11px;min-width:46px}
+  .topnav button:not(.opt):not(.pip-d):not(.selo-zona):not(.chip-e):not(.link-remover):not(.seg):not(.aba):not(.tipo):not(.mini):not(.attr-b):not(.fab-mesa):not(.adj):not(.lib-abrir):not(.step-b):not(.cm-link):not(.pista-b):not(.m-terror):not(.c-chip){padding:9px 11px;min-width:46px}
 }
 
 /* ======================= RETRATO DA ALMA ======================= */
@@ -1206,7 +1206,7 @@ body.m-com-ficha{overflow:hidden}
 .m-ficha>button.m-ficha-x{position:absolute!important;top:14px;right:14px;left:auto;margin:0}
 
 /* ---------- Sussurros e pistas: Grimório ---------- */
-.m-jog{grid-row:span 3}
+
 .m-sus textarea{width:100%;min-height:84px;resize:vertical;font:inherit;color:var(--text)}
 .s-arquivo{display:block;width:100%;padding:8px;border-radius:6px;border:1px dashed #4a4090;background:#0a0820;color:#b3add0;font:inherit;font-size:.85rem;cursor:pointer;min-height:44px}
 .s-arquivo::file-selector-button{font:inherit;margin-right:10px;padding:6px 12px;border-radius:6px;border:1px solid #b08cff88;background:#2c1d63;color:#e8e4f5;cursor:pointer}
@@ -1264,3 +1264,84 @@ body.com-sussurro{overflow:hidden}
 .s-escolher:hover{border-color:#b08cff}.s-escolher:hover .s-botao{border-color:#d8c8ff}
 .s-escolher:focus-within{outline:2px solid var(--gold2);outline-offset:2px}
 .pista-b>span{min-width:0}
+
+/* ---------- Controle do mestre: Grimório ---------- */
+.m-jog{grid-row:span 4}
+.m-cab{grid-template-columns:1fr auto auto}
+.m-cab .m-codigo-wrap{grid-column:3;grid-row:2}
+.m-terror{all:unset;box-sizing:border-box;cursor:pointer;grid-column:2;grid-row:2;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;border:1px solid #3b3566;background:#0c0a20;transition:border-color .2s,background-color .2s}
+.m-terror:hover{border-color:#a01020}
+.m-terror:focus-visible{outline:2px solid var(--gold2);outline-offset:3px}
+.m-terror[aria-busy=true]{opacity:.6}
+.m-terror-olho{position:relative;width:34px;height:20px;border-radius:50%;border:1.5px solid #8a84b0;background:radial-gradient(circle,#8a84b0 0 4px,transparent 5px)}
+.m-terror-txt small{display:block;font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:#a8a2c6}
+.m-terror-txt b{font-weight:normal;color:var(--text);font-size:1rem}
+.m-terror.on{border-color:#e0283a;background:radial-gradient(120% 120% at 0% 50%,#4a0814,#160308);box-shadow:0 0 24px #e0283a55,inset 0 0 18px #e0283a33}
+.m-terror.on .m-terror-olho{border-color:#ff3a4a;background:radial-gradient(circle,#ff3a4a 0 4px,#5a0a14 5px 8px,transparent 9px);box-shadow:0 0 12px #ff3a4a;animation:pulsa-luz 1.6s ease-in-out infinite}
+.m-terror.on b{color:#ff8a8a}
+.m-cj-nota{font-size:.66rem;letter-spacing:.08em;color:#c4a8ff;margin-right:auto;margin-left:10px}
+.c-alvo{border:0;margin:0;padding:0;min-width:0}
+.c-alvo legend{display:block;letter-spacing:.14em;text-transform:uppercase;font-size:.7rem;color:#8a84b0;margin:12px 0 6px;padding:0}
+.c-alvo-op{display:grid;grid-template-columns:1fr 1fr;gap:6px;clear:both}
+.c-alvo legend{float:left;width:100%;margin:12px 0 6px!important;line-height:inherit}
+.c-alvo label{position:relative;margin:0;cursor:pointer;letter-spacing:.06em;text-transform:none;font-size:.88rem}
+.c-alvo input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.c-alvo span{display:grid;place-items:center;min-height:44px;border-radius:6px;border:1px solid #2f2a5c;background:#0a0820;color:#b3add0}
+.c-alvo input:checked+span{border-color:var(--gold);color:var(--gold2);background:linear-gradient(180deg,#2a2160,#0e0b24)}
+.c-alvo input[value=san]:checked+span{border-color:#b08cff;color:#d8c8ff}
+.c-alvo input:focus-visible+span{outline:2px solid var(--gold2);outline-offset:2px}
+.c-qtd-linha{display:flex;gap:6px;align-items:stretch}
+.c-qtd-linha input{width:76px!important;flex:none}
+.c-chips{display:flex;gap:4px;flex:1}
+button.c-chip{all:unset;box-sizing:border-box;cursor:pointer;flex:1;display:grid;place-items:center;min-height:44px;border-radius:6px;border:1px solid #2f2a5c;background:#0a0820;color:#d8d2f0;font-size:.85rem}
+button.c-chip:hover{border-color:#8a84b0}
+button.c-chip:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+button.ghost.c-dano{--edge:linear-gradient(135deg,#ff6a6a,#7a1020 50%,#ff6a6a);color:#ffc8c8}
+button.ghost.c-dano.san{--edge:linear-gradient(135deg,#d08cff,#4a1a8a 50%,#d08cff);color:#e8d8ff}
+button.ghost.c-cura{--edge:linear-gradient(135deg,#9ee09e,#2a6a3a 50%,#9ee09e);color:#c8f0c8}
+button.ghost.c-cura.san{--edge:linear-gradient(135deg,#9ac8ff,#2a4a8a 50%,#9ac8ff);color:#d0e4ff}
+.m-ordens{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:4px}
+.m-ordens:empty{display:none}
+.m-o{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:6px 10px;border-radius:8px;background:#0a0818;border-left:3px solid #8a84b0;font-size:.8rem}
+.m-o.pv.neg{border-left-color:#e05a6a}.m-o.san.neg{border-left-color:#b04aff}.m-o.pos{border-left-color:#7ed67e}
+.m-o b{font-weight:normal;font-variant-numeric:tabular-nums;color:var(--text);min-width:64px}
+.m-o span{color:#c9c3e6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m-o em{font-style:normal;font-size:.66rem;letter-spacing:.06em}
+.m-o em.ok{color:#8ee08e}.m-o em.espera{color:#ffc870}
+.mf-segredo{border-color:#b08cff55;background:linear-gradient(160deg,#170f38cc,#0c0a20cc)}
+.mf-segredo h3 label{all:unset;cursor:text}
+.mf-segredo h3 i{font-style:normal;text-transform:none;letter-spacing:.02em;color:#a8a2c6;font-size:.72rem;margin-left:6px}
+.mf-segredo textarea{width:100%;min-height:96px;resize:vertical;font:inherit;color:var(--text)}
+.mf-nota-st{display:block;margin-top:4px;font-size:.7rem;color:#a8a2c6;min-height:1em}
+@media (max-width:860px){
+  .m-jog{grid-row:auto}
+  .m-cab{grid-template-columns:1fr}
+  .m-cab .m-codigo-wrap,.m-terror{grid-column:1;grid-row:auto}
+}
+
+/* ---------- Controle do mestre: o golpe na tela do jogador ---------- */
+.golpe{position:fixed;inset:0;z-index:96;pointer-events:none;display:grid;place-items:center}
+.golpe-borda{position:absolute;inset:0;opacity:0;animation:golpe-borda 2.4s ease-out both}
+.golpe.pv.dano .golpe-borda{box-shadow:inset 0 0 160px 40px #c0102acc,inset 0 0 40px 10px #ff3a4a}
+.golpe.san.dano .golpe-borda{box-shadow:inset 0 0 180px 50px #6a1aa8cc,inset 0 0 50px 10px #d07aff;background:radial-gradient(circle at 50% 50%,transparent 40%,#2a0a4a66 100%)}
+.golpe.cura .golpe-borda{box-shadow:inset 0 0 140px 30px #d9b86a88}
+.golpe.san.cura .golpe-borda{box-shadow:inset 0 0 140px 30px #6fb4ff77}
+@keyframes golpe-borda{0%{opacity:0}8%{opacity:1}35%{opacity:.85}100%{opacity:0}}
+.golpe-txt{position:relative;text-align:center;animation:golpe-txt 2.4s cubic-bezier(.2,.9,.3,1) both}
+.golpe-txt b{display:block;font-weight:normal;font-size:clamp(2.6rem,10vw,5rem);line-height:1;letter-spacing:.02em}
+.golpe-txt small{display:block;margin-top:8px;font-size:1rem;letter-spacing:.14em;text-transform:uppercase;color:#f0e8ff;text-shadow:0 2px 12px #000}
+.golpe.pv.dano .golpe-txt b{color:#ff5a6a;text-shadow:0 0 30px #ff2a3a,0 4px 20px #000}
+.golpe.san.dano .golpe-txt b{color:#e0a8ff;text-shadow:0 0 30px #b04aff,0 4px 20px #000}
+.golpe.cura .golpe-txt b{color:#f3dd9c;text-shadow:0 0 26px #d9b86a,0 4px 20px #000}
+.golpe.san.cura .golpe-txt b{color:#b8dcff;text-shadow:0 0 26px #6fb4ff,0 4px 20px #000}
+@keyframes golpe-txt{0%{opacity:0;transform:scale(1.5)}12%{opacity:1;transform:scale(1)}70%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-24px)}}
+.golpe.san.dano .golpe-txt b{animation:golpe-mente .5s steps(2) 3}
+@keyframes golpe-mente{50%{transform:translateX(3px) skewX(-6deg)}}
+#app.golpeado{animation:golpe-tremor .6s cubic-bezier(.36,.07,.19,.97) both}
+@keyframes golpe-tremor{10%,90%{transform:translate3d(-2px,0,0)}20%,80%{transform:translate3d(4px,1px,0)}30%,50%,70%{transform:translate3d(-7px,-1px,0)}40%,60%{transform:translate3d(7px,1px,0)}}
+.aviso-terror{position:fixed;left:50%;top:84px;z-index:97;transform:translateX(-50%);max-width:calc(100vw - 32px);padding:12px 20px;border-radius:12px;text-align:center;background:#160308f2;border:1px solid #e0283a;box-shadow:0 0 30px #e0283a66;animation:aviso-terror 5.2s ease both}
+.aviso-terror.desliga{border-color:#3b3566;background:#0d0b22f2;box-shadow:0 10px 30px #000a}
+.aviso-terror b{display:block;font-weight:normal;color:#ff9a9a;letter-spacing:.06em}
+.aviso-terror.desliga b{color:#c9c3e6}
+.aviso-terror small{display:block;margin-top:4px;color:#d8c8c8;font-size:.78rem}
+@keyframes aviso-terror{0%{opacity:0;transform:translate(-50%,-10px)}8%,85%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-10px)}}

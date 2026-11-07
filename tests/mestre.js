@@ -259,8 +259,79 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     await a.evaluate(() => Jogador.sairDaMesa()); await ate(async () => !(await m.textContent('#m-jogadores')).includes('Audrey'));
     await cA.close(); }
 
+  console.log('\n7c) Corpo e mente, Modo Terror e notas secretas');
+  { const pv = () => j.evaluate(() => P.pv), san = () => j.evaluate(() => P.san);
+    ok('o Grimório tem "Corpo e mente"', await m.isVisible('#m-form-ctrl'));
+    { const v = await axe(m); ok('painel com o controle sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    // dano de PV
+    const pv0 = await pv();
+    await m.fill('#c-qtd', '3'); await m.fill('#c-motivo', 'Mordida do lobo'); await m.click('#c-dano');
+    ok('o jogador sente o golpe na tela', await ate(() => j.isVisible('.golpe.pv.dano')));
+    ok('o golpe mostra o valor e o motivo', /−3 PV/.test(await j.textContent('.golpe')) && /Mordida do lobo/.test(await j.textContent('.golpe')));
+    ok('o PV da ficha do jogador cai 3', await ate(async () => (await pv()) === pv0 - 3), `${pv0} → ${await pv()}`);
+    ok('o número na ficha aberta acompanha', (await j.inputValue('#iv-pv')) === String(pv0 - 3));
+    ok('o painel do mestre recebe o PV novo', await ate(async () => (await m.textContent('.m-carta-j .m-barra b')).startsWith((pv0 - 3) + '/'), 6000));
+    ok('a ordem aparece como aplicada', await ate(async () => /aplicado/.test(await m.textContent('#m-ordens'))));
+    ok('a mesma ordem não se aplica duas vezes', (await j.evaluate(async id => Rede.rpc('jogador', 'aplicar_ordem', { p_id: id }), srv.db.ordens[0].id)) === null && (await pv()) === pv0 - 3);
+    // Sanidade: cura não passa do máximo
+    await m.check('input[name="c-alvo"][value="san"]');
+    ok('em Sanidade, os botões viram "Abalar a mente" e "Acalmar"', /Abalar a mente/.test(await m.textContent('#c-dano')) && /Acalmar/.test(await m.textContent('#c-cura')));
+    const san0 = await san(), sanMx = await j.evaluate(() => sanMax());
+    await m.fill('#c-qtd', '999'); await m.click('#c-cura');
+    ok('acalmar a mente aparece para o jogador', await ate(() => j.isVisible('.golpe.san.cura')));
+    ok('a Sanidade não passa do máximo', await ate(async () => (await san()) === sanMx), `${san0} → ${await san()} (máx ${sanMx})`);
+    await m.fill('#c-qtd', '4'); await m.click('#c-dano');
+    ok('abalar a mente tira 4 de Sanidade', await ate(async () => (await san()) === sanMx - 4));
+    // dano maior que o PV para em 0; depois cura tudo
+    await m.check('input[name="c-alvo"][value="pv"]'); await m.fill('#c-qtd', '999'); await m.click('#c-dano');
+    ok('dano maior que o PV para em 0 (Caído)', await ate(async () => (await pv()) === 0) && await ate(async () => /Caído/.test(await m.textContent('.m-carta-j'))));
+    await m.click('#c-cura'); await ate(async () => (await pv()) > 0);
+    // ordem enviada enquanto o jogador está fora é aplicada quando ele volta
+    const pvAntes = await pv();
+    await j.reload(); await j.waitForTimeout(200);
+    await m.fill('#c-qtd', '2'); await m.fill('#c-motivo', 'Queda na escada'); await m.click('#c-dano');
+    await j.click('#btn-continue');
+    ok('ordem feita com o jogador fora é aplicada quando ele volta', await ate(async () => (await pv()) === pvAntes - 2, 8000), `${pvAntes} → ${await pv()}`);
+    ok('e o golpe aparece na volta', await ate(() => j.isVisible('.golpe')));
+    ok('jogador não consegue dar ordens', /Só o mestre/.test(await j.evaluate(async mesa => { try { await Rede.rpc('jogador', 'ordenar', { p_mesa: mesa, p_para: null, p_tipo: 'pv', p_valor: 5, p_motivo: '' }); return 'aceitou'; } catch (e) { return Rede.mensagem(e); } }, srv.db.mesas[0].id)));
+    // Modo Terror da mesa
+    ok('o jogador começa sem Terror', !(await j.evaluate(() => Som.terror)));
+    await m.click('#m-terror');
+    ok('o botão do mestre mostra "Ligado"', await ate(async () => (await m.getAttribute('#m-terror', 'aria-pressed')) === 'true'));
+    ok('o Terror liga no jogador', await ate(() => j.evaluate(() => Som.terror && document.body.classList.contains('terror'))));
+    ok('o jogador é avisado de que pode desligar o seu', await ate(async () => /desligue no olho/i.test(await j.textContent('.aviso-terror').catch(() => ''))));
+    await j.click('#btn-terror');
+    ok('o jogador pode desligar o próprio Terror', !(await j.evaluate(() => Som.terror)) && srv.db.mesas[0].terror === true);
+    await j.reload(); await j.waitForTimeout(200); await j.click('#btn-continue'); await ate(() => j.evaluate(() => Jogador.estado === 'ligado'));
+    await j.waitForTimeout(800);
+    ok('ao recarregar, a mesa não força o Terror de novo', !(await j.evaluate(() => Som.terror)));
+    { const cN = await contexto(browser, srv), n = await pagina(cN, URL_SITE);
+      await n.evaluate(f => { novoSlot(); P = sanear(f); salvar(); iniciarPasso(); }, FICHA({ nome: 'Alger' })); await n.evaluate(c => Jogador.entrar(c), codigo);
+      ok('quem entra com o Terror ligado já recebe o Terror', await ate(() => n.evaluate(() => Som.terror), 6000));
+      await m.click('#m-terror');
+      ok('o mestre desliga e o Terror some de quem estava com ele', await ate(() => n.evaluate(() => !Som.terror)));
+      ok('o mestre vê "Desligado"', (await m.getAttribute('#m-terror', 'aria-pressed')) === 'false');
+      await n.evaluate(() => Jogador.sairDaMesa()); await ate(async () => !(await m.textContent('#m-jogadores')).includes('Alger')); await cN.close(); }
+    // notas secretas
+    await m.click('.m-cj-ver'); await m.waitForSelector('#mf-nota');
+    await m.click('#mf-nota'); await m.keyboard.type('Ele mente sobre o pai.');
+    ok('a nota secreta é guardada sozinha', await ate(async () => (await m.textContent('#mf-nota-st')) === 'guardada' && srv.db.notas_mestre.length === 1 && srv.db.notas_mestre[0].texto === 'Ele mente sobre o pai.'), JSON.stringify({ st: await m.textContent('#mf-nota-st'), db: srv.db.notas_mestre }));
+    await m.keyboard.type(' E deve 20 libras');
+    await j.click('.adj[data-c="san"][data-d="-1"]');   // a ficha do jogador muda e o painel se redesenha ao vivo...
+    await m.waitForTimeout(1800); await m.keyboard.type(' ao penhorista.');
+    ok('...sem perder o que o mestre está digitando', (await m.inputValue('#mf-nota')) === 'Ele mente sobre o pai. E deve 20 libras ao penhorista.' && await m.evaluate(() => document.activeElement.id === 'mf-nota'), await m.inputValue('#mf-nota'));
+    ok('e a versão completa é guardada', await ate(() => srv.db.notas_mestre[0].texto === 'Ele mente sobre o pai. E deve 20 libras ao penhorista.'));
+    { const v = await axe(m); ok('ficha com notas sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    await m.click('#mf-ctrl');
+    ok('"Corpo e mente" na ficha já escolhe o jogador', await ate(() => m.evaluate(u => !document.querySelector('#m-ficha') && document.querySelector('#c-para').value === u && document.activeElement.id === 'c-qtd', uidJ)));
+    ok('a carta mostra que há nota secreta', await m.isVisible('.m-carta-j .m-cj-nota'));
+    ok('o jogador NUNCA recebeu a nota', !JSON.stringify(srv.entregue[uidJ] || []).includes('penhorista'));
+    ok('o jogador não consegue ler notas', (await j.evaluate(async () => (await (await Rede.tabela('jogador', 'notas_mestre')).select('*')).data.length)) === 0);
+    ok('o jogador não consegue escrever notas', /permission|security|policy/i.test(JSON.stringify(await j.evaluate(async m2 => (await (await Rede.tabela('jogador', 'notas_mestre')).insert({ mesa_id: m2, user_id: 'x', texto: 'hack' })).error, srv.db.mesas[0].id))));
+    ok('controle: nenhum erro de script', m.erros.length === 0 && j.erros.length === 0, [m.erros[0], j.erros[0]].filter(Boolean).join(' | ')); }
+
   console.log('\n8) Ficha ao vivo');
-  await j.click('#mesa-x'); await j.click('.adj[data-c="pv"][data-d="-5"]');
+  if (await j.isVisible('#mesa')) await j.click('#mesa-x'); await j.click('.adj[data-c="pv"][data-d="-5"]');
   const pvNovo = await j.evaluate(() => P.pv);
   ok('perder PV no jogador aparece no painel do mestre', await ate(async () => (await m.textContent('.m-carta-j .m-barra b')).startsWith(pvNovo + '/'), 6000), await m.textContent('.m-carta-j .m-barra b'));
   ok('o envio da ficha é econômico (só quando muda)', await (async () => { const n = srv.db.jogadores[0].atualizado_em; await espera(1800); return srv.db.jogadores[0].atualizado_em === n; })());

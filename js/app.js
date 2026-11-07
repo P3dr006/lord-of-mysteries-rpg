@@ -473,6 +473,7 @@ function renderFicha(body) {
     const me = document.querySelector(`.gauge[data-k="${k}"] [role=meter]`); if (me) { me.setAttribute('aria-valuenow', novo); me.setAttribute('aria-valuetext', `${novo} de ${max}`); }
     anunciar(`${k === 'pv' ? 'Pontos de Vida' : 'Sanidade'}: ${novo} de ${max}`);
   };
+  window.aplicarVitalFicha = aplicarVital;   // o dano/cura do mestre (js/jogador.js) usa a mesma animação da ficha
   body.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => {
     const k = b.dataset.c; aplicarVital(k, b.dataset.max ? (k === 'pv' ? pvMax() : sanMax()) : P[k] + +b.dataset.d);
   }));
