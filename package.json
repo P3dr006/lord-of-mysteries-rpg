@@ -3,7 +3,7 @@
   "private": true,
   "description": "Criador de personagem de RPG inspirado em Lord of the Mysteries (sem build: abra index.html).",
   "scripts": {
-    "test": "node tests/segredos.js && node tests/robustez.js && node tests/ficha.js && node tests/acessibilidade.js && node tests/audio.js",
+    "test": "node tests/segredos.js && node tests/robustez.js && node tests/ficha.js && node tests/acessibilidade.js && node tests/audio.js && node tests/mestre.js",
     "test:robustez": "node tests/robustez.js",
     "test:ficha": "node tests/ficha.js",
     "test:a11y": "node tests/acessibilidade.js",
@@ -13,7 +13,8 @@
     "proteger": "git config core.hooksPath .githooks && node tools/verificar-segredos.js --tudo",
     "segredos": "node tools/verificar-segredos.js --tudo",
     "segredos:historico": "node tools/verificar-segredos.js --historico",
-    "test:segredos": "node tests/segredos.js"
+    "test:segredos": "node tests/segredos.js",
+    "test:mestre": "node tests/mestre.js"
   },
   "devDependencies": {
     "playwright": "^1.40.0",
