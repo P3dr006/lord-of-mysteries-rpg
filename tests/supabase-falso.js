@@ -61,7 +61,7 @@ const CLIENTE = `(() => {
 })();`;
 
 function criarServidor() {
-  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [], figuras: [], encontros: [], disputas: [], cronica: [], bestiario: [], habilidades: [] };
+  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [], figuras: [], efeitos: [], encontros: [], disputas: [], cronica: [], bestiario: [], habilidades: [] };
   const naMesa = (u, mesa) => db.jogadores.some(j => j.mesa_id === mesa && j.user_id === u);
   const assinaturas = [];          // { id, uid, tabela, filtro, page }
   const entregue = {};             // uid -> [cada resposta entregue a esse usuário]
@@ -86,7 +86,8 @@ function criarServidor() {
     notas_mestre: (u, r) => mestreDe(r.mesa_id) === u,
     figuras: (u, r) => mestreDe(r.mesa_id) === u,
     cronica: (u, r) => mestreDe(r.mesa_id) === u,
-    encontros: (u, r) => mestreDe(r.mesa_id) === u || naMesa(u, r.mesa_id),
+    encontros: (u, r) => mestreDe(r.mesa_id) === u || (naMesa(u, r.mesa_id) && [...(r.jogadores || []), ...(r.sairam || [])].includes(u)),
+    efeitos: (u, r) => mestreDe(r.mesa_id) === u || (r.user_id === u && !r.secreto && naMesa(u, r.mesa_id)),
     disputas: (u, r) => mestreDe(r.mesa_id) === u || (r.visivel && (r.a.id === u || r.b.id === u)),
     bestiario: (u, r) => r.dono === u && !anonimo(u),
     habilidades: (u, r) => mestreDe(r.mesa_id) === u || (r.user_id === u && naMesa(u, r.mesa_id)),
@@ -95,7 +96,8 @@ function criarServidor() {
     return db.resultados.filter(r => VE.resultados(u, r)).map(r => {
       const p = db.pedidos.find(x => x.id === r.pedido_id), s = db.segredos_pedido.find(x => x.pedido_id === r.pedido_id);
       if (!p || !VE.pedidos(u, p) || !s || !VE.segredos_pedido(u, s)) return null;
-      return { ...r, rotulo: p.rotulo, atributo: p.atributo, dificuldade: s.dificuldade, passou: r.total >= s.dificuldade };
+      const oc = s.oculto || 0;
+      return { ...r, modificador: r.modificador + oc, total: r.total + oc, rotulo: p.rotulo, atributo: p.atributo, dificuldade: s.dificuldade, passou: r.total + oc >= s.dificuldade, oculto: oc };
     }).filter(Boolean);
   }
 
@@ -111,8 +113,17 @@ function criarServidor() {
   // igual a privado.mod_da_ficha: valor ilegível vira 0, limite ±30
   const modDaFicha = (f, attr) => { if (!attr) return 0; const v = ((f || {}).mods || {})[attr]; return /^-?[0-9]{1,3}$/.test(String(v)) ? Math.max(-30, Math.min(30, parseInt(v, 10))) : 0; };
   const d20 = () => rolar(20);
+  const modJog = (mesa, u, f, attr, soVisivel) => { if (!attr) return 0; const extra = db.efeitos.filter(e => e.mesa_id === mesa && e.user_id === u && ['bencao', 'maldicao'].includes(e.tipo) && e.atributo === attr && !(soVisivel && e.secreto)).reduce((t, e) => t + e.valor, 0); return Math.max(-30, Math.min(30, modDaFicha(f, attr) + extra)); };
+  const entradaRoda = (mesa, tipo, idL) => {
+    if (tipo === 'jogador') { const j = db.jogadores.find(x => x.mesa_id === mesa && x.user_id === idL); if (!j) throw new Error('Jogador não encontrado.'); const d = d20(), b = modJog(mesa, j.user_id, j.ficha, 'agil'); return { tipo, id: idL, nome: j.nome, caminhoId: (j.ficha || {}).caminhoId || null, cor: (j.ficha || {}).cor || null, dado: d, bonus: b, total: d + b }; }
+    if (tipo === 'figura') { const f = db.figuras.find(x => x.mesa_id === mesa && x.id === idL); if (!f) throw new Error('Figura não encontrada.'); const d = d20(); return { tipo, id: idL, nome: f.nome, caminhoId: null, cor: null, dado: d, bonus: f.bonus, total: d + f.bonus }; }
+    throw new Error('Participante inválido.');
+  };
+  const jaEm = (mesa, tipo, idL) => db.encontros.find(e => e.mesa_id === mesa && e.ativo && e.ordem.some(p => p.tipo === tipo && p.id === idL));
+  const cronicaSrv = (mesa, texto) => { const l = { id: id('cro'), mesa_id: mesa, texto: String(texto).slice(0, 500), criado_em: new Date().toISOString() }; db.cronica.push(l); avisar('cronica', l); };
+  const batalhaDoMestre = (u, b) => { const e = db.encontros.find(x => x.id === b && x.ativo); return e && mestreDe(e.mesa_id) === u ? e : null; };
   function ladoDuelo(mesa, tipo, idL, attr) {
-    if (tipo === 'jogador') { const j = db.jogadores.find(x => x.mesa_id === mesa && x.user_id === idL); if (!j) throw new Error('Jogador não encontrado.'); const d = d20(), m = modDaFicha(j.ficha, attr); return { tipo, id: idL, nome: j.nome, caminhoId: (j.ficha || {}).caminhoId || null, cor: (j.ficha || {}).cor || null, atributo: attr || null, dado: d, mod: m, total: d + m }; }
+    if (tipo === 'jogador') { const j = db.jogadores.find(x => x.mesa_id === mesa && x.user_id === idL); if (!j) throw new Error('Jogador não encontrado.'); const d = d20(), m = modJog(mesa, j.user_id, j.ficha, attr); return { tipo, id: idL, nome: j.nome, caminhoId: (j.ficha || {}).caminhoId || null, cor: (j.ficha || {}).cor || null, atributo: attr || null, dado: d, mod: m, total: d + m }; }
     if (tipo === 'figura') { const f = db.figuras.find(x => x.mesa_id === mesa && x.id === idL); if (!f) throw new Error('Figura não encontrada.'); const d = d20(), tem = !!attr && Object.prototype.hasOwnProperty.call(f.mods || {}, attr), m = tem ? modDaFicha({ mods: f.mods }, attr) : f.bonus; return { tipo, id: idL, nome: f.nome, atributo: tem ? attr : null, dado: d, mod: m, total: d + m }; }
     throw new Error('Lado inválido.');
   }
@@ -130,26 +141,54 @@ function criarServidor() {
       if (!h) return erro('Esta habilidade não pode ser retirada.');
       db.habilidades.splice(db.habilidades.indexOf(h), 1); avisar('habilidades', h); return { data: null, error: null };
     },
-    iniciar_encontro(u, a) {
-      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre começa um encontro.');
-      const ps = db.jogadores.filter(j => j.mesa_id === a.p_mesa).map(j => { const d = d20(), b = modDaFicha(j.ficha, 'agil'); return { tipo: 'jogador', id: j.user_id, nome: j.nome, caminhoId: (j.ficha || {}).caminhoId || null, cor: (j.ficha || {}).cor || null, dado: d, bonus: b, total: d + b }; })
-        .concat(db.figuras.filter(f => f.mesa_id === a.p_mesa && (a.p_figuras || []).includes(f.id)).map(f => { const d = d20(); return { tipo: 'figura', id: f.id, nome: f.nome, caminhoId: null, cor: null, dado: d, bonus: f.bonus, total: d + f.bonus }; }))
-        .sort((x, y) => y.total - x.total || y.bonus - x.bonus);
+    iniciar_batalha(u, a) {
+      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre começa uma batalha.');
+      db.encontros = db.encontros.filter(e => !(e.mesa_id === a.p_mesa && !e.ativo));
+      if (db.encontros.filter(e => e.mesa_id === a.p_mesa && e.ativo).length >= 4) return erro('No máximo 4 batalhas ao mesmo tempo.');
+      const pedidos2 = new Set(a.p_jogadores || []), js = db.jogadores.filter(j => j.mesa_id === a.p_mesa && pedidos2.has(j.user_id)).map(j => j.user_id), fs2 = [...new Set(a.p_figuras || [])];
+      for (const x of js) { const o = jaEm(a.p_mesa, 'jogador', x); if (o) return erro(`${db.jogadores.find(j => j.mesa_id === a.p_mesa && j.user_id === x).nome} já está na batalha "${o.nome}".`); }
+      for (const x of fs2) { const o = jaEm(a.p_mesa, 'figura', x); if (o) return erro(`Essa figura já está na batalha "${o.nome}".`); }
+      let ps; try { ps = js.map(x => entradaRoda(a.p_mesa, 'jogador', x)).concat(fs2.map(x => entradaRoda(a.p_mesa, 'figura', x))); } catch (e) { return erro(e.message); }
+      ps.sort((x, y) => y.total - x.total || y.bonus - x.bonus);
       if (!ps.length) return erro('Ninguém para entrar na Roda.');
-      let e = db.encontros.find(x => x.mesa_id === a.p_mesa);
-      if (!e) db.encontros.push(e = { mesa_id: a.p_mesa });
-      Object.assign(e, { ativo: true, rodada: 1, vez: 0, ordem: ps, atualizado_em: new Date().toISOString() }); avisar('encontros', e);
-      return { data: ps, error: null };
+      const nome = String(a.p_nome || '').trim().slice(0, 40) || 'Encontro', agora = new Date().toISOString();
+      const e = { id: id('bat'), mesa_id: a.p_mesa, nome, ativo: true, rodada: 1, vez: 0, ordem: ps, jogadores: js, sairam: [], criado_em: agora, atualizado_em: agora };
+      db.encontros.push(e); avisar('encontros', e); cronicaSrv(a.p_mesa, '⚔ ' + nome + ' começa: ' + ps.map(p => p.nome).join(', '));
+      return { data: e.id, error: null };
     },
-    proximo_turno(u, a) {
-      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre passa o turno.');
-      const e = db.encontros.find(x => x.mesa_id === a.p_mesa && x.ativo); if (!e) return erro('Nenhum encontro em andamento.');
+    regirar_batalha(u, a) {
+      const e = batalhaDoMestre(u, a.p_batalha); if (!e) return erro('Batalha não encontrada.');
+      e.ordem = e.ordem.map(p => entradaRoda(e.mesa_id, p.tipo, p.id)).sort((x, y) => y.total - x.total || y.bonus - x.bonus); e.rodada = 1; e.vez = 0; e.atualizado_em = new Date().toISOString(); avisar('encontros', e);
+      return { data: null, error: null };
+    },
+    passar_turno(u, a) {
+      const e = batalhaDoMestre(u, a.p_batalha); if (!e) return erro('Batalha não encontrada.');
       const n = Math.max(1, e.ordem.length); if (e.vez + 1 >= n) e.rodada++; e.vez = (e.vez + 1) % n; e.atualizado_em = new Date().toISOString(); avisar('encontros', e);
       return { data: { rodada: e.rodada, vez: e.vez }, error: null };
     },
-    encerrar_encontro(u, a) {
-      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre encerra o encontro.');
-      const e = db.encontros.find(x => x.mesa_id === a.p_mesa); if (e) { e.ativo = false; e.atualizado_em = new Date().toISOString(); avisar('encontros', e); }
+    encerrar_batalha(u, a) {
+      const e = batalhaDoMestre(u, a.p_batalha); if (!e) return erro('Batalha não encontrada.');
+      e.ativo = false; e.atualizado_em = new Date().toISOString(); avisar('encontros', e); cronicaSrv(e.mesa_id, '⚔ ' + e.nome + ' termina na rodada ' + e.rodada);
+      return { data: null, error: null };
+    },
+    entrar_na_batalha(u, a) {
+      const e = batalhaDoMestre(u, a.p_batalha); if (!e) return erro('Batalha não encontrada.');
+      if (e.ordem.length >= 30) return erro('A Roda já está cheia (30).');
+      const o = jaEm(e.mesa_id, a.p_tipo, a.p_id); if (o) return erro(`Já está na batalha "${o.nome}".`);
+      let v; try { v = entradaRoda(e.mesa_id, a.p_tipo, a.p_id); } catch (er) { return erro(er.message); }
+      let pos = e.ordem.findIndex(x => v.total > x.total); if (pos < 0) pos = e.ordem.length;
+      e.ordem.splice(pos, 0, v); if (pos <= e.vez) e.vez++;
+      if (a.p_tipo === 'jogador') { e.jogadores = [...e.jogadores.filter(x => x !== a.p_id), a.p_id]; e.sairam = e.sairam.filter(x => x !== a.p_id); }
+      e.atualizado_em = new Date().toISOString(); avisar('encontros', e); cronicaSrv(e.mesa_id, e.nome + ' — ' + v.nome + ' entra na rodada ' + e.rodada);
+      return { data: null, error: null };
+    },
+    sair_da_batalha(u, a) {
+      const e = batalhaDoMestre(u, a.p_batalha); if (!e) return erro('Batalha não encontrada.');
+      const i = e.ordem.findIndex(x => x.tipo === a.p_tipo && x.id === a.p_id); if (i < 0) return erro('Não está nesta batalha.');
+      const [quem] = e.ordem.splice(i, 1), n = e.ordem.length, rod = e.rodada;
+      if (i < e.vez) e.vez--; if (n > 0 && e.vez >= n) { e.vez = 0; e.rodada++; } if (!n) { e.vez = 0; e.ativo = false; }
+      if (a.p_tipo === 'jogador') { e.jogadores = e.jogadores.filter(x => x !== a.p_id); e.sairam = [...e.sairam.filter(x => x !== a.p_id), a.p_id]; }
+      e.atualizado_em = new Date().toISOString(); avisar('encontros', e); cronicaSrv(e.mesa_id, e.nome + ' — ' + quem.nome + ' sai na rodada ' + rod + (n ? '' : ' (a batalha termina)'));
       return { data: null, error: null };
     },
     disputar(u, a) {
@@ -222,17 +261,18 @@ function criarServidor() {
       if (p.estado !== 'pendente') return erro('Este teste já foi rolado.');
       // à prova de trapaça: o modificador vem da ficha guardada, não do navegador (p_modificador é ignorado)
       const fj = (db.jogadores.find(j => j.mesa_id === p.mesa_id && j.user_id === u) || {}).ficha;
-      const mo = modDaFicha(fj, p.atributo), v = rolar(p.lados), r = { pedido_id: p.id, mesa_id: p.mesa_id, user_id: u, tipo: 'aberto', dado: v, lados: p.lados, modificador: mo, total: v + mo, criado_em: new Date().toISOString() };
+      const mo = modJog(p.mesa_id, u, fj, p.atributo), mv = modJog(p.mesa_id, u, fj, p.atributo, true), v = rolar(p.lados), r = { pedido_id: p.id, mesa_id: p.mesa_id, user_id: u, tipo: 'aberto', dado: v, lados: p.lados, modificador: mv, total: v + mv, criado_em: new Date().toISOString() };
+      const sg = db.segredos_pedido.find(x => x.pedido_id === p.id); if (sg) sg.oculto = mo - mv;
       db.resultados.push(r); p.estado = 'feito'; avisar('resultados', r); avisar('pedidos', p);
-      return { data: { dado: v, lados: p.lados, modificador: mo, total: v + mo }, error: null };
+      return { data: { dado: v, lados: p.lados, modificador: mv, total: v + mv }, error: null };
     },
     rolar_secreto(u, a) {
       if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre rola testes secretos.');
       const j = db.jogadores.find(x => x.mesa_id === a.p_mesa && x.user_id === a.p_para); if (!j) return erro('Jogador não encontrado.');
-      const l = a.p_lados || 20, mo = modDaFicha(j.ficha, a.p_atributo), v = rolar(l);
+      const l = a.p_lados || 20, mo = modJog(a.p_mesa, a.p_para, j.ficha, a.p_atributo), mv = modJog(a.p_mesa, a.p_para, j.ficha, a.p_atributo, true), v = rolar(l);
       const p = { id: id('ped'), mesa_id: a.p_mesa, para: a.p_para, tipo: 'secreto', rotulo: a.p_rotulo, atributo: a.p_atributo || null, lados: l, estado: 'feito', criado_em: new Date().toISOString() };
-      db.pedidos.push(p); db.segredos_pedido.push({ pedido_id: p.id, mesa_id: a.p_mesa, dificuldade: a.p_dificuldade });
-      const r = { pedido_id: p.id, mesa_id: a.p_mesa, user_id: a.p_para, tipo: 'secreto', dado: v, lados: l, modificador: mo, total: v + mo, criado_em: new Date().toISOString() };
+      db.pedidos.push(p); db.segredos_pedido.push({ pedido_id: p.id, mesa_id: a.p_mesa, dificuldade: a.p_dificuldade, oculto: mo - mv });
+      const r = { pedido_id: p.id, mesa_id: a.p_mesa, user_id: a.p_para, tipo: 'secreto', dado: v, lados: l, modificador: mv, total: v + mv, criado_em: new Date().toISOString() };
       db.resultados.push(r); avisar('pedidos', p); avisar('resultados', r);
       return { data: { pedido: p.id, dado: v, modificador: mo, total: v + mo, passou: v + mo >= a.p_dificuldade }, error: null };
     },
@@ -270,6 +310,16 @@ function criarServidor() {
       const agora = new Date().toISOString(), linha = { id: id('hab'), mesa_id: v.mesa_id, user_id: v.user_id, nome: n, descricao: v.descricao || null, custo: v.custo || null, efeito: v.efeito || null, origem: 'mestre', estado: 'aprovada', resposta: v.resposta || null, alterada: false, criado_em: agora, atualizado_em: agora };
       db.habilidades.push(linha); avisar('habilidades', linha); return { data: q.devolver ? [{ ...linha }] : null, error: null };
     }
+    if (q.op === 'insert' && q.tabela === 'efeitos') {
+      const v = q.valores; if (mestreDe(v.mesa_id) !== u || !naMesa(v.user_id, v.mesa_id)) return erro('new row violates row-level security policy for table "efeitos"');
+      if (!['bencao', 'maldicao', 'bloqueio', 'perda'].includes(v.tipo)) return erro('new row violates check constraint "efeitos_tipo_check"');
+      const atr = ['bencao', 'maldicao'].includes(v.tipo);
+      if (atr ? !(v.atributo && v.valor && !v.habilidade && (v.tipo === 'bencao' ? v.valor > 0 : v.valor < 0) && Math.abs(v.valor) <= 20) : !(v.habilidade && v.atributo == null && v.valor == null)) return erro('new row violates check constraint "efeitos_check"');
+      const rot = String(v.rotulo || ''); if (!rot || rot.length > 60) return erro('new row violates check constraint "efeitos_rotulo_check"');
+      if (db.efeitos.filter(e => e.mesa_id === v.mesa_id && e.user_id === v.user_id).length >= 30) return erro('No máximo 30 efeitos por jogador.');
+      const agora = new Date().toISOString(), linha = { id: id('efe'), mesa_id: v.mesa_id, user_id: v.user_id, tipo: v.tipo, atributo: v.atributo || null, valor: v.valor ?? null, habilidade: v.habilidade || null, rotulo: rot, descricao: v.descricao || null, secreto: !!v.secreto, criado_em: agora, atualizado_em: agora };
+      db.efeitos.push(linha); avisar('efeitos', linha); return { data: q.devolver ? [{ ...linha }] : null, error: null };
+    }
     if (q.op === 'insert' && (q.tabela === 'figuras' || q.tabela === 'cronica')) {   // escritas diretas só do mestre
       const v = q.valores; if (mestreDe(v.mesa_id) !== u) return erro(`new row violates row-level security policy for table "${q.tabela}"`);
       let linha;
@@ -293,9 +343,9 @@ function criarServidor() {
       return { data: null, error: null };
     }
     if (q.op === 'update') {
-      const COLS = { jogadores: ['nome', 'ficha'], notas_mestre: ['texto'], figuras: ['nome', 'bonus', 'pv', 'pv_max'], bestiario: ['nome', 'tipo', 'perigo', 'pv_max', 'defesa', 'horror', 'mods', 'habilidades', 'descricao', 'notas', 'imagem'], habilidades: ['nome', 'descricao', 'custo', 'efeito', 'estado', 'resposta', 'alterada'] }[q.tabela];
+      const COLS = { jogadores: ['nome', 'ficha'], notas_mestre: ['texto'], figuras: ['nome', 'bonus', 'pv', 'pv_max'], bestiario: ['nome', 'tipo', 'perigo', 'pv_max', 'defesa', 'horror', 'mods', 'habilidades', 'descricao', 'notas', 'imagem'], habilidades: ['nome', 'descricao', 'custo', 'efeito', 'estado', 'resposta', 'alterada'], efeitos: ['rotulo', 'descricao', 'secreto', 'valor'] }[q.tabela];
       if (!COLS) return erro('permission denied for table ' + q.tabela);
-      if (['bestiario', 'habilidades'].includes(q.tabela) && Object.keys(q.valores).some(k => !COLS.includes(k))) return erro('permission denied for table ' + q.tabela);   // grant de update só nas colunas permitidas
+      if (['bestiario', 'habilidades', 'efeitos'].includes(q.tabela) && Object.keys(q.valores).some(k => !COLS.includes(k))) return erro('permission denied for table ' + q.tabela);   // grant de update só nas colunas permitidas
       if (q.tabela === 'bestiario') { const ch = validarBestiario(q.valores, true); if (ch) return erro('new row violates check constraint "bestiario_' + ch + '_check"'); }
       if (q.tabela === 'habilidades' && 'estado' in q.valores && !['pendente', 'aprovada', 'rejeitada'].includes(q.valores.estado)) return erro('new row violates check constraint "habilidades_estado_check"');
       const pode = linhas.filter(r => q.tabela === 'jogadores' ? r.user_id === u : q.tabela === 'bestiario' ? r.dono === u : mestreDe(r.mesa_id) === u);
@@ -303,7 +353,7 @@ function criarServidor() {
       return { data: q.devolver ? pode.map(r => ({ ...r })) : null, error: null };
     }
     if (q.op === 'delete') {
-      const DEL = { jogadores: r => r.user_id === u || mestreDe(r.mesa_id) === u, sussurros: r => mestreDe(r.mesa_id) === u, pedidos: r => mestreDe(r.mesa_id) === u, notas_mestre: r => mestreDe(r.mesa_id) === u, mesas: r => r.mestre_id === u, figuras: r => mestreDe(r.mesa_id) === u, cronica: r => mestreDe(r.mesa_id) === u, bestiario: r => r.dono === u, habilidades: r => mestreDe(r.mesa_id) === u }[q.tabela];
+      const DEL = { jogadores: r => r.user_id === u || mestreDe(r.mesa_id) === u, sussurros: r => mestreDe(r.mesa_id) === u, pedidos: r => mestreDe(r.mesa_id) === u, notas_mestre: r => mestreDe(r.mesa_id) === u, mesas: r => r.mestre_id === u, figuras: r => mestreDe(r.mesa_id) === u, cronica: r => mestreDe(r.mesa_id) === u, bestiario: r => r.dono === u, habilidades: r => mestreDe(r.mesa_id) === u, efeitos: r => mestreDe(r.mesa_id) === u }[q.tabela];
       if (!DEL) return erro('permission denied for table ' + q.tabela);
       const tab = db[q.tabela]; linhas.filter(DEL).forEach(r => {
         tab.splice(tab.indexOf(r), 1); avisar(q.tabela, r);

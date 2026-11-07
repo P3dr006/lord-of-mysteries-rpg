@@ -84,6 +84,21 @@ Sem mesa, o formulário continua anotando habilidades locais, como antes.
 **Tirar da mesa / apagar mesa:** na ficha do jogador, "Tirar da mesa" (pede confirmação; ele é avisado e pode voltar
 com o código). Na lista de mesas, "Apagar" exige digitar o código da mesa e some com tudo dela.
 
+**Batalhas (Roda do Destino):** na aba Cena, "Nova batalha" com nome e com os jogadores e figuras marcados (sem
+batalha ativa, todos vêm marcados). Até 4 ao mesmo tempo (ex.: Cais e Catedral), cada uma com ordem, rodada e "Próximo turno"
+próprios; o topo do Grimório mostra uma faixa por batalha. Ninguém fica em duas. No meio da luta: "Entra na batalha" rola a
+iniciativa e encaixa o novo participante sem roubar a vez de ninguém; o × tira alguém (se era a vez dele, passa ao próximo; vazia,
+a batalha termina). Cada jogador só vê a faixa da batalha em que está. Começo, entradas, saídas e fim vão para a Crônica.
+
+**Revelar criatura:** o Revelar do Bestiário pergunta para quem: todos, ninguém (barrado), quem está numa batalha, ou cada um.
+
+**Bênçãos, maldições e selos:** na ficha do jogador, "Abençoar, amaldiçoar ou selar": bênção (+N) ou maldição (−N) num
+atributo, selar uma habilidade (volta depois) ou tirar uma habilidade. Avisando, o jogador recebe o decreto com selo de cera e vê
+o efeito em "Sobre você" e na habilidade (⛓ selada / ✕ perdida). **Em segredo**, o jogador não recebe nada (a RLS esconde a
+linha) e a ficha dele continua igual, mas o modificador vale nos testes secretos, no Duelo e na iniciativa; no teste aberto o
+jogador vê o número sem o segredo e o mestre vê o total real (coluna `oculto`). Depois dá para Revelar, Desfazer avisando
+(sussurro "O selo se rompe" etc.) ou Em silêncio. A carta mostra o resumo (ex.: "✦ 1 bênção · ☠ 1 maldição oculta").
+
 **Teste aberto à prova de trapaça:** o modificador do teste aberto agora vem da ficha guardada no servidor (a mesma que o
 mestre vê), não do que o navegador manda. Modificador ilegível na ficha vale 0 em vez de dar erro.
 
@@ -145,6 +160,13 @@ No teste secreto o modificador vem de `ficha.mods.<atributo>` do jogador. No abe
 navegador do jogador (o dado não); opção futura: usar a ficha também no aberto.
 
 Verificado em 24 cenários com papéis reais (mestre, 2 jogadores anônimos, visitante sem login).
+
+Migração `20261111_batalhas_e_efeitos.sql` (**ainda não aplicada**): `encontros` com várias batalhas por mesa
+(`id`, `nome`, `jogadores`, `sairam`; o jogador lê só a sua), funções `iniciar_batalha`, `regirar_batalha`,
+`passar_turno`, `encerrar_batalha`, `entrar_na_batalha`, `sair_da_batalha` (as antigas de encontro foram removidas);
+tabela `efeitos` (só o mestre escreve; o jogador lê só os próprios não secretos; limite de 30 por gatilho);
+`privado.mod_do_jogador` / `mod_visivel` somam os efeitos em `rolar_secreto`, `responder_pedido` e no Duelo;
+`segredos_pedido.oculto` e `resultados_mestre` com o total real. Verificada em 35 cenários com papéis reais, desfeita no fim.
 
 ## Configuração que falta no painel do Supabase
 

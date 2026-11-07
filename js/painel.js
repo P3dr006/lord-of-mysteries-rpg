@@ -9,7 +9,7 @@
   const hora = t => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const anunciar = t => { const r = $('#anuncio'); if (!r) return; r.textContent = ''; setTimeout(() => { r.textContent = t; }, 30); };
 
-  const S = { user: null, mesa: null, jogadores: [], resultados: [], pendentes: [], sussurros: [], leituras: [], ordens: [], notas: {}, figuras: [], encontro: null, disputas: [], cronica: [], bestiario: [], habs: [], habModo: {}, keep: {}, habsCarregadas: false, online: new Set(), pararDeOuvir: [], ultimoSecreto: null, fichaAberta: null, fichaGatilho: null };
+  const S = { user: null, mesa: null, jogadores: [], resultados: [], pendentes: [], sussurros: [], leituras: [], ordens: [], notas: {}, figuras: [], batalhas: [], disputas: [], cronica: [], bestiario: [], habs: [], efeitos: [], habModo: {}, keep: {}, habsCarregadas: false, online: new Set(), pararDeOuvir: [], ultimoSecreto: null, fichaAberta: null, fichaGatilho: null };
   const tela = html => { $('#m-tela').innerHTML = html; if (typeof decorarTudo === 'function') decorarTudo(); };
   const erroEm = (sel, e) => { const el = $(sel); if (el) { el.textContent = Rede.mensagem(e); el.hidden = false; } };
   // desativa o botão enquanto espera o servidor; o foco do teclado volta para ele depois (desativar tira o foco)
@@ -201,7 +201,7 @@ ${secaoDados()}
     $('#m-form-teste').addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#t-aberto'), () => testar('aberto')); });
     $('#t-secreto').addEventListener('click', e => ocupado(e.currentTarget, () => testar('secreto')));
     ligarFormSussurro(); ligarControle(); ligarAbas(); ligarDuelo(); ligarFiguras(); ligarCronica(); ligarDadosMestre(); ligarBestiario();
-    await Promise.all([carregarJogadores(), carregarResultados(), carregarSussurros(), carregarOrdens(), carregarNotas(), carregarFiguras(), carregarEncontro(), carregarDisputas(), carregarCronica(), carregarBestiario(), carregarHabs()]);
+    await Promise.all([carregarJogadores(), carregarResultados(), carregarSussurros(), carregarOrdens(), carregarNotas(), carregarFiguras(), carregarEncontro(), carregarDisputas(), carregarCronica(), carregarBestiario(), carregarHabs(), carregarEfeitos()]);
     ouvirMesa();
   }
 
@@ -269,6 +269,7 @@ ${secaoDados()}
         return `<li class="${principal ? 'cam' : ''}" style="--ac:${a.cor}" title="${a.nome}${t != null ? ` ${t}` : ''}${principal ? ' · atributo do Caminho' : ''}"><span>${a.nome.slice(0, 3)}</span><b>${v == null ? '—' : sinal(v)}</b></li>`; }).join('')}</ul>
       <footer class="m-cj-pe"><span class="m-cj-hora" data-t="${esc(j.atualizado_em || '')}">${haQuanto(j.atualizado_em)}</span>
         <span class="m-cj-nota" title="Você tem uma nota secreta sobre este jogador" ${S.notas && S.notas[j.user_id] && S.notas[j.user_id].texto.trim() ? '' : 'hidden'}>✎ nota secreta</span>
+        ${resumoEfeitos(j.user_id)}
         ${pendentesDe(j.user_id).length ? `<span class="m-cj-prop" title="Habilidades esperando a sua decisão">✦ ${pendentesDe(j.user_id).length} ${pendentesDe(j.user_id).length === 1 ? 'proposta' : 'propostas'}</span>` : ''}
         <button type="button" class="ghost m-cj-ver" data-u="${esc(j.user_id)}">Ver ficha <span class="sr-only">de ${esc(j.nome)}</span></button></footer>
     </article>`;
@@ -582,65 +583,99 @@ ${secaoDados()}
     try { const r = await (await Rede.tabela('mestre', 'disputas')).select('id,rotulo,a,b,visivel,criado_em').eq('mesa_id', S.mesa.id).order('criado_em', { ascending: false }).limit(30); if (r.error) throw r.error; S.disputas = r.data || []; } catch (e) { /* fica a lista antiga */ }
   }
 
-  // ---------- Roda do Destino ----------
+  // ---------- Roda do Destino: várias batalhas, cada uma com quem o mestre escolher ----------
+  const batalhas = () => (S.batalhas || []).filter(b => b.ativo);
+  const ondeEsta = (tipo, id) => batalhas().find(b => lista(b.ordem).some(p => obj(p).tipo === tipo && obj(p).id === id));
   async function carregarEncontro() {
     if (!S.mesa) return;
-    try { const r = await (await Rede.tabela('mestre', 'encontros')).select('ativo,rodada,vez,ordem,atualizado_em').eq('mesa_id', S.mesa.id); if (r.error) throw r.error; S.encontro = (r.data || [])[0] || null; } catch (e) { return; }
+    try { const r = await (await Rede.tabela('mestre', 'encontros')).select('id,nome,ativo,rodada,vez,ordem,jogadores,criado_em,atualizado_em').eq('mesa_id', S.mesa.id).order('criado_em'); if (r.error) throw r.error; S.batalhas = r.data || []; } catch (e) { return; }
     desenharRoda();
   }
   function desenharRoda() {
-    const e = S.encontro && S.encontro.ativo ? S.encontro : null, faixa = $('#m-roda'), ctrl = $('#m-roda-ctrl');
-    const ordem = e && Array.isArray(e.ordem) ? e.ordem.map(obj) : [], vez = e ? num(e.vez, 0, 99) : 0, atual = ordem[vez];
-    // o redesenho troca os botões: o foco do teclado vai para o próximo passo natural, nunca para o vazio
+    const bs = batalhas(), faixa = $('#m-roda'), ctrl = $('#m-roda-ctrl');
+    // o redesenho troca os botões: o foco volta ao mesmo botão (ou ao próximo passo natural), nunca ao vazio
     const idFoco = document.activeElement && /^rd-/.test(document.activeElement.id) ? document.activeElement.id : '';
+    const vezDe = b => { const o = lista(b.ordem).map(obj); return { o, v: num(b.vez, 0, 99), a: o[num(b.vez, 0, 99)] }; };
     if (faixa) {
-      faixa.hidden = !e;
-      if (e) faixa.innerHTML = `<div class="rd-cab"><span class="rd-tit">Roda do Destino</span><b class="rd-rod">Rodada ${num(e.rodada, 1, 999)}</b>
-          <span class="rd-agora">Vez de <b>${esc(atual ? atual.nome : '—')}</b></span>
-          <button type="button" class="primary rd-prox" id="rd-prox">Próximo turno</button></div>
-        <ol class="rd-fila" aria-label="Ordem da rodada">${ordem.map((p, i) => `<li class="rd-p ${i === vez ? 'vez' : ''} ${i < vez ? 'foi' : ''} ${p.tipo}" style="--i:${i}" ${i === vez ? 'aria-current="true"' : ''}>
-          <span class="rd-chama" aria-hidden="true"></span>${medalhao(p, 40)}<span class="rd-nome">${esc(p.nome)}</span><small>${num(p.total, -99, 99)}</small></li>`).join('')}</ol>`;
-      const b = $('#rd-prox'); if (b) b.addEventListener('click', ev => ocupado(ev.currentTarget, passarTurno));
+      faixa.hidden = !bs.length;
+      faixa.classList.toggle('varias', bs.length > 1);
+      faixa.innerHTML = bs.map(b => { const { o, v, a } = vezDe(b); return `<div class="rd-bat" data-b="${esc(b.id)}"><div class="rd-cab"><span class="rd-tit">${esc(b.nome)}</span><b class="rd-rod">Rodada ${num(b.rodada, 1, 999)}</b>
+          <span class="rd-agora">Vez de <b>${esc(a ? a.nome : '—')}</b></span>
+          <button type="button" class="primary rd-prox" id="rd-prox-${esc(b.id)}" data-prox="${esc(b.id)}">Próximo turno<span class="sr-only"> em ${esc(b.nome)}</span></button></div>
+        <ol class="rd-fila" aria-label="Ordem de ${esc(b.nome)}">${o.map((p, i) => `<li class="rd-p ${i === v ? 'vez' : ''} ${i < v ? 'foi' : ''} ${p.tipo}" style="--i:${i}" ${i === v ? 'aria-current="true"' : ''}>
+          <span class="rd-chama" aria-hidden="true"></span>${medalhao(p, 40)}<span class="rd-nome">${esc(p.nome)}</span><small>${num(p.total, -99, 99)}</small></li>`).join('')}</ol></div>`; }).join('');
+      faixa.querySelectorAll('[data-prox]').forEach(bt => bt.addEventListener('click', ev => ocupado(ev.currentTarget, () => passarTurno(bt.dataset.prox))));
     }
     if (ctrl) {
-      const figs = S.figuras || [];
-      ctrl.innerHTML = e
-        ? `<p class="rd-estado">Rodada <b>${num(e.rodada, 1, 999)}</b> · vez de <b>${esc(atual ? atual.nome : '—')}</b>. A ordem aparece no topo do painel e na tela dos jogadores.</p>
-           <div class="m-acoes"><button type="button" class="primary" id="rd-prox2">Próximo turno</button><button type="button" class="ghost" id="rd-girar">Girar de novo</button><button type="button" class="ghost c-dano" id="rd-fim">Encerrar o encontro</button></div>`
-        : `<p class="hint">Todos os jogadores da mesa entram. O servidor rola d20 + Agilidade da ficha de cada um${figs.length ? ' e d20 + bônus das figuras escolhidas' : ''}.</p>
-           ${figs.length ? `<fieldset class="rd-figs"><legend>Figuras que entram</legend>${figs.map(f => `<label><input type="checkbox" value="${esc(f.id)}" checked><span>${esc(f.nome)} <i>${sinal(f.bonus)}</i></span></label>`).join('')}</fieldset>` : '<p class="hint">Dica: chame figuras (NPCs) abaixo para elas entrarem na roda.</p>'}
-           <div class="m-acoes"><button type="button" class="primary" id="rd-girar">Girar a Roda</button></div>`;
-      const g = $('#rd-girar'); if (g) g.addEventListener('click', ev => ocupado(ev.currentTarget, girarRoda));
-      const p2 = $('#rd-prox2'); if (p2) p2.addEventListener('click', ev => ocupado(ev.currentTarget, passarTurno));
-      const f = $('#rd-fim'); if (f) f.addEventListener('click', async () => { if (await confirmar({ titulo: 'Encerrar o encontro?', texto: 'A Roda some da tela de todos. Dá para girar de novo depois.', botao: 'Encerrar' })) ocupado(f, async () => { try { await Rede.rpc('mestre', 'encerrar_encontro', { p_mesa: S.mesa.id }); await carregarEncontro(); anunciar('Encontro encerrado'); } catch (er) { erroEm('#m-erro-roda', er); } }); });
+      const livresJ = S.jogadores.filter(j => !ondeEsta('jogador', j.user_id)), livresF = (S.figuras || []).filter(f => !ondeEsta('figura', f.id));
+      const opcoes = () => (livresJ.length ? `<optgroup label="Jogadores">${livresJ.map(j => `<option value="jogador:${esc(j.user_id)}">${esc(j.nome)}</option>`).join('')}</optgroup>` : '')
+        + (livresF.length ? `<optgroup label="Figuras">${livresF.map(f => `<option value="figura:${esc(f.id)}">${esc(f.nome)} (${sinal(f.bonus)})</option>`).join('')}</optgroup>` : '');
+      const cartaBat = b => { const { o, v, a } = vezDe(b), id = esc(b.id); return `<article class="rd-batalha" aria-labelledby="rd-n-${id}">
+          <header><h3 id="rd-n-${id}"><span aria-hidden="true">⚔</span> ${esc(b.nome)}</h3><p>Rodada <b>${num(b.rodada, 1, 999)}</b> · vez de <b>${esc(a ? a.nome : '—')}</b></p></header>
+          <ul class="rd-quem" aria-label="Quem está em ${esc(b.nome)}">${o.map((p, i) => `<li class="${p.tipo} ${i === v ? 'vez' : ''}">${medalhao(p, 26)}<span>${esc(p.nome)}</span><small>${num(p.total, -99, 99)}</small>
+            <button type="button" class="mini rd-tirar" id="rd-tirar-${id}-${i}" data-b="${id}" data-t="${esc(p.tipo)}" data-i="${esc(p.id)}" data-n="${esc(p.nome)}" aria-label="Tirar ${esc(p.nome)} de ${esc(b.nome)}" title="Sai da batalha">×</button></li>`).join('')}</ul>
+          ${livresJ.length || livresF.length ? `<div class="rd-entra"><label class="sr-only" for="rd-sel-${id}">Quem entra em ${esc(b.nome)}</label><select id="rd-sel-${id}">${opcoes()}</select>
+            <button type="button" class="ghost" id="rd-entra-${id}" data-entra="${id}">Entra na batalha</button></div>` : ''}
+          <div class="m-acoes"><button type="button" class="primary" id="rd-prox2-${id}" data-prox="${id}">Próximo turno</button><button type="button" class="ghost" id="rd-girar-${id}" data-regirar="${id}">Girar de novo</button><button type="button" class="ghost c-dano" id="rd-fim-${id}" data-fim="${id}" data-n="${esc(b.nome)}">Encerrar</button></div>
+        </article>`; };
+      // a escolha de quem entra sobrevive aos redesenhos ao vivo (sem batalha, todos vêm marcados)
+      const marcado = id => S.keep['rdc' + id] ? S.keep['rdc' + id] === '1' : !bs.length;
+      const podeNova = bs.length < 4 && (livresJ.length || livresF.length);
+      ctrl.innerHTML = (bs.length ? `<div class="rd-batalhas">${bs.map(cartaBat).join('')}</div>` : '')
+        + (podeNova ? `<form class="rd-nova" id="rd-nova" autocomplete="off"><h3 class="sub">${bs.length ? 'Outra batalha ao mesmo tempo' : 'Nova batalha'}</h3>
+            <div class="m-campo"><label for="rd-nome">Nome</label><input type="text" id="rd-nome" maxlength="40" placeholder="${bs.length ? 'Ex.: Batalha da Catedral' : 'Ex.: Batalha do Cais'}" data-keep="rd-nome" value="${esc(S.keep['rd-nome'] || '')}"></div>
+            ${livresJ.length ? `<fieldset class="rd-figs rd-jogs"><legend>Jogadores que entram</legend>${livresJ.map(j => `<label><input type="checkbox" name="rd-j" value="${esc(j.user_id)}" ${marcado(j.user_id) ? 'checked' : ''}><span>${esc(j.nome)}</span></label>`).join('')}</fieldset>` : ''}
+            ${livresF.length ? `<fieldset class="rd-figs"><legend>Figuras que entram</legend>${livresF.map(f => `<label><input type="checkbox" name="rd-f" value="${esc(f.id)}" ${marcado(f.id) ? 'checked' : ''}><span>${esc(f.nome)} <i>${sinal(f.bonus)}</i></span></label>`).join('')}</fieldset>` : '<p class="hint">Dica: chame figuras (NPCs) abaixo para elas entrarem na roda.</p>'}
+            <p class="hint">O servidor rola d20 + Agilidade de cada jogador marcado e d20 + bônus de cada figura. Cada jogador só vê a batalha em que está.</p>
+            <div class="m-acoes"><button type="submit" class="primary" id="rd-girar">Girar a Roda</button></div></form>`
+          : bs.length ? `<p class="hint">${bs.length >= 4 ? 'No máximo 4 batalhas ao mesmo tempo.' : 'Todos já estão em alguma batalha.'}</p>` : '<p class="hint">Ninguém na mesa ainda.</p>');
+      ctrl.querySelectorAll('#rd-nova input[type=checkbox]').forEach(c => c.addEventListener('change', () => { S.keep['rdc' + c.value] = c.checked ? '1' : '0'; }));
+      const f = $('#rd-nova'); if (f) f.addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#rd-girar'), girarRoda); });
+      ctrl.querySelectorAll('[data-prox]').forEach(bt => bt.addEventListener('click', () => ocupado(bt, () => passarTurno(bt.dataset.prox))));
+      ctrl.querySelectorAll('[data-regirar]').forEach(bt => bt.addEventListener('click', () => ocupado(bt, () => acaoRoda('regirar_batalha', { p_batalha: bt.dataset.regirar }, 'A Roda girou de novo'))));
+      ctrl.querySelectorAll('[data-entra]').forEach(bt => bt.addEventListener('click', () => { const v = ($('#rd-sel-' + bt.dataset.entra) || {}).value || ''; const [t, i] = v.split(':'); if (!i) return;
+        ocupado(bt, () => acaoRoda('entrar_na_batalha', { p_batalha: bt.dataset.entra, p_tipo: t, p_id: i }, 'Entrou na batalha')); }));
+      ctrl.querySelectorAll('.rd-tirar').forEach(bt => bt.addEventListener('click', () => ocupado(bt, () => acaoRoda('sair_da_batalha', { p_batalha: bt.dataset.b, p_tipo: bt.dataset.t, p_id: bt.dataset.i }, bt.dataset.n + ' saiu da batalha'))));
+      ctrl.querySelectorAll('[data-fim]').forEach(bt => bt.addEventListener('click', async () => { if (await confirmar({ titulo: `Encerrar ${bt.dataset.n}?`, texto: 'A Roda dessa batalha some da tela de quem está nela. As outras batalhas continuam.', botao: 'Encerrar' }))
+        ocupado(bt, () => acaoRoda('encerrar_batalha', { p_batalha: bt.dataset.fim }, bt.dataset.n + ' encerrada')); }));
     }
     desenharJogadores_vez();
-    if (idFoco) {
-      const proximo = { 'rd-girar': e ? 'rd-prox2' : 'rd-girar', 'rd-fim': 'rd-girar', 'rd-prox': 'rd-prox', 'rd-prox2': e ? 'rd-prox2' : 'rd-girar' }[idFoco] || idFoco;
-      const alvo = document.getElementById(proximo) || document.getElementById('rd-girar'); if (alvo && (!document.activeElement || document.activeElement === document.body)) alvo.focus({ preventScroll: true });
+    if (idFoco && (!document.activeElement || document.activeElement === document.body)) {
+      const alvo = document.getElementById(idFoco) || document.getElementById(idFoco.replace(/^rd-(fim|tirar)-([^-]+(?:-[^-]+){4}).*$/, 'rd-prox2-$2')) || document.getElementById('rd-girar') || document.querySelector('[id^="rd-prox2-"]');
+      if (alvo) alvo.focus({ preventScroll: true });
     }
+  }
+  async function acaoRoda(fn, args, aviso) {
+    $('#m-erro-roda').hidden = true;
+    try { await Rede.rpc('mestre', fn, args); await carregarEncontro(); anunciar(aviso); } catch (e) { erroEm('#m-erro-roda', e); }
   }
   async function girarRoda() {
     $('#m-erro-roda').hidden = true;
-    const figs = [...document.querySelectorAll('.rd-figs input:checked')].map(i => i.value);
-    try { await Rede.rpc('mestre', 'iniciar_encontro', { p_mesa: S.mesa.id, p_figuras: figs }); await carregarEncontro(); const a = obj((S.encontro.ordem || [])[0]); anunciar('A Roda girou. Primeiro: ' + (a.nome || '')); }
-    catch (e) { erroEm('#m-erro-roda', e); }
+    const js = [...document.querySelectorAll('#rd-nova input[name=rd-j]:checked')].map(i => i.value), figs = [...document.querySelectorAll('#rd-nova input[name=rd-f]:checked')].map(i => i.value);
+    if (!js.length && !figs.length) return erroEm('#m-erro-roda', new Rede.ErroRede('Marque quem entra na batalha.'));
+    const nome = txt($('#rd-nome').value, 40) || (batalhas().length ? 'Batalha ' + (batalhas().length + 1) : 'Encontro');
+    try {
+      const id = await Rede.rpc('mestre', 'iniciar_batalha', { p_mesa: S.mesa.id, p_nome: nome, p_jogadores: js, p_figuras: figs });
+      Object.keys(S.keep).forEach(k => { if (k === 'rd-nome' || k.startsWith('rdc')) delete S.keep[k]; }); await carregarEncontro();
+      const b = (S.batalhas || []).find(x => x.id === id) || batalhas().slice(-1)[0], a = b ? obj(lista(b.ordem)[0]) : {};
+      anunciar(`${nome}: a Roda girou. Primeiro: ${a.nome || ''}`);
+    } catch (e) { erroEm('#m-erro-roda', e); }
   }
-  async function passarTurno() {
-    try { await Rede.rpc('mestre', 'proximo_turno', { p_mesa: S.mesa.id }); await carregarEncontro(); const e = S.encontro; const p = obj((e.ordem || [])[e.vez]); anunciar(`Rodada ${e.rodada}. Vez de ${p.nome || ''}`); }
+  async function passarTurno(id) {
+    try { await Rede.rpc('mestre', 'passar_turno', { p_batalha: id }); await carregarEncontro(); const e = (S.batalhas || []).find(b => b.id === id); if (e) { const p = obj(lista(e.ordem)[e.vez]); anunciar(`${e.nome}, rodada ${e.rodada}. Vez de ${p.nome || ''}`); } }
     catch (er) { erroEm('#m-erro-roda', er); }
   }
-  // a carta de quem está na vez ganha a chama
+  // a carta de quem está na vez (em qualquer batalha) ganha a chama
   function desenharJogadores_vez() {
-    const e = S.encontro && S.encontro.ativo ? S.encontro : null, p = e ? obj((e.ordem || [])[num(e.vez, 0, 99)]) : {};
-    document.querySelectorAll('.m-carta-j').forEach(c => c.classList.toggle('na-vez', !!e && p.tipo === 'jogador' && c.dataset.u === p.id));
+    const naVez = new Set(batalhas().map(b => obj(lista(b.ordem)[num(b.vez, 0, 99)])).filter(p => p.tipo === 'jogador').map(p => p.id));
+    document.querySelectorAll('.m-carta-j').forEach(c => c.classList.toggle('na-vez', naVez.has(c.dataset.u)));
   }
 
   // ---------- Figuras da cena ----------
   async function carregarFiguras() {
     if (!S.mesa) return;
     try { const r = await (await Rede.tabela('mestre', 'figuras')).select('id,nome,bonus,pv,pv_max,ficha_id,mods,defesa,criado_em').eq('mesa_id', S.mesa.id).order('criado_em'); if (r.error) throw r.error; S.figuras = r.data || []; } catch (e) { return; }
-    desenharFiguras(); preencherLados(); if (!(S.encontro && S.encontro.ativo)) desenharRoda();
+    desenharFiguras(); preencherLados(); desenharRoda();
   }
   function desenharFiguras() {
     const l = $('#m-figuras'); if (!l) return;
@@ -844,15 +879,39 @@ ${secaoDados()}
       anunciar(nome + ' entra em cena'); await carregarFiguras(); return true;
     } catch (e) { erroEm(erroSel, e); return false; }
   }
-  // revelar = um sussurro para todos com o retrato, o nome e a descrição (números e notas ficam com o mestre)
-  async function revelarCriatura(b, erroSel) {
+  // revelar = um sussurro (retrato, nome e descrição) só para quem o mestre escolher; números e notas ficam com ele
+  function escolherQuem(b, gatilho) {
+    return new Promise(res => {
+      let feito = false; const fim = v => { if (feito) return; feito = true; res(v); };
+      const bs = batalhas().filter(x => lista(x.jogadores).length);
+      const { fundo, fechar } = janela('m-revelar', 'rv-fundo', `<section class="rv-caixa" role="dialog" aria-modal="true" aria-labelledby="rv-t" tabindex="-1">
+        <h2 id="rv-t">Revelar ${esc(b.nome)}</h2><p class="hint">Quem marcar recebe o retrato, o nome e a descrição. Números, poderes e notas ficam só com você.</p>
+        <div class="rv-atalhos" role="group" aria-label="Escolher rápido"><button type="button" class="ghost mini-t" data-rv="todos">Todos</button><button type="button" class="ghost mini-t" data-rv="nenhum">Ninguém</button>
+          ${bs.map(x => `<button type="button" class="ghost mini-t" data-rv="${esc(x.id)}">Quem está em ${esc(x.nome)}</button>`).join('')}</div>
+        <fieldset class="rd-figs rv-quem"><legend>Para quem</legend>${S.jogadores.map(j => `<label><input type="checkbox" value="${esc(j.user_id)}" checked><span>${esc(j.nome)}</span></label>`).join('')}</fieldset>
+        <p class="m-erro" id="rv-erro" role="alert" hidden></p>
+        <div class="m-acoes"><button type="button" class="primary" id="rv-ok">Revelar</button><button type="button" class="ghost" id="rv-nao">Cancelar</button></div></section>`, gatilho, () => fim(null));
+      const caixas = () => [...fundo.querySelectorAll('.rv-quem input')];
+      fundo.querySelectorAll('[data-rv]').forEach(bt => bt.addEventListener('click', () => { const v = bt.dataset.rv, bat = bs.find(x => x.id === v);
+        caixas().forEach(c => { c.checked = v === 'todos' || (!!bat && lista(bat.jogadores).includes(c.value)); }); }));
+      fundo.querySelector('#rv-nao').addEventListener('click', () => fechar());
+      fundo.querySelector('#rv-ok').addEventListener('click', () => { const q = caixas().filter(c => c.checked).map(c => c.value);
+        if (!q.length) { const e = fundo.querySelector('#rv-erro'); e.textContent = 'Marque ao menos um jogador.'; e.hidden = false; return; }
+        fim({ todos: q.length === S.jogadores.length, quem: q }); fechar(); });
+      setTimeout(() => { const c = fundo.querySelector('.rv-quem input'); if (c) c.focus(); }, 30);
+    });
+  }
+  async function revelarCriatura(b, erroSel, gatilho) {
     const e0 = $(erroSel); if (e0) e0.hidden = true;
     if (!S.jogadores.length) return erroEm(erroSel, new Rede.ErroRede('Ninguém na mesa para ver a criatura.'));
-    const ok2 = await confirmar({ titulo: `Revelar ${b.nome} aos jogadores?`, texto: 'Todos recebem o retrato, o nome e a descrição. Números, poderes e suas notas ficam só com você.', botao: 'Revelar' });
-    if (!ok2) return;
+    const esc2 = await escolherQuem(b, gatilho || document.activeElement);
+    if (!esc2) return;
+    const base = { p_mesa: S.mesa.id, p_titulo: txt(b.nome, 80), p_texto: txt(b.descricao, 1000) || 'Algo surge diante de vocês.', p_imagem: imgOk(b.imagem) || null };
     try {
-      await Rede.rpc('mestre', 'sussurrar', { p_mesa: S.mesa.id, p_para: null, p_titulo: txt(b.nome, 80), p_texto: txt(b.descricao, 1000) || 'Algo surge diante de vocês.', p_imagem: imgOk(b.imagem) || null });
-      anunciar(b.nome + ' foi revelada aos jogadores'); carregarSussurros();
+      if (esc2.todos) await Rede.rpc('mestre', 'sussurrar', { ...base, p_para: null });
+      else for (const u of esc2.quem) await Rede.rpc('mestre', 'sussurrar', { ...base, p_para: u });
+      const nomes = esc2.todos ? 'todos' : S.jogadores.filter(j => esc2.quem.includes(j.user_id)).map(j => j.nome).join(', ');
+      anunciar(`${b.nome} foi revelada a ${nomes}`); carregarSussurros();
     } catch (e) { erroEm(erroSel, e); }
   }
 
@@ -1062,6 +1121,85 @@ ${secaoDados()}
     if (idFoco) { const el = document.getElementById(idFoco); if (el) el.focus({ preventScroll: true }); }
   }
   function redesenharHabs() { desenharPropostas(); if (S.fichaAberta) desenharFicha(); }
+  // ---------- bênçãos, maldições e selos (efeitos sobre o jogador, avisados ou secretos) ----------
+  const TIPO_EF = { bencao: { nome: 'Bênção', ic: '✦' }, maldicao: { nome: 'Maldição', ic: '☠' }, bloqueio: { nome: 'Selo', ic: '⛓' }, perda: { nome: 'Perda', ic: '✕' } };
+  const efeitosDe = u => (S.efeitos || []).filter(e => e.user_id === u);
+  async function carregarEfeitos() {
+    if (!S.mesa) return;
+    try { const r = await (await Rede.tabela('mestre', 'efeitos')).select('id,user_id,tipo,atributo,valor,habilidade,rotulo,descricao,secreto,criado_em').eq('mesa_id', S.mesa.id).order('criado_em'); if (r.error) throw r.error; S.efeitos = r.data || []; } catch (e) { return; }
+    desenharJogadores(); if (S.fichaAberta) desenharFicha();
+  }
+  // resumo na carta do jogador: "✦ 1 bênção · ☠ 1 maldição oculta · ⛓ 1 selo"
+  function resumoEfeitos(u) {
+    const es = efeitosDe(u); if (!es.length) return '';
+    const g = {}; es.forEach(e => { const k = e.tipo + (e.secreto ? '-s' : ''); g[k] = (g[k] || 0) + 1; });
+    const pal = { bencao: ['bênção', 'bênçãos'], maldicao: ['maldição', 'maldições'], bloqueio: ['selo', 'selos'], perda: ['perda', 'perdas'] };
+    const partes = Object.entries(g).map(([k, n]) => { const [t, sec] = k.split('-'); return `<span class="ef-${t}${sec ? ' oculto' : ''}">${TIPO_EF[t].ic} ${n} ${pal[t][n === 1 ? 0 : 1]}${sec ? ' ' + (t === 'bloqueio' ? 'oculto' : 'oculta') + (n > 1 ? 's' : '') : ''}</span>`; });
+    return `<span class="m-cj-ef" title="Efeitos ativos (os ocultos o jogador não vê)">${partes.join('<i aria-hidden="true">·</i>')}</span>`;
+  }
+  const descEfeito = e => e.tipo === 'bencao' || e.tipo === 'maldicao' ? `${NOME_ATTR[e.atributo] || e.atributo} ${sinal(num(e.valor, -20, 20))}` : `${e.tipo === 'perda' ? 'Perdida' : 'Selada'}: ${e.habilidade}`;
+  function efeitosFichaHTML(j, nomesHab) {
+    const es = efeitosDe(j.user_id), k = 'x' + j.user_id, tipo = S.keep[k + 'tipo'] || 'bencao', hab = tipo === 'bloqueio' || tipo === 'perda', v = c => esc(S.keep[k + c] || '');
+    const opt = (val, rot, atual) => `<option value="${esc(val)}" ${atual === val ? 'selected' : ''}>${esc(rot)}</option>`;
+    return `<section class="mf-bloco mf-largo mf-efeitos" aria-labelledby="${k}-t"><h3 id="${k}-t">Bênçãos, maldições e selos <i>${es.length ? es.length + ' ativo' + (es.length > 1 ? 's' : '') : 'mude a sorte de ' + esc(j.nome)}</i></h3>
+      ${es.length ? `<ul class="ef-lista">${es.map(e => `<li class="ef ef-${e.tipo} ${e.secreto ? 'oculto' : ''}" data-ef="${esc(e.id)}"><span class="ef-ic" aria-hidden="true">${TIPO_EF[e.tipo].ic}</span>
+        <div><b>${esc(e.rotulo)}</b><span class="ef-o-que">${esc(descEfeito(e))}</span>${e.descricao ? `<p>${esc(e.descricao)}</p>` : ''}</div>
+        <span class="ef-vis">${e.secreto ? 'em segredo' : 'o jogador sabe'}</span>
+        <span class="ef-ac">${e.secreto ? `<button type="button" class="ghost mini-t ef-revelar" id="ef-rv-${esc(e.id)}">Revelar<span class="sr-only"> ${esc(e.rotulo)} ao jogador</span></button>` : ''}
+          <button type="button" class="ghost mini-t ef-tirar" id="ef-x-${esc(e.id)}" data-avisar="${e.secreto ? '' : '1'}">${e.secreto ? 'Desfazer' : 'Desfazer avisando'}<span class="sr-only"> ${esc(e.rotulo)}</span></button>
+          ${e.secreto ? '' : `<button type="button" class="ghost mini-t ef-tirar" id="ef-xs-${esc(e.id)}" data-avisar="">Em silêncio<span class="sr-only">: desfazer ${esc(e.rotulo)}</span></button>`}</span></li>`).join('')}</ul>` : ''}
+      <details class="mf-conceder mf-novo-ef" id="${k}-det" ${S.keep[k + 'aberto'] ? 'open' : ''}><summary>Abençoar, amaldiçoar ou selar</summary>
+        <fieldset class="ef-tipos"><legend class="sr-only">Tipo de efeito</legend>${Object.entries(TIPO_EF).map(([t, d]) => `<label class="ef-tipo ef-${t}"><input type="radio" name="${k}-tipo" value="${t}" ${tipo === t ? 'checked' : ''}><span><i aria-hidden="true">${d.ic}</i>${t === 'bloqueio' ? 'Selar habilidade' : t === 'perda' ? 'Tirar habilidade' : d.nome}</span></label>`).join('')}</fieldset>
+        <div class="m-grade">
+          ${hab ? `<div class="m-campo m-largo"><label for="${k}-hab">Habilidade</label>${nomesHab.length ? `<select id="${k}-hab" data-keep="${k}hab">${nomesHab.map(n => opt(n, n, S.keep[k + 'hab'])).join('')}</select>` : `<input type="text" id="${k}-hab" data-keep="${k}hab" maxlength="80" value="${v('hab')}" placeholder="Nome da habilidade">`}</div>`
+            : `<div class="m-campo"><label for="${k}-attr">Atributo</label><select id="${k}-attr" data-keep="${k}attr">${ATTRS.map(a => opt(a.key, a.nome, S.keep[k + 'attr'])).join('')}</select></div>
+               <div class="m-campo"><label for="${k}-val">${tipo === 'bencao' ? 'Bônus' : 'Penalidade'}</label><select id="${k}-val" data-keep="${k}val">${[1, 2, 3, 4, 5, 6, 8, 10].map(n => opt(String(n), (tipo === 'bencao' ? '+' : '−') + n, S.keep[k + 'val'] || '2')).join('')}</select></div>`}
+          <div class="m-campo m-largo"><label for="${k}-rot">Nome</label><input type="text" id="${k}-rot" data-keep="${k}rot" maxlength="60" value="${v('rot')}" placeholder="${{ bencao: 'Ex.: Bênção da Deusa da Noite', maldicao: 'Ex.: Olhar do Abismo', bloqueio: 'Ex.: Selo do Bispo', perda: 'Ex.: Preço da Corrupção' }[tipo]}"></div>
+          <div class="m-campo m-largo"><label for="${k}-desc">O que o jogador lê <i>(opcional)</i></label><input type="text" id="${k}-desc" data-keep="${k}desc" maxlength="300" value="${v('desc')}" placeholder="Ex.: Até a lua cheia, ou até quebrar a maldição."></div>
+        </div>
+        <label class="ef-segredo"><input type="checkbox" id="${k}-sec" data-keep="${k}sec" ${S.keep[k + 'sec'] === '1' ? 'checked' : ''}><span><b>Em segredo</b><small>${hab ? 'O jogador ainda vê a habilidade como se nada tivesse acontecido.' : 'Vale nas rolagens feitas pelo servidor, mas a ficha do jogador continua com o número antigo.'}</small></span></label>
+        <p class="m-erro" id="${k}-erro" role="alert" hidden></p>
+        <div class="hp-acoes"><button type="button" class="primary" id="${k}-ok">Aplicar</button></div></details></section>`;
+  }
+  function ligarEfeitos(caixa, j) {
+    const bl = caixa.querySelector('.mf-efeitos'); if (!bl) return; const k = 'x' + j.user_id;
+    // a habilidade selada ou perdida ganha a marca na lista de habilidades
+    efeitosDe(j.user_id).filter(e => e.habilidade).forEach(e => caixa.querySelectorAll('.mf-hab > li').forEach(li => { const b = li.querySelector('b'); if (b && b.textContent.trim() === e.habilidade && !li.querySelector('.ef-marca')) { li.classList.add(e.tipo === 'perda' ? 'perdida' : 'selada'); b.insertAdjacentHTML('afterend', `<span class="ef-marca">${e.tipo === 'perda' ? '✕ perdida' : '⛓ selada'}${e.secreto ? ' em segredo' : ''}</span>`); } }));
+    const det = bl.querySelector('.mf-novo-ef'); det.addEventListener('toggle', () => { S.keep[k + 'aberto'] = det.open ? '1' : ''; });
+    bl.querySelectorAll(`input[name="${k}-tipo"]`).forEach(r => r.addEventListener('change', () => { S.keep[k + 'tipo'] = r.value; desenharFicha(); const f = document.querySelector(`input[name="${k}-tipo"][value="${r.value}"]`); if (f) f.focus(); }));
+    const sec = bl.querySelector('#' + CSS.escape(k + '-sec')); sec.addEventListener('change', () => { S.keep[k + 'sec'] = sec.checked ? '1' : ''; });
+    bl.querySelector('#' + CSS.escape(k + '-ok')).addEventListener('click', e => ocupado(e.currentTarget, async () => {
+      const g = c => ((bl.querySelector('#' + CSS.escape(k + '-' + c)) || {}).value || '').trim(), tipo = S.keep[k + 'tipo'] || 'bencao', hab = tipo === 'bloqueio' || tipo === 'perda';
+      const rot = g('rot').slice(0, 60) || { bencao: 'Bênção', maldicao: 'Maldição', bloqueio: 'Selo', perda: 'Perda' }[tipo];
+      const linha = { mesa_id: S.mesa.id, user_id: j.user_id, tipo, rotulo: rot, descricao: g('desc').slice(0, 300) || null, secreto: sec.checked };
+      if (hab) { const h = g('hab').slice(0, 80); if (!h) return erroEm('#' + k + '-erro', new Rede.ErroRede('Escolha a habilidade.')); linha.habilidade = h; }
+      else { const n = num(g('val'), 1, 20) || 2; linha.atributo = g('attr'); linha.valor = tipo === 'bencao' ? n : -n; }
+      try {
+        const r = await (await Rede.tabela('mestre', 'efeitos')).insert(linha).select('id'); if (r.error) throw r.error;
+        await registrar(`${TIPO_EF[tipo].ic} ${j.nome} — ${rot} (${descEfeito(linha)})${linha.secreto ? ' · em segredo' : ''}`);
+        ['rot', 'desc', 'hab', 'sec'].forEach(c => delete S.keep[k + c]); S.keep[k + 'aberto'] = '1';
+        anunciar(`${rot} aplicada a ${j.nome}${linha.secreto ? ', em segredo' : ''}`); await carregarEfeitos();
+      } catch (e2) { erroEm('#' + k + '-erro', e2); }
+    }));
+    bl.querySelectorAll('.ef').forEach(li => {
+      const ef = (S.efeitos || []).find(x => x.id === li.dataset.ef); if (!ef) return;
+      const rv = li.querySelector('.ef-revelar'); if (rv) rv.addEventListener('click', () => ocupado(rv, async () => {
+        try { const r = await (await Rede.tabela('mestre', 'efeitos')).update({ secreto: false }).eq('id', ef.id); if (r.error) throw r.error; await registrar(`${TIPO_EF[ef.tipo].ic} ${j.nome} descobre: ${ef.rotulo}`); anunciar(`${ef.rotulo} revelada a ${j.nome}`); await carregarEfeitos(); }
+        catch (e) { erroEm('#' + k + '-erro', e); } }));
+      li.querySelectorAll('.ef-tirar').forEach(bt => bt.addEventListener('click', () => ocupado(bt, async () => {
+        try {
+          const r = await (await Rede.tabela('mestre', 'efeitos')).delete().eq('id', ef.id); if (r.error) throw r.error;
+          if (bt.dataset.avisar) await Rede.rpc('mestre', 'sussurrar', { p_mesa: S.mesa.id, p_para: j.user_id, p_titulo: txt({ bencao: 'A bênção se esvai', maldicao: 'A maldição se quebra', bloqueio: 'O selo se rompe', perda: 'O que foi perdido retorna' }[ef.tipo], 80), p_texto: `${ef.rotulo} — ${descEfeito(ef)}. Não vale mais.`, p_imagem: null });
+          await registrar(`${TIPO_EF[ef.tipo].ic} ${j.nome} — ${ef.rotulo} desfeita${bt.dataset.avisar ? '' : ' em silêncio'}`);
+          anunciar(`${ef.rotulo} desfeita`); await carregarEfeitos();
+          const f = caixa.querySelector('.mf-novo-ef summary'); if (f) f.focus();
+        } catch (e) { erroEm('#' + k + '-erro', e); }
+      })));
+    });
+  }
+  // a Crônica registra o que o mestre fez (falhar aqui não desfaz o efeito)
+  async function registrar(texto) { try { await (await Rede.tabela('mestre', 'cronica')).insert({ mesa_id: S.mesa.id, texto: String(texto).slice(0, 500) }); carregarCronica(); } catch (e) { /* só a crônica */ } }
+
   // bloco de habilidades na ficha do jogador (dentro da janela)
   function habsFichaHTML(j, habC, habJ) {
     const minhas = (S.habs || []).filter(h => h.user_id === j.user_id), apr = minhas.filter(h => h.estado === 'aprovada'), pend = minhas.filter(h => h.estado === 'pendente'), k = 'c' + j.user_id;
@@ -1196,6 +1334,7 @@ ${secaoDados()}
         <section class="mf-bloco mf-largo"><h3>Quem é</h3>
           ${par('Idade', txt(f.idade, 20)) || par('Gênero', txt(f.genero, 40)) || txt(f.aparencia) || txt(f.historia) ? `<dl class="mf-pares">${par('Idade', txt(f.idade, 20))}${par('Gênero', txt(f.genero, 40))}${par('Aparência', txt(f.aparencia, 400))}${par('História', txt(f.historia, 900))}</dl>` : vazio('O jogador ainda não descreveu o personagem.')}</section>
         ${habsFichaHTML(j, habC, habJ)}
+        ${efeitosFichaHTML(j, [...new Set([...habC.map(h => txt(h, 80)), ...(S.habs || []).filter(h => h.user_id === j.user_id && h.estado === 'aprovada').map(h => h.nome), ...habJ.map(h => txt(h.nome, 60))].filter(Boolean))])}
         ${txt(f.notas) ? `<section class="mf-bloco mf-largo"><h3>Notas do jogador</h3><p class="mf-notas">${esc(txt(f.notas, 900))}</p></section>` : ''}
         <section class="mf-bloco mf-largo mf-segredo"><h3><label for="mf-nota">Notas secretas</label> <i>só você vê · o jogador nunca recebe</i></h3>
           <textarea id="mf-nota" data-u="${esc(j.user_id)}" maxlength="4000" rows="4" placeholder="O que você sabe e ele não: segredos, ganchos, dívidas, mentiras…">${esc(((S.notas || {})[j.user_id] || {}).texto || '')}</textarea>
@@ -1229,7 +1368,7 @@ ${secaoDados()}
     const nota = caixa.querySelector('#mf-nota'), notaSt = caixa.querySelector('#mf-nota-st');
     if (notaViva) { nota.value = notaViva.v; notaSt.textContent = notaViva.st || ''; if (focoDentro && idFoco === 'mf-nota') nota.setSelectionRange(notaViva.a, notaViva.b); }
     nota.addEventListener('input', () => salvarNota(j.user_id, nota.value));
-    ligarHabsFicha(caixa, j);
+    ligarHabsFicha(caixa, j); ligarEfeitos(caixa, j);
     caixa.querySelector('#mf-sussurrar').addEventListener('click', () => {
       const uid = j.user_id; fecharFicha(false);
       const sel = $('#s-para'); if (sel) sel.value = uid;
@@ -1299,6 +1438,7 @@ ${secaoDados()}
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'enc', 'encontros', f, adiar(carregarEncontro)));
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'due', 'disputas', f, adiar(carregarDisputas)));
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'hab', 'habilidades', f, adiar(carregarHabs)));
+      S.pararDeOuvir.push(await Rede.ouvir('mestre', 'efe', 'efeitos', f, adiar(carregarEfeitos)));
       S.pararDeOuvir.push(await Rede.presenca('mestre', id, 'mestre', null, st => { S.online = new Set(Object.keys(st || {}).filter(k => k !== 'mestre')); atualizarVelas(); }));
     } catch (e) { const v = $('#m-ao-vivo'); if (v) { v.textContent = 'sem tempo real'; v.classList.add('off'); } }
   }
