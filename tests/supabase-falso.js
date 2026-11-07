@@ -26,12 +26,13 @@ const CLIENTE = `(() => {
         update(v) { q.op = 'update'; q.valores = v; q.devolver = false; return b; },
         delete() { q.op = 'delete'; q.devolver = false; return b; },
         eq(c, v) { q.filtros.push([c, v]); return b; },
+        is(c, v) { q.filtros.push([c, v]); return b; },
         order(c, o) { q.ordem = [c, !o || o.ascending !== false]; return b; },
         limit(n) { q.limite = n; return b; },
         then(ok, falha) { return chamar('query', { uid: uid(), ...q }).then(ok, falha); },
       };
       // como no supabase-js: from() NÃO é "aguardável"; só depois de select/update/delete
-      return { select: c => b.select(c), update: v => b.update(v), delete: () => b.delete() };
+      return { select: c => b.select(c), update: v => b.update(v), delete: () => b.delete(), insert: v => { q.op = 'insert'; q.valores = v; q.devolver = false; return b; } };
     }
     return {
       auth,
@@ -50,7 +51,7 @@ const CLIENTE = `(() => {
 })();`;
 
 function criarServidor() {
-  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [] };
+  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [] };
   const naMesa = (u, mesa) => db.jogadores.some(j => j.mesa_id === mesa && j.user_id === u);
   const assinaturas = [];          // { id, uid, tabela, filtro, page }
   const entregue = {};             // uid -> [cada resposta entregue a esse usuário]
@@ -71,6 +72,8 @@ function criarServidor() {
     resultados: (u, r) => mestreDe(r.mesa_id) === u || (r.user_id === u && r.tipo === 'aberto'),
     sussurros: (u, r) => mestreDe(r.mesa_id) === u || r.para === u || (r.para === null && naMesa(u, r.mesa_id)),
     sussurros_leituras: (u, r) => mestreDe(r.mesa_id) === u || r.user_id === u,
+    ordens: (u, r) => mestreDe(r.mesa_id) === u || r.para === u,
+    notas_mestre: (u, r) => mestreDe(r.mesa_id) === u,
   };
   function visao(u) {     // resultados_mestre (security_invoker: vale a RLS de quem consulta)
     return db.resultados.filter(r => VE.resultados(u, r)).map(r => {
@@ -90,6 +93,26 @@ function criarServidor() {
   const registrar = (u, r) => { if (u) (entregue[u] = entregue[u] || []).push(JSON.parse(JSON.stringify(r))); return r; };
 
   const RPC = {
+    ordenar(u, a) {
+      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre dá ordens.');
+      if (!['pv', 'san', 'terror'].includes(a.p_tipo)) return erro('Ordem desconhecida.');
+      if (a.p_tipo === 'terror') { if (![0, 1].includes(a.p_valor)) return erro('Terror é ligar (1) ou desligar (0).'); db.mesas.find(m => m.id === a.p_mesa).terror = a.p_valor === 1; }
+      else if (!a.p_valor || Math.abs(a.p_valor) > 999) return erro('Quantidade inválida (1 a 999).');
+      const alvos = db.jogadores.filter(j => j.mesa_id === a.p_mesa && (!a.p_para || j.user_id === a.p_para));
+      if (!alvos.length && a.p_tipo !== 'terror') return erro('Jogador não encontrado.');
+      alvos.forEach(j => { const o = { id: id('ord'), mesa_id: a.p_mesa, para: j.user_id, tipo: a.p_tipo, valor: a.p_valor, motivo: String(a.p_motivo || '').trim().slice(0, 80) || null, criado_em: new Date().toISOString(), aplicada_em: null }; db.ordens.push(o); avisar('ordens', o); });
+      return { data: alvos.length, error: null };
+    },
+    aplicar_ordem(u, a) {
+      const o = db.ordens.find(x => x.id === a.p_id && x.para === u && x.aplicada_em === null);
+      if (!o) return { data: null, error: null };
+      o.aplicada_em = new Date().toISOString(); avisar('ordens', o);
+      return { data: { tipo: o.tipo, valor: o.valor, motivo: o.motivo }, error: null };
+    },
+    estado_da_mesa(u, a) {
+      if (!(naMesa(u, a.p_mesa) || mestreDe(a.p_mesa) === u)) return erro('Mesa inválida.');
+      return { data: { terror: !!db.mesas.find(m => m.id === a.p_mesa).terror }, error: null };
+    },
     sussurrar(u, a) {
       if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre sussurra.');
       const t = String(a.p_texto || '').trim().slice(0, 1000) || null, ti = String(a.p_titulo || '').trim().slice(0, 80) || null, img = a.p_imagem || null;
@@ -108,7 +131,7 @@ function criarServidor() {
     criar_mesa(u, a) {
       if (!u || anonimo(u)) return erro('Entre com e-mail para criar uma mesa.');
       const AL = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c; do { c = Array.from({ length: 6 }, () => AL[Math.floor(Math.random() * AL.length)]).join(''); } while (db.mesas.some(m => m.codigo === c));
-      db.mesas.push({ id: id('mesa'), codigo: c, nome: String(a.p_nome).trim().slice(0, 60), mestre_id: u, criada_em: new Date().toISOString() });
+      db.mesas.push({ id: id('mesa'), codigo: c, nome: String(a.p_nome).trim().slice(0, 60), mestre_id: u, criada_em: new Date().toISOString(), terror: false });
       return { data: c, error: null };
     },
     entrar_na_mesa(u, a) {
@@ -149,13 +172,28 @@ function criarServidor() {
     const u = q.uid; if (!u) return erro('JWT ausente');
     let linhas = q.tabela === 'resultados_mestre' ? visao(u) : (db[q.tabela] || []).filter(r => VE[q.tabela](u, r));
     linhas = linhas.filter(r => q.filtros.every(([c, v]) => String(r[c]) === String(v)));
+    if (q.op === 'insert') {   // só notas_mestre aceita escrita direta (as outras tabelas são só por função)
+      if (q.tabela !== 'notas_mestre') return erro('permission denied for table ' + q.tabela);
+      const v = q.valores; if (mestreDe(v.mesa_id) !== u) return erro('new row violates row-level security policy for table "notas_mestre"');
+      if (!naMesa(v.user_id, v.mesa_id)) return erro('violates foreign key constraint');
+      if (db.notas_mestre.some(n => n.mesa_id === v.mesa_id && n.user_id === v.user_id)) return erro('duplicate key value violates unique constraint "notas_mestre_pkey"');
+      db.notas_mestre.push({ mesa_id: v.mesa_id, user_id: v.user_id, texto: String(v.texto || '').slice(0, 4000), atualizado_em: new Date().toISOString() });
+      return { data: null, error: null };
+    }
     if (q.op === 'update') {
-      const pode = linhas.filter(r => q.tabela === 'jogadores' && r.user_id === u);
-      pode.forEach(r => { for (const k of ['nome', 'ficha']) if (k in q.valores) r[k] = q.valores[k]; r.atualizado_em = new Date().toISOString(); avisar('jogadores', r); });
+      const COLS = { jogadores: ['nome', 'ficha'], notas_mestre: ['texto'] }[q.tabela];
+      if (!COLS) return erro('permission denied for table ' + q.tabela);
+      const pode = linhas.filter(r => q.tabela === 'jogadores' ? r.user_id === u : mestreDe(r.mesa_id) === u);
+      pode.forEach(r => { for (const k of COLS) if (k in q.valores) r[k] = q.valores[k]; r.atualizado_em = new Date().toISOString(); avisar(q.tabela, r); });
       return { data: q.devolver ? pode.map(r => ({ ...r })) : null, error: null };
     }
     if (q.op === 'delete') {
-      const tab = db[q.tabela]; linhas.forEach(r => { tab.splice(tab.indexOf(r), 1); avisar(q.tabela, r); });
+      const DEL = { jogadores: r => r.user_id === u || mestreDe(r.mesa_id) === u, sussurros: r => mestreDe(r.mesa_id) === u, pedidos: r => mestreDe(r.mesa_id) === u, notas_mestre: r => mestreDe(r.mesa_id) === u, mesas: r => r.mestre_id === u }[q.tabela];
+      if (!DEL) return erro('permission denied for table ' + q.tabela);
+      const tab = db[q.tabela]; linhas.filter(DEL).forEach(r => {
+        tab.splice(tab.indexOf(r), 1); avisar(q.tabela, r);
+        if (q.tabela === 'jogadores') for (const t of ['ordens', 'notas_mestre']) db[t] = db[t].filter(x => !(x.mesa_id === r.mesa_id && (x.para || x.user_id) === r.user_id));   // on delete cascade
+      });
       return { data: null, error: null };
     }
     if (q.ordem) { const [c, asc] = q.ordem; linhas = linhas.slice().sort((a, b) => (a[c] > b[c] ? 1 : a[c] < b[c] ? -1 : 0) * (asc ? 1 : -1)); }

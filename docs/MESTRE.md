@@ -29,6 +29,18 @@ mestre (até 1280 px, WebP, ~330 KB no máximo). No jogador, a cena aparece na h
 em papel envelhecido); o que chegou enquanto ele estava fora aparece quando ele volta. "Guardar na memória" marca
 como lido, e o mestre vê quem leu. As pistas ficam na aba Testes para reler. "Para todos" é guardado uma vez só.
 
+**Corpo e mente:** no Grimório, escolha o jogador (ou todos), PV ou Sanidade, quanto e um motivo (o jogador vê).
+"Causar dano"/"Abalar a mente" e "Curar"/"Acalmar". Como PV e Sanidade vivem no navegador do jogador, o mestre manda
+uma **ordem**; o navegador do jogador aplica uma única vez (o servidor garante), anima a ficha e mostra o golpe na tela
+(vermelho e tremor para PV, roxo para a mente, dourado na cura). Se o jogador estiver fora, aplica quando voltar.
+A lista mostra "aplicado" ou "aguardando o jogador". Os valores ficam entre 0 e o máximo.
+
+**Modo Terror da mesa:** o botão no topo do painel liga/desliga para todos, inclusive quem entrar depois. O jogador
+pode desligar o próprio (o Terror pisca e tem som forte); a mesa não força de novo, e só desliga o que ela ligou.
+
+**Notas secretas:** na ficha do jogador, "Notas secretas" (só o mestre lê e escreve; salva sozinha). A carta mostra
+"✎ nota secreta" quando existe uma.
+
 ## Arquivos
 
 | Arquivo | O que faz |
@@ -57,6 +69,12 @@ Arquivo: `supabase/migrations/20261106_mesa_do_mestre.sql`. Tudo com RLS.
 | `resultados_mestre` (visão) | só o mestre | — |
 | `sussurros` | o mestre; o jogador só os dele e os "para todos" da mesa dele | `sussurrar` (só o mestre) |
 | `sussurros_leituras` | o mestre; o jogador só as próprias | `ler_sussurro` |
+| `ordens` (dano, cura, Terror) | o mestre; o jogador só as dele | `ordenar` (só o mestre); `aplicar_ordem` (uma vez) |
+| `notas_mestre` | **só o mestre** | só o mestre (direto na tabela) |
+| `mesas.terror` | lido por `estado_da_mesa` (mestre e jogadores da mesa) | `ordenar(..., 'terror', 1/0)` |
+
+Controle do mestre: `20261108_controle_do_mestre.sql`, verificado em 31 cenários com papéis reais **sem aplicar**
+(a migração e os testes rodaram numa transação desfeita no fim). Aplicar no banco junto com a publicação do site.
 
 Sussurros: `20261107_sussurros.sql`, `…b_sussurros_corrige_leitura.sql` (achado na verificação: um `null`
 deixava quem estava fora da mesa marcar como lido) e `…c_sussurros_tem_imagem.sql`. Verificados em 19 cenários com

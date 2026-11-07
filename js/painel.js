@@ -9,10 +9,17 @@
   const hora = t => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const anunciar = t => { const r = $('#anuncio'); if (!r) return; r.textContent = ''; setTimeout(() => { r.textContent = t; }, 30); };
 
-  const S = { user: null, mesa: null, jogadores: [], resultados: [], pendentes: [], sussurros: [], leituras: [], pararDeOuvir: [], ultimoSecreto: null, fichaAberta: null, fichaGatilho: null };
+  const S = { user: null, mesa: null, jogadores: [], resultados: [], pendentes: [], sussurros: [], leituras: [], ordens: [], notas: {}, pararDeOuvir: [], ultimoSecreto: null, fichaAberta: null, fichaGatilho: null };
   const tela = html => { $('#m-tela').innerHTML = html; if (typeof decorarTudo === 'function') decorarTudo(); };
   const erroEm = (sel, e) => { const el = $(sel); if (el) { el.textContent = Rede.mensagem(e); el.hidden = false; } };
-  const ocupado = async (botao, fn) => { if (botao.disabled) return; botao.disabled = true; botao.setAttribute('aria-busy', 'true'); try { await fn(); } finally { if (botao.isConnected) { botao.disabled = false; botao.removeAttribute('aria-busy'); } } };
+  // desativa o botão enquanto espera o servidor; o foco do teclado volta para ele depois (desativar tira o foco)
+  const ocupado = async (botao, fn) => {
+    if (botao.disabled) return; const tinhaFoco = document.activeElement === botao;
+    botao.disabled = true; botao.setAttribute('aria-busy', 'true');
+    try { await fn(); } finally {
+      if (botao.isConnected) { botao.disabled = false; botao.removeAttribute('aria-busy'); if (tinhaFoco && (document.activeElement === document.body || !document.activeElement)) botao.focus({ preventScroll: true }); }
+    }
+  };
 
   // ---------- início ----------
   async function iniciar() {
@@ -69,7 +76,7 @@
     pararTempoReal(); S.mesa = null;
     tela('<p class="m-carregando">Lendo suas mesas…</p>');
     let mesas = [];
-    try { mesas = (await (await Rede.tabela('mestre', 'mesas')).select('id,codigo,nome,criada_em').order('criada_em', { ascending: false })).data || []; }
+    try { mesas = (await (await Rede.tabela('mestre', 'mesas')).select('id,codigo,nome,criada_em,terror').order('criada_em', { ascending: false })).data || []; }
     catch (e) { return semRede(e); }
     tela(`<section class="m-cartao">
       <h2>Suas mesas</h2>
@@ -83,7 +90,7 @@
       const nome = $('#m-nome-mesa').value.trim(); if (!nome) return erroEm('#m-erro-mesa', new Rede.ErroRede('Dê um nome para a mesa.'));
       try {
         const codigo = await Rede.rpc('mestre', 'criar_mesa', { p_nome: nome });
-        const r = await (await Rede.tabela('mestre', 'mesas')).select('id,codigo,nome,criada_em').eq('codigo', codigo);
+        const r = await (await Rede.tabela('mestre', 'mesas')).select('id,codigo,nome,criada_em,terror').eq('codigo', codigo);
         abrirMesa((r.data || [])[0] || { codigo, nome }, true);
       } catch (e) { erroEm('#m-erro-mesa', e); }
     }); });
@@ -97,12 +104,33 @@
       <section class="m-cartao m-cab">
         <button type="button" class="link-remover m-voltar" id="m-voltar">← Suas mesas</button>
         <h2 class="m-nome">${esc(m.nome)}</h2>
+        <button type="button" class="m-terror ${m.terror ? 'on' : ''}" id="m-terror" aria-pressed="${m.terror ? 'true' : 'false'}">
+          <span class="m-terror-olho" aria-hidden="true"></span><span class="m-terror-txt"><small>Modo Terror da mesa</small><b>${m.terror ? 'Ligado' : 'Desligado'}</b></span></button>
         <div class="m-codigo-wrap"><span class="lbl">Código para os jogadores</span>
           <div class="m-codigo" id="m-codigo"><span class="sr-only">Código da mesa: ${esc(m.codigo.split('').join(' '))}</span>${m.codigo.split('').map((c, i) => `<span style="--i:${i}" aria-hidden="true">${esc(c)}</span>`).join('')}</div>
           <button type="button" class="ghost m-copiar" id="m-copiar" data-ic="copia">Copiar código</button></div>
         ${nova ? '<p class="m-ok m-dica">Mesa criada. Os jogadores abrem a Mesa do Destino, aba Testes, e digitam este código.</p>' : ''}
       </section>
       <section class="m-cartao m-jog" aria-labelledby="t-jog"><h2 id="t-jog">Jogadores <small id="m-ao-vivo" class="m-vivo">ao vivo</small></h2><div id="m-jogadores" class="m-jogadores"></div></section>
+      <section class="m-cartao m-ctrl" aria-labelledby="t-ctrl"><h2 id="t-ctrl">Corpo e mente</h2>
+        <form id="m-form-ctrl" class="m-form" novalidate>
+          <div class="m-grade">
+            <div class="m-campo"><label for="c-para">Para</label><select id="c-para"></select></div>
+            <fieldset class="m-campo c-alvo"><legend>Em</legend><div class="c-alvo-op">
+              <label><input type="radio" name="c-alvo" value="pv" checked><span>PV</span></label>
+              <label><input type="radio" name="c-alvo" value="san"><span>Sanidade</span></label></div></fieldset>
+            <div class="m-campo"><label for="c-qtd">Quanto</label><div class="c-qtd-linha"><input type="number" id="c-qtd" min="1" max="999" value="1" inputmode="numeric">
+              <div class="c-chips" role="group" aria-label="Valores rápidos">${[1, 3, 5, 10].map(v => `<button type="button" class="c-chip" data-v="${v}">${v}</button>`).join('')}</div></div></div>
+            <div class="m-campo"><label for="c-motivo">Motivo <i>(o jogador vê)</i></label><input type="text" id="c-motivo" maxlength="80" placeholder="Ex.: Mordida do lobo" autocomplete="off"></div>
+          </div>
+          <p class="m-erro" id="m-erro-ctrl" role="alert" hidden></p>
+          <div class="m-acoes">
+            <button type="submit" class="ghost c-dano" id="c-dano">Causar dano</button>
+            <button type="button" class="ghost c-cura" id="c-cura">Curar</button>
+          </div>
+        </form>
+        <ol id="m-ordens" class="m-ordens" aria-label="Últimas ordens"></ol>
+      </section>
       <section class="m-cartao m-teste" aria-labelledby="t-teste"><h2 id="t-teste">Teste</h2>
         <form id="m-form-teste" class="m-form" novalidate>
           <div class="m-grade">
@@ -143,8 +171,8 @@
     $('#t-rotulo').addEventListener('input', e => { e.target.dataset.auto = ''; });
     $('#m-form-teste').addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#t-aberto'), () => testar('aberto')); });
     $('#t-secreto').addEventListener('click', e => ocupado(e.currentTarget, () => testar('secreto')));
-    ligarFormSussurro();
-    await Promise.all([carregarJogadores(), carregarResultados(), carregarSussurros()]);
+    ligarFormSussurro(); ligarControle();
+    await Promise.all([carregarJogadores(), carregarResultados(), carregarSussurros(), carregarOrdens(), carregarNotas()]);
     ouvirMesa();
   }
 
@@ -211,6 +239,7 @@
       <ul class="m-mods" aria-label="Modificadores">${ATTRS.map(a => { const v = num(mods[a.key], -30, 30), t = num(attrs[a.key], 1, 60), principal = f.attrCaminho === a.key;
         return `<li class="${principal ? 'cam' : ''}" style="--ac:${a.cor}" title="${a.nome}${t != null ? ` ${t}` : ''}${principal ? ' · atributo do Caminho' : ''}"><span>${a.nome.slice(0, 3)}</span><b>${v == null ? '—' : sinal(v)}</b></li>`; }).join('')}</ul>
       <footer class="m-cj-pe"><span class="m-cj-hora" data-t="${esc(j.atualizado_em || '')}">${haQuanto(j.atualizado_em)}</span>
+        <span class="m-cj-nota" title="Você tem uma nota secreta sobre este jogador" ${S.notas && S.notas[j.user_id] && S.notas[j.user_id].texto.trim() ? '' : 'hidden'}>✎ nota secreta</span>
         <button type="button" class="ghost m-cj-ver" data-u="${esc(j.user_id)}">Ver ficha <span class="sr-only">de ${esc(j.nome)}</span></button></footer>
     </article>`;
   }
@@ -225,6 +254,12 @@
       sel.innerHTML = (S.jogadores.length > 1 ? '<option value="*">Todos os jogadores</option>' : '') + S.jogadores.map(j => `<option value="${esc(j.user_id)}">${esc(j.nome)}</option>`).join('');
       if ([...sel.options].some(o => o.value === atual)) sel.value = atual;
       sel.disabled = !S.jogadores.length;
+    }
+    const cp = $('#c-para'); if (cp) {
+      const atual = cp.value;
+      cp.innerHTML = (S.jogadores.length > 1 ? '<option value="">Todos os jogadores</option>' : '') + S.jogadores.map(j => `<option value="${esc(j.user_id)}">${esc(j.nome)}</option>`).join('');
+      if ([...cp.options].some(o => o.value === atual)) cp.value = atual;
+      cp.disabled = !S.jogadores.length;
     }
     const ss = $('#s-para'); if (ss) {        // sussurro: "Todos" é guardado uma vez só (para = vazio)
       const atual = ss.value;
@@ -315,6 +350,84 @@
     }); });
   }
 
+  // ---------- corpo e mente: dano, cura e Modo Terror (ordens que o navegador do jogador aplica uma vez) ----------
+  const alvo = () => (document.querySelector('input[name="c-alvo"]:checked') || {}).value || 'pv';
+  function rotularControle() {
+    const san = alvo() === 'san', d = $('#c-dano'), c = $('#c-cura'); if (!d) return;
+    d.lastChild.textContent = san ? 'Abalar a mente' : 'Causar dano'; c.lastChild.textContent = san ? 'Acalmar' : 'Curar';
+    d.classList.toggle('san', san); c.classList.toggle('san', san);
+  }
+  function ligarControle() {
+    document.querySelectorAll('input[name="c-alvo"]').forEach(r => r.addEventListener('change', rotularControle));
+    document.querySelectorAll('.c-chip').forEach(b => b.addEventListener('click', () => { $('#c-qtd').value = b.dataset.v; }));
+    const mandar = sinalDano => async () => {
+      $('#m-erro-ctrl').hidden = true;
+      const q = num($('#c-qtd').value, 1, 999), para = $('#c-para').value || null, k = alvo();
+      if (!S.jogadores.length) return erroEm('#m-erro-ctrl', new Rede.ErroRede('Espere um jogador entrar na mesa.'));
+      if (q == null || String($('#c-qtd').value).trim() === '') return erroEm('#m-erro-ctrl', new Rede.ErroRede('Diga quanto (1 a 999).'));
+      try {
+        await Rede.rpc('mestre', 'ordenar', { p_mesa: S.mesa.id, p_para: para, p_tipo: k, p_valor: sinalDano * q, p_motivo: $('#c-motivo').value.trim() });
+        anunciar(`${sinalDano < 0 ? '−' : '+'}${q} ${k === 'pv' ? 'PV' : 'Sanidade'} para ${para ? nomeDe(para) : 'todos'}`);
+        $('#c-motivo').value = ''; carregarOrdens();
+      } catch (e) { erroEm('#m-erro-ctrl', e); }
+    };
+    $('#m-form-ctrl').addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#c-dano'), mandar(-1)); });
+    $('#c-cura').addEventListener('click', e => ocupado(e.currentTarget, mandar(1)));
+    $('#m-terror').addEventListener('click', e => ocupado(e.currentTarget, async () => {
+      const ligar = !S.mesa.terror;
+      try {
+        await Rede.rpc('mestre', 'ordenar', { p_mesa: S.mesa.id, p_para: null, p_tipo: 'terror', p_valor: ligar ? 1 : 0, p_motivo: '' });
+        S.mesa.terror = ligar; const b = $('#m-terror');
+        b.classList.toggle('on', ligar); b.setAttribute('aria-pressed', String(ligar)); b.querySelector('b').textContent = ligar ? 'Ligado' : 'Desligado';
+        anunciar(ligar ? 'Modo Terror ligado para a mesa' : 'Modo Terror desligado para a mesa'); carregarOrdens();
+      } catch (er) { erroEm('#m-erro-ctrl', er); }
+    }));
+    rotularControle();
+  }
+  async function carregarOrdens() {
+    if (!S.mesa) return;
+    try { const r = await (await Rede.tabela('mestre', 'ordens')).select('id,para,tipo,valor,motivo,criado_em,aplicada_em').eq('mesa_id', S.mesa.id).order('criado_em', { ascending: false }).limit(12); if (r.error) throw r.error; S.ordens = r.data || []; }
+    catch (e) { return; }
+    desenharOrdens();
+  }
+  function desenharOrdens() {
+    const l = $('#m-ordens'); if (!l) return;
+    const os = (S.ordens || []).filter(o => o.tipo !== 'terror').slice(0, 8);
+    l.innerHTML = os.map(o => `<li class="m-o ${o.tipo} ${o.valor < 0 ? 'neg' : 'pos'}"><b>${o.valor < 0 ? '−' : '+'}${Math.abs(o.valor)} ${o.tipo === 'pv' ? 'PV' : 'San'}</b>
+      <span>${esc(nomeDe(o.para))}${o.motivo ? ` · ${esc(o.motivo)}` : ''}</span><em class="${o.aplicada_em ? 'ok' : 'espera'}">${o.aplicada_em ? 'aplicado' : 'aguardando o jogador'}</em></li>`).join('');
+  }
+
+  // ---------- notas secretas (só o mestre lê e escreve) ----------
+  async function carregarNotas() {
+    if (!S.mesa) return;
+    try { const r = await (await Rede.tabela('mestre', 'notas_mestre')).select('user_id,texto,atualizado_em').eq('mesa_id', S.mesa.id); if (r.error) throw r.error; S.notas = Object.fromEntries((r.data || []).map(n => [n.user_id, n])); }
+    catch (e) { return; }
+    desenharJogadores();
+  }
+  let timerNota = null;
+  function salvarNota(uid, texto) {
+    clearTimeout(timerNota);
+    // o aviso é procurado na hora: a ficha pode ter sido redesenhada ao vivo enquanto a nota salvava
+    const aviso = { set textContent(t) { const s = document.querySelector('#mf-nota-st'), n = document.querySelector('#mf-nota'); if (s && n && n.dataset.u === uid) s.textContent = t; } };
+    const status = aviso;
+    status.textContent = 'escrevendo…';
+    timerNota = setTimeout(async () => {
+      try {
+        const t = await Rede.tabela('mestre', 'notas_mestre');
+        const r = S.notas && S.notas[uid]
+          ? await t.update({ texto }).eq('mesa_id', S.mesa.id).eq('user_id', uid)
+          : await t.insert({ mesa_id: S.mesa.id, user_id: uid, texto });
+        if (r.error) throw r.error;
+        S.notas = S.notas || {}; S.notas[uid] = { user_id: uid, texto, atualizado_em: new Date().toISOString() };
+        status.textContent = 'guardada'; marcarNotaNaCarta(uid);
+      } catch (e) { status.textContent = 'não salvou: ' + Rede.mensagem(e); }
+    }, 700);
+  }
+  function marcarNotaNaCarta(uid) {
+    const c = document.querySelector(`.m-carta-j[data-u="${CSS.escape(uid)}"] .m-cj-nota`); if (!c) return;
+    c.hidden = !(S.notas && S.notas[uid] && S.notas[uid].texto.trim());
+  }
+
   // ---------- ficha completa do jogador (janela) ----------
   function abrirFicha(uid, gatilho) {
     fecharFicha(false);
@@ -341,6 +454,8 @@
   }
   function desenharFicha() {
     const caixa = document.querySelector('#m-ficha .m-ficha'); if (!caixa) return;
+    // a nota que o mestre está digitando sobrevive ao redesenho ao vivo (texto e posição do cursor)
+    const notaEl = caixa.querySelector('#mf-nota'), notaViva = notaEl && notaEl.dataset.u === S.fichaAberta ? { v: notaEl.value, a: notaEl.selectionStart, b: notaEl.selectionEnd, st: (caixa.querySelector('#mf-nota-st') || {}).textContent } : null;
     const j = S.jogadores.find(x => x.user_id === S.fichaAberta);
     if (!j) { caixa.innerHTML = `<button type="button" class="icon m-ficha-x" aria-label="Fechar a ficha">✕</button><h2 id="mf-nome">Jogador saiu da mesa</h2><p class="hint">Esta ficha não está mais disponível.</p>`; caixa.querySelector('.m-ficha-x').addEventListener('click', () => fecharFicha()); return; }
     const f = fichaDe(j), mods = obj(f.mods), attrs = obj(f.attrs), cor = corOk(f.cor), rolagem = caixa.scrollTop;
@@ -379,11 +494,15 @@
         <section class="mf-bloco mf-largo"><h3>Quem é</h3>
           ${par('Idade', txt(f.idade, 20)) || par('Gênero', txt(f.genero, 40)) || txt(f.aparencia) || txt(f.historia) ? `<dl class="mf-pares">${par('Idade', txt(f.idade, 20))}${par('Gênero', txt(f.genero, 40))}${par('Aparência', txt(f.aparencia, 400))}${par('História', txt(f.historia, 900))}</dl>` : vazio('O jogador ainda não descreveu o personagem.')}</section>
         ${txt(f.notas) ? `<section class="mf-bloco mf-largo"><h3>Notas do jogador</h3><p class="mf-notas">${esc(txt(f.notas, 900))}</p></section>` : ''}
+        <section class="mf-bloco mf-largo mf-segredo"><h3><label for="mf-nota">Notas secretas</label> <i>só você vê · o jogador nunca recebe</i></h3>
+          <textarea id="mf-nota" data-u="${esc(j.user_id)}" maxlength="4000" rows="4" placeholder="O que você sabe e ele não: segredos, ganchos, dívidas, mentiras…">${esc(((S.notas || {})[j.user_id] || {}).texto || '')}</textarea>
+          <small class="mf-nota-st" id="mf-nota-st" aria-live="polite">${(S.notas || {})[j.user_id] ? 'guardada' : ''}</small></section>
         <section class="mf-bloco mf-largo"><h3>Testes nesta mesa</h3>
           ${meus.length ? `<ol class="m-resultados mf-res">${meus.map(linhaResultado).join('')}</ol>` : vazio('Nenhum teste ainda.')}</section>
       </div>
       <div class="mf-acoes"><div class="mf-botoes"><button type="button" class="primary" id="mf-pedir" data-ic="dado">Pedir teste para ${esc(j.nome)}</button>
-        <button type="button" class="ghost m-secreto" id="mf-sussurrar" data-ic="olho">Sussurrar</button></div>
+        <button type="button" class="ghost m-secreto" id="mf-sussurrar" data-ic="olho">Sussurrar</button>
+        <button type="button" class="ghost c-dano" id="mf-ctrl">Corpo e mente</button></div>
         <span class="mf-hora">Ficha atualizada ${esc(haQuanto(j.atualizado_em))}</span></div>`;
     caixa.scrollTop = rolagem;
     caixa.querySelector('.m-ficha-x').addEventListener('click', () => fecharFicha());
@@ -392,6 +511,14 @@
       const sel = $('#t-para'); if (sel) sel.value = uid;
       const r = $('#t-rotulo'); if (r) { r.scrollIntoView({ block: 'center', behavior: 'smooth' }); r.focus(); }
     });
+    caixa.querySelector('#mf-ctrl').addEventListener('click', () => {
+      const uid = j.user_id; fecharFicha(false);
+      const sel = $('#c-para'); if (sel) sel.value = uid;
+      const q = $('#c-qtd'); if (q) { q.scrollIntoView({ block: 'center', behavior: 'smooth' }); q.focus(); q.select(); }
+    });
+    const nota = caixa.querySelector('#mf-nota'), notaSt = caixa.querySelector('#mf-nota-st');
+    if (notaViva) { nota.value = notaViva.v; notaSt.textContent = notaViva.st || ''; if (focoDentro && idFoco === 'mf-nota') nota.setSelectionRange(notaViva.a, notaViva.b); }
+    nota.addEventListener('input', () => salvarNota(j.user_id, nota.value));
     caixa.querySelector('#mf-sussurrar').addEventListener('click', () => {
       const uid = j.user_id; fecharFicha(false);
       const sel = $('#s-para'); if (sel) sel.value = uid;
@@ -457,6 +584,7 @@
       const su = adiar(carregarSussurros);
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'sus', 'sussurros', f, su));
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'lei', 'sussurros_leituras', f, su));
+      S.pararDeOuvir.push(await Rede.ouvir('mestre', 'ord', 'ordens', f, adiar(carregarOrdens)));
     } catch (e) { const v = $('#m-ao-vivo'); if (v) { v.textContent = 'sem tempo real'; v.classList.add('off'); } }
   }
 

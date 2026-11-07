@@ -92,9 +92,13 @@ const Jogador = (() => {
         await carregarSussurros();
         parar.push(await Rede.ouvir('jogador', 'sussurros', 'sussurros', 'mesa_id=eq.' + con.mesa, aoMudarSussurros));
       } catch (e) { /* sem sussurros nesta conexão */ }
+      try {   // ordens do mestre (dano, cura, Terror): idem
+        parar.push(await Rede.ouvir('jogador', 'ordens', 'ordens', 'para=eq.' + uid, () => aplicarOrdens()));
+      } catch (e) { /* sem ordens nesta conexão */ }
       estado = 'ligado'; redesenhar();
       enviarFicha();
       enfileirarNaoLidos();   // o que chegou enquanto estava fora aparece agora
+      sincronizarTerror(); aplicarOrdens();
     } catch (e) { estado = 'desligado'; erro = Rede.mensagem(e); redesenhar(); }
   }
 
@@ -113,6 +117,70 @@ const Jogador = (() => {
       anunciar('O mestre pede: ' + novos.map(p => p.rotulo).join(', '));
     }
     redesenhar();
+  }
+
+  // ---------- ordens do mestre: dano, cura, Sanidade e Modo Terror ----------
+  // Cada ordem é aplicada UMA vez (o servidor marca e devolve null na segunda). Se o jogador estava fora, aplica ao voltar.
+  let aplicando = false, deNovo = false;
+  async function aplicarOrdens() {
+    if (!con || !uid) return;
+    if (aplicando) { deNovo = true; return; }
+    aplicando = true;
+    try {
+      do {
+        deNovo = false;
+        const r = await (await Rede.tabela('jogador', 'ordens')).select('id,tipo,valor,motivo,criado_em').eq('mesa_id', con.mesa).eq('para', uid).is('aplicada_em', null).order('criado_em');
+        if (r.error) throw r.error;
+        for (const o of r.data || []) {
+          const feita = await Rede.rpc('jogador', 'aplicar_ordem', { p_id: o.id });
+          if (feita) executarOrdem(feita);
+        }
+      } while (deNovo);
+    } catch (e) { /* tenta de novo no próximo aviso */ }
+    finally { aplicando = false; }
+  }
+  function executarOrdem(o) {
+    if (o.tipo === 'terror') return terrorDaMesa(o.valor === 1, true);
+    const k = o.tipo === 'san' ? 'san' : 'pv', max = k === 'pv' ? pvMax() : sanMax(), d = Math.trunc(Number(o.valor) || 0);
+    if (!d) return;
+    if (max > 0 && minhaFicha()) {
+      const atual = P[k] == null ? max : P[k], novo = Math.max(0, Math.min(max, atual + d));
+      if (document.querySelector('#iv-' + k) && typeof window.aplicarVitalFicha === 'function') window.aplicarVitalFicha(k, novo);
+      else { P[k] = novo; salvar(); }
+    }
+    golpe(k, d, o.motivo);
+  }
+  // O golpe na tela: vermelho e tremor para PV, roxo e distorção para a mente; dourado suave para cura.
+  function golpe(k, d, motivo) {
+    const dano = d < 0, el = document.createElement('div');
+    el.className = `golpe ${k} ${dano ? 'dano' : 'cura'}`; el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = `<div class="golpe-borda"></div><div class="golpe-txt"><b>${dano ? '−' : '+'}${Math.abs(d)} ${k === 'pv' ? 'PV' : 'Sanidade'}</b>${motivo ? `<small>${esc2(motivo)}</small>` : ''}</div>`;
+    document.body.appendChild(el);
+    if (dano) { const app = document.querySelector('#app'); if (app) { app.classList.remove('golpeado'); void app.offsetWidth; app.classList.add('golpeado'); setTimeout(() => app.classList.remove('golpeado'), 650); } }
+    if (typeof Som === 'object') { if (!dano) Som.confirmar(); else if (k === 'san') Som.batida(); else Som.falha(); }
+    anunciar(`O mestre: ${dano ? 'você perde' : 'você recupera'} ${Math.abs(d)} de ${k === 'pv' ? 'Pontos de Vida' : 'Sanidade'}${motivo ? ', ' + motivo : ''}`);
+    setTimeout(() => el.remove(), 2600);
+  }
+  // Modo Terror da mesa: o mestre liga e desliga para todos, mas o jogador pode desligar o seu (o Terror pisca e tem som forte).
+  const K_TERROR = 'lotm-rpg-terror-mesa';
+  function terrorDaMesa(ligar, avisar) {
+    try { localStorage.setItem(K_TERROR, con.mesa + ':' + (ligar ? 1 : 0)); } catch (e) { /* só nesta aba */ }
+    const b = document.querySelector('#btn-terror');
+    if (typeof Som === 'object' && Som.terror !== ligar && b) b.click();
+    if (avisar) {
+      const el = document.createElement('div'); el.className = 'aviso-terror ' + (ligar ? 'liga' : 'desliga'); el.setAttribute('role', 'status');
+      el.innerHTML = ligar ? '<b>O mestre trouxe o Terror à mesa</b><small>Se precisar, desligue no olho, no topo da tela.</small>' : '<b>O Terror se dissipa</b>';
+      document.body.appendChild(el); setTimeout(() => el.remove(), 5200);
+    }
+  }
+  async function sincronizarTerror() {   // quem entra depois (ou volta) recebe o estado atual, uma vez por mudança
+    try {
+      const e = await Rede.rpc('jogador', 'estado_da_mesa', { p_mesa: con.mesa });
+      const ligar = !!(e && e.terror); let visto = ''; try { visto = localStorage.getItem(K_TERROR) || ''; } catch (er) { /* sem armazenamento */ }
+      if (ligar && visto !== con.mesa + ':1') terrorDaMesa(true, true);                 // o mestre ligou enquanto estava fora
+      else if (!ligar && visto === con.mesa + ':1') terrorDaMesa(false, true);          // o mestre desligou o que ele tinha ligado
+      else if (!ligar && !visto) { try { localStorage.setItem(K_TERROR, con.mesa + ':0'); } catch (er) { /* idem */ } }   // não mexe no Terror pessoal
+    } catch (e) { /* sem estado: fica como está */ }
   }
 
   // ---------- sussurros e pistas do mestre ----------
