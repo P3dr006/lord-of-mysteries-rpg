@@ -18,10 +18,33 @@ const Jogador = (() => {
   // O que o mestre vê: modificadores, PV e Sanidade (nada além disso sai do navegador).
   function ficha() {
     // atributo ainda não rolado não vai (o mestre vê "—"; no teste secreto o servidor usa 0)
-    const mods = {}; ATTRS.forEach(a => { const t = total(a.key); if (t != null) mods[a.key] = mod(t); });
-    const c = P.caminho && caminhoPorId(P.caminho), temVigor = total('vigor') != null, temPres = total('pres') != null;
-    return { mods, pv: temVigor ? (P.pv == null ? pvMax() : P.pv) : null, pvMax: temVigor ? pvMax() : null,
-      san: temPres ? (P.san == null ? sanMax() : P.san) : null, sanMax: temPres ? sanMax() : null, seq: P.sequencia, caminho: c ? c.nome : '' };
+    const mods = {}, attrs = {}; ATTRS.forEach(a => { const t = total(a.key); if (t != null) { mods[a.key] = mod(t); attrs[a.key] = t; } });
+    const c = P.caminho && caminhoPorId(P.caminho), temVigor = total('vigor') != null, temPres = total('pres') != null, temEsp = total('espir') != null;
+    const r = P.raca && racaPorId(P.raca), o = P.origem && origemPorId(P.origem);
+    const tr = P.traco != null ? TRACOS[P.traco] : null, ar = P.artefato != null ? ARTEFATOS[P.artefato] : null;
+    const corta = (s, n) => String(s || '').trim().slice(0, n);
+    // a ficha vai "resolvida" (nomes e textos), para o mestre não depender dos dados do jogo nem da versão do site
+    const f = {
+      v: 2, mods, attrs,
+      pv: temVigor ? (P.pv == null ? pvMax() : P.pv) : null, pvMax: temVigor ? pvMax() : null,
+      san: temPres ? (P.san == null ? sanMax() : P.san) : null, sanMax: temPres ? sanMax() : null,
+      espMax: temEsp ? espMax() : null,
+      seq: P.sequencia, seqNome: c ? corta(nomeSeq(P.sequencia), 60) : '', patamar: patamarDe(P.sequencia).nome,
+      digestao: P.digestao, digMax: typeof DIG_MAX === 'number' ? DIG_MAX : 10,
+      caminho: c ? c.nome : '', caminhoId: c ? c.id : '', cor: c ? c.cor : '', attrCaminho: c ? c.attr : '',
+      raca: r ? { nome: r.nome, icone: r.icone } : null, origem: o ? { nome: o.nome, icone: o.icone } : null,
+      jogador: corta(P.jogador, 60), idade: corta(P.idade, 20), genero: corta(P.genero, 40), aparencia: corta(P.aparencia, 400),
+      traco: tr ? { nome: tr.t, desc: corta(tr.d, 240) } : null,
+      artefato: ar ? { nome: ar.n, dadiva: corta(ar.dadiva, 240), maldicao: corta(ar.maldicao, 240) } : null,
+      habCaminho: c ? c.hab.slice(0, 6) : [],
+      hab: (P.habilidades || []).slice(0, 20).map(h => ({ nome: corta(h.nome, 60), desc: corta(h.desc, 200) })),
+      historia: corta(P.historia, 900), notas: corta(P.notas, 900),
+    };
+    // o banco aceita até ~8 KB por ficha: se passar, os textos longos encolhem primeiro
+    const bytes = () => new TextEncoder().encode(JSON.stringify(f)).length;   // bytes, não letras (acento ocupa 2)
+    for (const k of ['notas', 'historia', 'aparencia']) { if (bytes() <= 6500) break; f[k] = f[k].slice(0, 200); }
+    while (bytes() > 6500 && f.hab.length) f.hab.pop();
+    return f;
   }
 
   // ---------- entrar / sair ----------
@@ -185,5 +208,5 @@ const Jogador = (() => {
     if (fab) fab.addEventListener('click', () => { const m = document.querySelector('#mesa'); if (pedidos.length && estado === 'ligado' && m && !m.hidden) Mesa.irParaTestes(); });
   });
 
-  return { desenhar, entrar, sairDaMesa, ligar, rolarPedido, get estado() { return estado; }, get pedidos() { return pedidos.slice(); } };
+  return { desenhar, entrar, sairDaMesa, ligar, rolarPedido, fichaParaMestre: ficha, get estado() { return estado; }, get pedidos() { return pedidos.slice(); } };
 })();
