@@ -567,6 +567,44 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('revelar manda um sussurro para todos com nome e descrição (sem as notas)', await ate(() => srv.db.sussurros.some(s => s.titulo === 'Lobo de Tingen' && s.para === null && s.texto === 'Olhos de vidro.')) && !srv.db.sussurros.some(s => /Foge do fogo/.test(s.texto || '')));
     await ate(() => j.isVisible('#sus-ok'), 4000); await fecharCena();
 
+    // ---- NPC: a mesma ficha do bestiário, com Caminho, facção, falas e segredos em camadas
+    await m.click('#bs-novo-npc'); await m.waitForSelector('#be-nome');
+    ok('"Novo NPC" abre o editor já como NPC, com o bloco "Quem é"', await m.evaluate(() => document.querySelector('input[name=be-cat][value=npc]').checked && !document.querySelector('#be-npc').hidden));
+    await m.fill('#be-nome', 'Dunn Smith'); await m.selectOption('#be-caminho', 'louco'); await m.selectOption('#be-seq', '7');
+    await m.fill('#be-fac', 'Falcões Noturnos'); await m.selectOption('#be-rel', 'aliado'); await m.fill('#be-local', 'Rua Zouteland, 36'); await m.fill('#be-pers', 'Distraído, leal.');
+    await m.click('#be-fala-mais'); await m.fill('#be-fala-0', 'Ah, esqueci de novo.');
+    await m.click('#be-seg-mais'); await m.fill('#be-seg-0', 'É capitão dos Falcões.'); await m.click('#be-seg-mais'); await m.fill('#be-seg-1', 'Sonha com a Deusa.');
+    await semViolacoes(m, 'editor de NPC');
+    await m.click('#be-salvar');
+    ok('o NPC entra no bestiário com Caminho, Sequência, facção, falas e camadas', await ate(() => { const x = srv.db.bestiario.find(b => b.nome === 'Dunn Smith'); return !!x && x.categoria === 'npc' && x.caminho === 'louco' && x.sequencia === 7 && x.faccao === 'Falcões Noturnos' && x.relacao === 'aliado' && x.local === 'Rua Zouteland, 36' && x.falas.length === 1 && x.segredos.length === 2 && x.segredos.every(s => s.revelado === false); }), JSON.stringify(srv.db.bestiario.find(b => b.nome === 'Dunn Smith')));
+    const npcB = srv.db.bestiario.find(b => b.nome === 'Dunn Smith') || { id: '' };
+    ok('a carta do NPC mostra Caminho e relação', await ate(async () => /Caminho Louco · Seq\. 7/.test(await m.textContent(`.bs-carta[data-b="${npcB.id}"]`)) && /Aliado/.test(await m.textContent(`.bs-carta[data-b="${npcB.id}"]`))));
+    await m.click('.bs-f[data-f="npc"]');
+    ok('filtro NPCs mostra só o NPC', await m.evaluate(() => [...document.querySelectorAll('.bs-carta')].map(x => x.querySelector('.bs-nome').textContent).join() === 'Dunn Smith'));
+    await m.click('.bs-f[data-f="criatura"]');
+    ok('filtro Criaturas esconde o NPC', await m.evaluate(() => [...document.querySelectorAll('.bs-carta')].map(x => x.querySelector('.bs-nome').textContent).join() === 'Lobo de Tingen'));
+    await m.click('.bs-f[data-f="todos"]');
+    await m.click(`.bs-carta[data-b="${npcB.id}"] .bs-ver`); await m.waitForSelector('.bs-ficha.npc');
+    await semViolacoes(m, 'ficha do NPC');
+    await m.click('#bf-abrir-0'); await m.waitForSelector('#rv-ok'); await m.click('[data-rv="todos"]'); await m.click('#rv-ok');
+    ok('revelar a 1ª camada manda só ela e marca como revelada', await ate(() => { const x = srv.db.bestiario.find(b => b.id === npcB.id); return srv.db.sussurros.some(s => s.titulo === 'Dunn Smith' && s.texto === 'É capitão dos Falcões.') && x.segredos[0].revelado === true && x.segredos[1].revelado === false; }));
+    ok('a camada que não foi revelada nunca chega ao jogador', !JSON.stringify(srv.entregue[uidJ] || []).includes('Sonha com a Deusa'));
+    ok('a ficha reabre com a camada aberta e o botão de ocultar', await ate(() => m.isVisible('#bf-ocultar-0')));
+    await ate(() => j.isVisible('#sus-ok'), 4000); await fecharCena();
+    await m.click('#bf-ocultar-0');
+    ok('"Ocultar de novo" desmarca a camada (para reusar o NPC)', await ate(() => srv.db.bestiario.find(b => b.id === npcB.id).segredos[0].revelado === false));
+    await ate(() => m.isVisible('#bf-dizer-0')); await m.click('#bf-dizer-0'); await m.waitForSelector('#rv-ok'); await m.click('[data-rv="todos"]'); await m.click('#rv-ok');
+    ok('"Sussurrar" manda a fala entre aspas com o nome do NPC', await ate(() => srv.db.sussurros.some(s => s.titulo === 'Dunn Smith' && s.texto === '“Ah, esqueci de novo.”')));
+    await ate(() => j.isVisible('#sus-ok'), 4000); await fecharCena();
+    await m.keyboard.press('Escape');
+    // virar criatura limpa os campos de pessoa
+    await m.click(`.bs-carta[data-b="${npcB.id}"] .bs-ver`); await m.click('#bf-editar'); await m.waitForSelector('#be-nome'); await m.check('input[name=be-cat][value=criatura]');
+    ok('como criatura, o bloco "Quem é" some', await m.evaluate(() => document.querySelector('#be-npc').hidden));
+    await m.click('#be-salvar');
+    ok('salvar como criatura limpa Caminho, falas e segredos', await ate(() => { const x = srv.db.bestiario.find(b => b.id === npcB.id); return x.categoria === 'criatura' && x.caminho === null && x.falas.length === 0 && x.segredos.length === 0; }));
+    await m.click(`.bs-carta[data-b="${npcB.id}"] .bs-ver`); await m.click('#bf-apagar'); await m.click('#cf-ok');
+    ok('apagar o NPC tira a carta', await ate(async () => !srv.db.bestiario.some(b => b.id === npcB.id) && !(await m.$(`.bs-carta[data-b="${npcB.id}"]`))));
+
     // ---- habilidades: o jogador propõe pela ficha
     if (await j.isVisible('#mesa')) await j.click('#mesa-x');
     await j.fill('#hab-nome', 'Truque do palhaço'); await j.fill('#hab-desc', 'O inimigo perde a próxima ação.');

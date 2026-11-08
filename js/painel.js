@@ -9,7 +9,7 @@
   const hora = t => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const anunciar = t => { const r = $('#anuncio'); if (!r) return; r.textContent = ''; setTimeout(() => { r.textContent = t; }, 30); };
 
-  const S = { user: null, mesa: null, jogadores: [], resultados: [], pendentes: [], sussurros: [], leituras: [], ordens: [], notas: {}, figuras: [], batalhas: [], disputas: [], cronica: [], bestiario: [], habs: [], efeitos: [], habModo: {}, keep: {}, habsCarregadas: false, online: new Set(), pararDeOuvir: [], ultimoSecreto: null, fichaAberta: null, fichaGatilho: null };
+  const S = { user: null, mesa: null, jogadores: [], resultados: [], pendentes: [], sussurros: [], leituras: [], ordens: [], notas: {}, figuras: [], batalhas: [], disputas: [], cronica: [], bestiario: [], besFiltro: 'todos', habs: [], efeitos: [], habModo: {}, keep: {}, habsCarregadas: false, online: new Set(), pararDeOuvir: [], ultimoSecreto: null, fichaAberta: null, fichaGatilho: null };
   const tela = html => { $('#m-tela').innerHTML = html; if (typeof decorarTudo === 'function') decorarTudo(); };
   const erroEm = (sel, e) => { const el = $(sel); if (el) { el.classList.remove('m-ok'); el.textContent = Rede.mensagem(e); el.hidden = false; } };
   // desativa o botão enquanto espera o servidor; o foco do teclado volta para ele depois (desativar tira o foco)
@@ -741,7 +741,7 @@ ${secaoDados()}
     l.innerHTML = (S.figuras || []).map(f => {
       const temPV = f.pv_max != null, pv = num(f.pv, 0, 9999), mx = num(f.pv_max, 1, 9999), e = temPV ? estado(pv, mx, EST_PV) : null;
       const fb = f.ficha_id && (S.bestiario || []).find(x => x.id === f.ficha_id), im = fb && imgOk(fb.imagem);
-      return `<li class="m-fig ${e && e.cls === 'zero' ? 'caida' : ''} ${fb ? 'com-ficha' : ''}" data-f="${esc(f.id)}">${fb ? `<span class="fg-ret">${im ? `<img src="${im}" alt="">` : sombra(fb.nome)}</span>` : ''}<div class="fg-id"><b>${esc(f.nome)}</b><small>${fb ? `${esc(txt(fb.tipo, 40) || 'Criatura')} · ` : ''}inic. ${sinal(f.bonus)}${f.defesa != null ? ` · def ${num(f.defesa, 0, 99)}` : ''}${e ? ` · <span class="m-est pv ${e.cls}">${e.txt}</span>` : ''}</small></div>
+      return `<li class="m-fig ${e && e.cls === 'zero' ? 'caida' : ''} ${fb ? 'com-ficha' : ''}" data-f="${esc(f.id)}">${fb ? `<span class="fg-ret">${im ? `<img src="${im}" alt="">` : sombra(fb.nome)}</span>` : ''}<div class="fg-id"><b>${esc(f.nome)}</b><small>${fb ? `${esc(txt(rotulo(fb), 40))} · ` : ''}inic. ${sinal(f.bonus)}${f.defesa != null ? ` · def ${num(f.defesa, 0, 99)}` : ''}${e ? ` · <span class="m-est pv ${e.cls}">${e.txt}</span>` : ''}</small></div>
         ${temPV ? `<div class="fg-pv">${barra('PV', pv, mx, '#e05a6a')}<div class="fg-bts" role="group" aria-label="PV de ${esc(f.nome)}">${[-5, -1, 1, 5].map(d => `<button type="button" class="c-chip fg-d" data-d="${d}" aria-label="${d < 0 ? 'Tirar' : 'Dar'} ${Math.abs(d)} PV de ${esc(f.nome)}">${d < 0 ? '−' : '+'}${Math.abs(d)}</button>`).join('')}</div></div>` : ''}
         ${fb ? `<button type="button" class="ghost fg-ficha" data-ic="livro">Ficha<span class="sr-only"> de ${esc(f.nome)}</span></button>` : ''}<button type="button" class="link-remover fg-x">Dispensar<span class="sr-only"> ${esc(f.nome)}</span></button></li>`;
     }).join('') || '<li class="hint m-vazio">Nenhuma figura. Lobos, cultistas, um bispo suspeito: chame quem estiver em cena.</li>';
@@ -867,6 +867,16 @@ ${secaoDados()}
   const modDe = (mods, k) => num(obj(mods)[k], -10, 20) || 0;
   const olhos = n => `<span class="bs-perigo" role="img" aria-label="Perigo ${n} de 5: ${PERIGO[n - 1]}">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}<b aria-hidden="true">${PERIGO[n - 1]}</b></span>`;
   const sombra = nome => `<span class="bs-sombra" aria-hidden="true">${esc(txt(nome, 1).toUpperCase() || '?')}</span>`;
+  // ---- NPCs: a mesma ficha do bestiário com categoria "npc" e campos de pessoa (Caminho, facção, falas, segredos)
+  const RELACAO = { aliado: 'Aliado', amigavel: 'Amigável', neutro: 'Neutro', desconfiado: 'Desconfiado', hostil: 'Hostil' };
+  const ehNpc = b => !!b && b.categoria === 'npc';
+  const caminhoDe = b => (b && b.caminho && typeof caminhoPorId === 'function' && caminhoPorId(b.caminho)) || null;
+  const seqDe = b => b && b.sequencia != null ? num(b.sequencia, 0, 9) : null;
+  const seqTxt = b => { const c = caminhoDe(b), s = seqDe(b); return c ? `Caminho ${c.nome}${s != null ? ' · Seq. ' + s : ''}` : s != null ? 'Sequência ' + s : ''; };
+  const rotulo = b => txt(b.tipo, 60) || (ehNpc(b) ? seqTxt(b) || 'Pessoa comum' : 'Criatura');
+  const relSelo = b => RELACAO[b.relacao] ? `<span class="bs-rel r-${b.relacao}">${RELACAO[b.relacao]}</span>` : '';
+  const falasDe = b => lista(b.falas).map(f => txt(f, 200).trim()).filter(Boolean);
+  const segredosDe = b => lista(b.segredos).map(obj).map(s => ({ texto: txt(s.texto, 400).trim(), revelado: s.revelado === true })).filter(s => s.texto);
   // "2d6+3", "1d8 de dano", "d20 - 1": o primeiro dado escrito no efeito vira botão de rolar
   const DADO_RX = /(\d{0,2})d(\d{1,3})(?:\s*([+\-−])\s*(\d{1,3}))?/i;
   function rolarEfeito(ef) {
@@ -894,15 +904,20 @@ ${secaoDados()}
   }
 
   function secaoBestiario() {
-    return `<section class="m-cartao m-bes" aria-labelledby="t-bes"><h2 id="t-bes">Bestiário ${sub('suas criaturas · valem em todas as mesas')}</h2>
-      <div class="bs-barra"><label class="sr-only" for="bs-busca">Procurar no bestiário</label><input type="search" id="bs-busca" placeholder="Procurar criatura ou tipo…" autocomplete="off">
-        <button type="button" class="primary" id="bs-nova" data-ic="mais">Nova criatura</button></div>
+    return `<section class="m-cartao m-bes" aria-labelledby="t-bes"><h2 id="t-bes">Bestiário ${sub('criaturas e NPCs · valem em todas as mesas')}</h2>
+      <div class="bs-barra"><label class="sr-only" for="bs-busca">Procurar no bestiário</label><input type="search" id="bs-busca" placeholder="Procurar nome, tipo, Caminho ou facção…" autocomplete="off">
+        <button type="button" class="primary" id="bs-nova" data-ic="mais">Nova criatura</button><button type="button" class="primary" id="bs-novo-npc" data-ic="mais">Novo NPC</button></div>
+      <div class="bs-filtro" role="group" aria-label="Mostrar">${[['todos', 'Tudo'], ['criatura', 'Criaturas'], ['npc', 'NPCs']].map(([k, t]) => `<button type="button" class="bs-f" data-f="${k}" aria-pressed="${k === 'todos'}">${t} <span class="bs-f-n" id="bs-n-${k}"></span></button>`).join('')}</div>
       <p class="m-erro" id="m-erro-bes" role="alert" hidden></p>
       <ul id="m-bestiario" class="bs-grade" aria-label="Criaturas do bestiário"></ul></section>`;
   }
   function ligarBestiario() {
     $('#bs-nova').addEventListener('click', e => editarCriatura(null, e.currentTarget));
+    $('#bs-novo-npc').addEventListener('click', e => editarCriatura(null, e.currentTarget, 'npc'));
     $('#bs-busca').addEventListener('input', desenharBestiario);
+    document.querySelectorAll('.bs-f').forEach(bt => bt.addEventListener('click', () => {
+      S.besFiltro = bt.dataset.f; document.querySelectorAll('.bs-f').forEach(x => x.setAttribute('aria-pressed', String(x === bt))); desenharBestiario();
+    }));
   }
   async function carregarBestiario() {
     try { const r = await (await Rede.tabela('mestre', 'bestiario')).select('*').order('nome'); if (r.error) throw r.error; S.bestiario = r.data || []; } catch (e) { return; }
@@ -911,14 +926,17 @@ ${secaoDados()}
   function desenharBestiario() {
     const l = $('#m-bestiario'); if (!l) return;
     const q = norm(($('#bs-busca') || {}).value);
-    const vis = (S.bestiario || []).filter(b => !q || norm(b.nome + ' ' + (b.tipo || '')).includes(q));
-    l.innerHTML = vis.map(b => { const p = num(b.perigo, 1, 5) || 1, im = imgOk(b.imagem);
-      return `<li class="bs-carta p${p}" data-b="${esc(b.id)}">
-        <div class="bs-retrato">${im ? `<img src="${im}" alt="">` : sombra(b.nome)}</div>
-        <div class="bs-corpo"><small class="bs-tipo">${esc(txt(b.tipo, 60) || 'Criatura')}</small><b class="bs-nome">${esc(b.nome)}</b>${olhos(p)}
-          <p class="bs-num">${b.pv_max != null ? `<span><i>PV</i>${num(b.pv_max, 1, 9999)}</span>` : ''}${b.defesa != null ? `<span><i>Def</i>${num(b.defesa, 0, 99)}</span>` : ''}<span><i>Inic</i>${sinal(modDe(b.mods, 'agil'))}</span><span><i>Poderes</i>${lista(b.habilidades).length}</span></p></div>
+    const todos = S.bestiario || [], f = S.besFiltro || 'todos';
+    const conta = { todos: todos.length, npc: todos.filter(ehNpc).length }; conta.criatura = conta.todos - conta.npc;
+    Object.entries(conta).forEach(([k, n]) => { const s = $('#bs-n-' + k); if (s) s.textContent = String(n); });
+    const vis = todos.filter(b => (f === 'todos' || (f === 'npc') === ehNpc(b)) && (!q || norm([b.nome, b.tipo, b.faccao, seqTxt(b)].join(' ')).includes(q)));
+    l.innerHTML = vis.map(b => { const p = num(b.perigo, 1, 5) || 1, im = imgOk(b.imagem), npc = ehNpc(b), c = caminhoDe(b), sg = segredosDe(b);
+      return `<li class="bs-carta p${p}${npc ? ' npc' : ''}" data-b="${esc(b.id)}"${c ? ` style="--cc:${c.cor}"` : ''}>
+        <div class="bs-retrato">${im ? `<img src="${im}" alt="">` : sombra(b.nome)}${c ? `<span class="bs-sigilo" aria-hidden="true">${svgGlifo(c, 18)}</span>` : ''}</div>
+        <div class="bs-corpo"><small class="bs-tipo">${npc ? '<span class="bs-npc">NPC</span> ' : ''}${esc(rotulo(b))}</small><b class="bs-nome">${esc(b.nome)}</b>${npc && (b.faccao || b.relacao) ? `<p class="bs-fac">${b.faccao ? `<span>${esc(txt(b.faccao, 60))}</span>` : ''}${relSelo(b)}</p>` : ''}${olhos(p)}
+          <p class="bs-num">${b.pv_max != null ? `<span><i>PV</i>${num(b.pv_max, 1, 9999)}</span>` : ''}${b.defesa != null ? `<span><i>Def</i>${num(b.defesa, 0, 99)}</span>` : ''}<span><i>Inic</i>${sinal(modDe(b.mods, 'agil'))}</span>${npc ? `<span><i>Segredos</i>${sg.filter(s => s.revelado).length}/${sg.length}</span>` : `<span><i>Poderes</i>${lista(b.habilidades).length}</span>`}</p></div>
         <div class="bs-acoes"><button type="button" class="primary bs-chamar" data-ic="mais">Chamar<span class="sr-only"> ${esc(b.nome)} à cena</span></button><button type="button" class="ghost bs-ver" data-ic="livro">Ficha<span class="sr-only"> de ${esc(b.nome)}</span></button><button type="button" class="ghost bs-revelar" data-ic="olho">Revelar<span class="sr-only"> ${esc(b.nome)} aos jogadores</span></button></div></li>`;
-    }).join('') || `<li class="hint m-vazio">${q ? 'Nenhuma criatura com esse nome.' : 'O bestiário está vazio. Crie a primeira criatura: um lobo de olhos de vidro, um cultista da Aurora, o espectro do cais.'}</li>`;
+    }).join('') || `<li class="hint m-vazio">${q ? 'Nada com esse nome aqui.' : f === 'npc' ? 'Nenhum NPC ainda. Um capitão dos Falcões Noturnos, a dona da pensão que ouve demais, o bispo de sorriso fixo.' : 'O bestiário está vazio. Crie a primeira criatura: um lobo de olhos de vidro, um cultista da Aurora, o espectro do cais.'}</li>`;
     l.querySelectorAll('.bs-carta').forEach(li => {
       const b = S.bestiario.find(x => x.id === li.dataset.b); if (!b) return;
       li.querySelector('.bs-chamar').addEventListener('click', e => ocupado(e.currentTarget, () => chamarCriatura(b, '#m-erro-bes')));
@@ -939,17 +957,17 @@ ${secaoDados()}
     } catch (e) { erroEm(erroSel, e); return false; }
   }
   // revelar = um sussurro (retrato, nome e descrição) só para quem o mestre escolher; números e notas ficam com ele
-  function escolherQuem(b, gatilho) {
+  function escolherQuem(b, gatilho, tit, dica, botao) {
     return new Promise(res => {
       let feito = false; const fim = v => { if (feito) return; feito = true; res(v); };
       const bs = batalhas().filter(x => lista(x.jogadores).length);
       const { fundo, fechar } = janela('m-revelar', 'rv-fundo', `<section class="rv-caixa" role="dialog" aria-modal="true" aria-labelledby="rv-t" tabindex="-1">
-        <h2 id="rv-t">Revelar ${esc(b.nome)}</h2><p class="hint">Quem marcar recebe o retrato, o nome e a descrição. Números, poderes e notas ficam só com você.</p>
+        <h2 id="rv-t">${esc(tit || 'Revelar ' + b.nome)}</h2>${dica ? `<blockquote class="rv-previa">${esc(dica)}</blockquote>` : '<p class="hint">Quem marcar recebe o retrato, o nome e a descrição. Números, poderes e notas ficam só com você.</p>'}
         <div class="rv-atalhos" role="group" aria-label="Escolher rápido"><button type="button" class="ghost mini-t" data-rv="todos">Todos</button><button type="button" class="ghost mini-t" data-rv="nenhum">Ninguém</button>
           ${bs.map(x => `<button type="button" class="ghost mini-t" data-rv="${esc(x.id)}">Quem está em ${esc(x.nome)}</button>`).join('')}</div>
         <fieldset class="rd-figs rv-quem"><legend>Para quem</legend>${S.jogadores.map(j => `<label><input type="checkbox" value="${esc(j.user_id)}" checked><span>${esc(j.nome)}</span></label>`).join('')}</fieldset>
         <p class="m-erro" id="rv-erro" role="alert" hidden></p>
-        <div class="m-acoes"><button type="button" class="primary" id="rv-ok">Revelar</button><button type="button" class="ghost" id="rv-nao">Cancelar</button></div></section>`, gatilho, () => fim(null));
+        <div class="m-acoes"><button type="button" class="primary" id="rv-ok">${esc(botao || 'Revelar')}</button><button type="button" class="ghost" id="rv-nao">Cancelar</button></div></section>`, gatilho, () => fim(null));
       const caixas = () => [...fundo.querySelectorAll('.rv-quem input')];
       fundo.querySelectorAll('[data-rv]').forEach(bt => bt.addEventListener('click', () => { const v = bt.dataset.rv, bat = bs.find(x => x.id === v);
         caixas().forEach(c => { c.checked = v === 'todos' || (!!bat && lista(bat.jogadores).includes(c.value)); }); }));
@@ -960,35 +978,49 @@ ${secaoDados()}
       setTimeout(() => { const c = fundo.querySelector('.rv-quem input'); if (c) c.focus(); }, 30);
     });
   }
-  async function revelarCriatura(b, erroSel, gatilho) {
+  // manda um sussurro com o retrato da ficha para quem o mestre escolher; devolve os nomes (ou null se cancelou/falhou)
+  async function sussurrarDaFicha(b, texto, erroSel, gatilho, tit, dica, botao) {
     const e0 = $(erroSel); if (e0) e0.hidden = true;
-    if (!S.jogadores.length) return erroEm(erroSel, new Rede.ErroRede('Ninguém na mesa para ver a criatura.'));
-    const esc2 = await escolherQuem(b, gatilho || document.activeElement);
-    if (!esc2) return;
-    const base = { p_mesa: S.mesa.id, p_titulo: txt(b.nome, 80), p_texto: txt(b.descricao, 1000) || 'Algo surge diante de vocês.', p_imagem: imgOk(b.imagem) || null };
+    if (!S.jogadores.length) { erroEm(erroSel, new Rede.ErroRede('Ninguém na mesa para ouvir.')); return null; }
+    const esc2 = await escolherQuem(b, gatilho || document.activeElement, tit, dica, botao);
+    if (!esc2) return null;
+    const base = { p_mesa: S.mesa.id, p_titulo: txt(b.nome, 80), p_texto: txt(texto, 1000), p_imagem: imgOk(b.imagem) || null };
     try {
       if (esc2.todos) await Rede.rpc('mestre', 'sussurrar', { ...base, p_para: null });
       else for (const u of esc2.quem) await Rede.rpc('mestre', 'sussurrar', { ...base, p_para: u });
-      const nomes = esc2.todos ? 'todos' : S.jogadores.filter(j => esc2.quem.includes(j.user_id)).map(j => j.nome).join(', ');
-      anunciar(`${b.nome} foi revelada a ${nomes}`); carregarSussurros();
-    } catch (e) { erroEm(erroSel, e); }
+      carregarSussurros();
+      return esc2.todos ? 'todos' : S.jogadores.filter(j => esc2.quem.includes(j.user_id)).map(j => j.nome).join(', ');
+    } catch (e) { erroEm(erroSel, e); return null; }
+  }
+  async function revelarCriatura(b, erroSel, gatilho) {
+    const nomes = await sussurrarDaFicha(b, txt(b.descricao, 1000) || (ehNpc(b) ? 'Alguém se aproxima.' : 'Algo surge diante de vocês.'), erroSel, gatilho);
+    if (nomes) anunciar(ehNpc(b) ? `Apresentação de ${b.nome} enviada a ${nomes}` : `${b.nome} foi revelada a ${nomes}`);
   }
 
   // ---------- ficha da criatura (leitura, rolar poderes, dano direto nos jogadores) ----------
   function abrirCriatura(id, gatilho, figNome) {
     const b = (S.bestiario || []).find(x => x.id === id); if (!b) return;
     const p = num(b.perigo, 1, 5) || 1, im = imgOk(b.imagem), hs = lista(b.habilidades).map(obj).filter(h => txt(h.nome)), quem = figNome || b.nome;
-    const { fundo, fechar } = janela('m-criatura', 'bs-fundo', `<section class="bs-ficha p${p}" role="dialog" aria-modal="true" aria-labelledby="bf-nome" tabindex="-1">
-      <button type="button" class="icon bf-x" aria-label="Fechar a ficha da criatura">✕</button>
+    const npc = ehNpc(b), c = caminhoDe(b), falas = falasDe(b), sg = segredosDe(b);
+    // NPC: quem é (facção, relação, onde achar), jeito de ser, falas prontas e segredos em camadas
+    const blocoNpc = !npc ? '' : `${txt(b.personalidade) ? `<section class="bf-bloco"><h3>Personalidade</h3><p class="bf-desc">${esc(txt(b.personalidade, 600))}</p></section>` : ''}
+      <section class="bf-bloco"><h3>Falas <i>diga em voz alta ou sussurre a quem quiser</i></h3>${falas.length ? `<ol class="bf-falas">${falas.map((t, i) => `<li><q>${esc(t)}</q><button type="button" class="ghost mini-t bf-dizer" id="bf-dizer-${i}" data-i="${i}" data-ic="olho">Sussurrar<span class="sr-only"> a fala ${i + 1}</span></button></li>`).join('')}</ol>` : '<p class="hint">Nenhuma fala pronta.</p>'}</section>
+      <section class="bf-bloco bf-camadas"><h3>Segredos <i>em camadas · o grupo descobre um por vez</i></h3>${sg.length ? `<ol class="bf-seg">${sg.map((s, i) => `<li class="${s.revelado ? 'aberto' : ''}" data-i="${i}"><span class="bf-selo" aria-hidden="true">${['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'][i]}</span>
+        <div><small class="bf-seg-est">${s.revelado ? 'Revelado' : 'Oculto'}</small><p>${esc(s.texto)}</p></div>
+        ${s.revelado ? `<button type="button" class="ghost mini-t bf-ocultar" id="bf-ocultar-${i}" data-i="${i}">Ocultar de novo<span class="sr-only"> o segredo ${i + 1}</span></button>` : `<button type="button" class="ghost mini-t bf-abrir" id="bf-abrir-${i}" data-i="${i}" data-ic="olho">Revelar<span class="sr-only"> o segredo ${i + 1}</span></button>`}</li>`).join('')}</ol>` : '<p class="hint">Nenhum segredo anotado.</p>'}</section>`;
+    const { fundo, fechar } = janela('m-criatura', 'bs-fundo', `<section class="bs-ficha p${p}${npc ? ' npc' : ''}" role="dialog" aria-modal="true" aria-labelledby="bf-nome" tabindex="-1"${c ? ` style="--cc:${c.cor}"` : ''}>
+      <button type="button" class="icon bf-x" aria-label="Fechar a ficha de ${esc(b.nome)}">✕</button>
       <div class="bf-cab">
-        <figure class="bf-retrato">${im ? `<img src="${im}" alt="Retrato de ${esc(b.nome)}">` : sombra(b.nome)}</figure>
-        <div class="bf-id"><small class="bf-tipo">${esc(txt(b.tipo, 60) || 'Criatura')}${figNome ? ` · <i>em cena como ${esc(figNome)}</i>` : ''}</small><h2 id="bf-nome">${esc(b.nome)}</h2>${olhos(p)}
+        <figure class="bf-retrato">${im ? `<img src="${im}" alt="Retrato de ${esc(b.nome)}">` : sombra(b.nome)}${c ? `<span class="bs-sigilo" aria-hidden="true">${svgGlifo(c, 22)}</span>` : ''}</figure>
+        <div class="bf-id"><small class="bf-tipo">${npc ? '<span class="bs-npc">NPC</span> ' : ''}${esc(rotulo(b))}${figNome ? ` · <i>em cena como ${esc(figNome)}</i>` : ''}</small><h2 id="bf-nome">${esc(b.nome)}</h2>${npc && (b.faccao || b.relacao) ? `<p class="bs-fac">${b.faccao ? `<span>${esc(txt(b.faccao, 60))}</span>` : ''}${relSelo(b)}</p>` : ''}${olhos(p)}
           <dl class="bf-vit">${b.pv_max != null ? `<div><dt>PV</dt><dd>${num(b.pv_max, 1, 9999)}</dd></div>` : ''}${b.defesa != null ? `<div><dt>Defesa</dt><dd>${num(b.defesa, 0, 99)}</dd></div>` : ''}<div><dt>Iniciativa</dt><dd>${sinal(modDe(b.mods, 'agil'))}</dd></div></dl>
+          ${npc && txt(b.local) ? `<p class="bf-horror bf-local"><span>Onde achar</span> ${esc(txt(b.local, 120))}</p>` : ''}
           ${txt(b.horror) ? `<p class="bf-horror"><span>Horror</span> ${esc(txt(b.horror, 120))}</p>` : ''}</div>
       </div>
       <ul class="bf-attrs" aria-label="Modificadores">${ATTRS.map(a => `<li style="--ac:${a.cor}"><span>${a.nome}</span><b>${sinal(modDe(b.mods, a.key))}</b></li>`).join('')}</ul>
-      <section class="bf-bloco"><h3>Poderes</h3>${hs.length ? `<ol class="bf-hab">${hs.map((h, i) => `<li data-i="${i}"><div class="bf-h-txt"><b>${esc(txt(h.nome, 60))}</b>${txt(h.efeito) ? `<em>${esc(txt(h.efeito, 60))}</em>` : ''}${txt(h.desc) ? `<p>${esc(txt(h.desc, 400))}</p>` : ''}</div>
-        ${DADO_RX.test(txt(h.efeito)) ? `<button type="button" class="ghost bf-rolar" id="bf-rolar-${i}" data-i="${i}" data-ic="dado">Rolar<span class="sr-only"> ${esc(txt(h.nome, 60))}</span></button>` : ''}<div class="bf-res" id="bf-res-${i}" role="status" aria-live="polite"></div></li>`).join('')}</ol>` : '<p class="hint">Sem poderes anotados.</p>'}</section>
+      ${blocoNpc}
+      ${npc && !hs.length ? '' : `<section class="bf-bloco"><h3>Poderes</h3>${hs.length ? `<ol class="bf-hab">${hs.map((h, i) => `<li data-i="${i}"><div class="bf-h-txt"><b>${esc(txt(h.nome, 60))}</b>${txt(h.efeito) ? `<em>${esc(txt(h.efeito, 60))}</em>` : ''}${txt(h.desc) ? `<p>${esc(txt(h.desc, 400))}</p>` : ''}</div>
+        ${DADO_RX.test(txt(h.efeito)) ? `<button type="button" class="ghost bf-rolar" id="bf-rolar-${i}" data-i="${i}" data-ic="dado">Rolar<span class="sr-only"> ${esc(txt(h.nome, 60))}</span></button>` : ''}<div class="bf-res" id="bf-res-${i}" role="status" aria-live="polite"></div></li>`).join('')}</ol>` : '<p class="hint">Sem poderes anotados.</p>'}</section>`}
       ${txt(b.descricao) ? `<section class="bf-bloco"><h3>O que os jogadores veem</h3><p class="bf-desc">${esc(txt(b.descricao, 1000))}</p></section>` : ''}
       ${txt(b.notas) ? `<section class="bf-bloco bf-segredo"><h3>Notas secretas <i>só você vê</i></h3><p class="bf-desc">${esc(txt(b.notas, 1500))}</p></section>` : ''}
       <p class="m-erro" id="bf-erro" role="alert" hidden></p>
@@ -1012,6 +1044,26 @@ ${secaoDados()}
     }));
     fundo.querySelector('#bf-chamar').addEventListener('click', e => ocupado(e.currentTarget, async () => { if (await chamarCriatura(b, '#bf-erro')) { fechar(false); irParaAba('cena'); const f = $('#m-figuras'); if (f) f.scrollIntoView({ block: 'nearest' }); } }));
     fundo.querySelector('#bf-revelar').addEventListener('click', e => ocupado(e.currentTarget, () => revelarCriatura(b, '#bf-erro')));
+    fundo.querySelectorAll('.bf-dizer').forEach(bt => bt.addEventListener('click', () => ocupado(bt, async () => {
+      const fala = falas[+bt.dataset.i]; const nomes = await sussurrarDaFicha(b, `“${fala}”`, '#bf-erro', bt, `${b.nome} diz…`, fala, 'Sussurrar');
+      if (nomes) anunciar(`Fala de ${b.nome} enviada a ${nomes}`);
+    })));
+    // camada de segredo: revelar manda o texto a quem o mestre escolher e marca a camada; ocultar só desmarca (reusar o NPC)
+    const marcarCamada = async (i, revelado) => {
+      const novos = sg.map((s, k) => ({ texto: s.texto, revelado: k === i ? revelado : s.revelado }));
+      const r = await (await Rede.tabela('mestre', 'bestiario')).update({ segredos: novos }).eq('id', b.id); if (r.error) throw r.error;
+      b.segredos = novos; await carregarBestiario(); fechar(false); abrirCriatura(b.id, gatilho, figNome);
+      const foco = fundo.isConnected ? null : document.querySelector(`#${revelado ? 'bf-ocultar' : 'bf-abrir'}-${i}`); if (foco) /** @type {HTMLElement} */ (foco).focus();
+    };
+    fundo.querySelectorAll('.bf-abrir').forEach(bt => bt.addEventListener('click', () => ocupado(bt, async () => {
+      const i = +bt.dataset.i, s = sg[i];
+      const nomes = await sussurrarDaFicha(b, s.texto, '#bf-erro', bt, `Revelar o segredo ${i + 1} de ${b.nome}`, s.texto, 'Revelar segredo');
+      if (!nomes) return;
+      try { await marcarCamada(i, true); anunciar(`Segredo ${i + 1} de ${b.nome} revelado a ${nomes}`); } catch (e) { erroEm('#bf-erro', e); }
+    })));
+    fundo.querySelectorAll('.bf-ocultar').forEach(bt => bt.addEventListener('click', () => ocupado(bt, async () => {
+      const i = +bt.dataset.i; try { await marcarCamada(i, false); anunciar(`Segredo ${i + 1} de ${b.nome} voltou a ficar oculto`); } catch (e) { erroEm('#bf-erro', e); }
+    })));
     fundo.querySelector('#bf-editar').addEventListener('click', () => { fechar(false); editarCriatura(b, gatilho); });
     fundo.querySelector('#bf-apagar').addEventListener('click', async () => {
       const ok2 = await confirmar({ titulo: `Apagar ${b.nome} do bestiário?`, texto: 'A ficha some de todas as suas mesas. As figuras que já estão em cena continuam, só sem a ficha.', botao: 'Apagar', perigo: true });
@@ -1023,14 +1075,17 @@ ${secaoDados()}
   }
 
   // ---------- criar / editar uma criatura ----------
-  function editarCriatura(b0, gatilho) {
-    const novo = !b0, b = b0 || { nome: '', tipo: '', perigo: 2, pv_max: null, defesa: null, horror: '', mods: {}, habilidades: [], descricao: '', notas: '', imagem: null };
+  function editarCriatura(b0, gatilho, cat) {
+    const novo = !b0, b = b0 || { categoria: cat === 'npc' ? 'npc' : 'criatura', nome: '', tipo: '', perigo: cat === 'npc' ? 1 : 2, pv_max: null, defesa: null, horror: '', mods: {}, habilidades: [], descricao: '', notas: '', imagem: null, caminho: null, sequencia: null, faccao: '', relacao: null, local: '', personalidade: '', falas: [], segredos: [] };
     let imagem = imgOk(b.imagem) || null;
     const habs = lista(b.habilidades).map(obj).map(h => ({ nome: txt(h.nome, 60), efeito: txt(h.efeito, 60), desc: txt(h.desc, 400) }));
+    const falas = falasDe(b), segs = segredosDe(b);
     const v = x => esc(x == null ? '' : x);
+    const opc = (val, t, atual) => `<option value="${esc(val)}" ${String(atual ?? '') === String(val) ? 'selected' : ''}>${esc(t)}</option>`;
     const { fundo, fechar } = janela('m-bes-editor', 'bs-fundo', `<section class="bs-editor" role="dialog" aria-modal="true" aria-labelledby="be-tit" tabindex="-1"><form id="be-form" novalidate>
       <button type="button" class="icon bf-x" aria-label="Fechar sem salvar">✕</button>
-      <small class="bf-tipo">Bestiário</small><h2 id="be-tit">${novo ? 'Nova criatura' : 'Editar ' + esc(b.nome)}</h2>
+      <small class="bf-tipo">Bestiário</small><h2 id="be-tit">${novo ? (ehNpc(b) ? 'Novo NPC' : 'Nova criatura') : 'Editar ' + esc(b.nome)}</h2>
+      <fieldset class="be-cat"><legend class="sr-only">Esta ficha é</legend>${[['criatura', 'Criatura', 'fera, horror, cultista sem rosto'], ['npc', 'NPC', 'pessoa com nome, Caminho e segredos']].map(([k, t, d]) => `<label><input type="radio" name="be-cat" value="${k}" ${(ehNpc(b) ? 'npc' : 'criatura') === k ? 'checked' : ''}><span><b>${t}</b><small>${d}</small></span></label>`).join('')}</fieldset>
       <div class="be-topo">
         <div class="be-retrato"><div class="be-img" id="be-img"></div>
           <div class="s-escolher"><input type="file" id="be-arq" accept="image/*" class="s-arquivo" aria-label="Escolher retrato da criatura"><span class="s-botao" aria-hidden="true">Escolher retrato</span></div>
@@ -1043,6 +1098,18 @@ ${secaoDados()}
           <div class="m-campo"><label for="be-def">Defesa</label><input type="number" id="be-def" min="0" max="99" value="${v(b.defesa)}" placeholder="opcional" inputmode="numeric"></div>
         </div>
       </div>
+      <fieldset class="be-npc" id="be-npc"><legend>Quem é <i>só para NPCs</i></legend>
+        <div class="m-grade be-grade">
+          <div class="m-campo"><label for="be-caminho">Caminho</label><select id="be-caminho">${opc('', 'Nenhum · pessoa comum', b.caminho)}${(typeof CAMINHOS !== 'undefined' ? CAMINHOS : []).map(c => opc(c.id, c.nome, b.caminho)).join('')}</select></div>
+          <div class="m-campo"><label for="be-seq">Sequência</label><select id="be-seq">${opc('', '—', seqDe(b))}${[9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map(n => opc(n, `Sequência ${n}${n === 9 ? ' (início)' : n === 0 ? ' (topo)' : ''}`, seqDe(b))).join('')}</select></div>
+          <div class="m-campo"><label for="be-fac">Facção <i>(opcional)</i></label><input type="text" id="be-fac" maxlength="60" value="${v(b.faccao)}" placeholder="Ex.: Falcões Noturnos · Igreja da Deusa" autocomplete="off"></div>
+          <div class="m-campo"><label for="be-rel">Com o grupo</label><select id="be-rel">${opc('', 'Não definido', b.relacao)}${Object.entries(RELACAO).map(([k, t]) => opc(k, t, b.relacao)).join('')}</select></div>
+          <div class="m-campo m-largo"><label for="be-local">Onde achar <i>(opcional)</i></label><input type="text" id="be-local" maxlength="120" value="${v(b.local)}" placeholder="Ex.: Rua Zouteland, 36 · Tingen, depois das dez" autocomplete="off"></div>
+        </div>
+        <div class="m-campo"><label for="be-pers">Personalidade <i>(jeito de falar, o que quer, do que tem medo)</i></label><textarea id="be-pers" maxlength="600" rows="3" placeholder="Distraído, esquece nomes. Leal até o osso. Teme perder mais alguém do esquadrão.">${v(b.personalidade)}</textarea></div>
+        <div class="be-lista"><h3 class="be-sub">Falas prontas <i>até 10</i></h3><ol id="be-falas"></ol><button type="button" class="ghost" id="be-fala-mais" data-ic="mais">Adicionar fala</button></div>
+        <div class="be-lista"><h3 class="be-sub">Segredos em camadas <i>até 8 · do mais raso ao mais fundo</i></h3><ol id="be-segs"></ol><button type="button" class="ghost" id="be-seg-mais" data-ic="mais">Adicionar camada</button></div>
+      </fieldset>
       <fieldset class="be-mods"><legend>Modificadores <i>usados no Duelo · Agilidade é a iniciativa</i></legend>
         ${ATTRS.map(a => `<div class="m-campo be-mod" style="--ac:${a.cor}"><label for="be-m-${a.key}" title="${a.nome}"><span aria-hidden="true">${a.nome.slice(0, 3)}</span><span class="sr-only">${a.nome}</span></label>
           <div class="be-passo"><button type="button" class="be-d" data-k="${a.key}" data-d="-1" aria-label="Diminuir ${a.nome}">−</button><input type="number" id="be-m-${a.key}" min="-10" max="20" value="${modDe(b.mods, a.key)}" inputmode="numeric"><button type="button" class="be-d" data-k="${a.key}" data-d="1" aria-label="Aumentar ${a.nome}">+</button></div></div>`).join('')}</fieldset>
@@ -1068,6 +1135,29 @@ ${secaoDados()}
       if (foco != null) { const f = ol.querySelector('#be-h-nome-' + foco); if (f) f.focus(); }
     };
     desenharImg(); desenharHabs();
+    // falas e camadas de segredo: listas de textos (a camada guarda se já foi revelada)
+    const LISTAS = {
+      fala: { arr: falas, ol: '#be-falas', mais: '#be-fala-mais', max: 10, tam: 200, rot: 'Fala', ph: 'Ex.: Ah, esqueci de novo. Qual é mesmo o seu nome?', vazio: 'Nenhuma fala. Um bordão, uma ameaça educada, a frase que ele repete quando mente…', texto: x => x, novo: () => '', por: (i, t) => { falas[i] = t; } },
+      seg: { arr: segs, ol: '#be-segs', mais: '#be-seg-mais', max: 8, tam: 400, rot: 'Camada', ph: 'Ex.: É capitão dos Falcões Noturnos.', vazio: 'Nenhum segredo. O que todos sabem, o que poucos sabem, o que ninguém deveria saber.', texto: x => x.texto, novo: () => ({ texto: '', revelado: false }), por: (i, t) => { segs[i].texto = t; } },
+    };
+    const desenharLista = (k, foco) => {
+      const L = LISTAS[k], ol = fundo.querySelector(L.ol);
+      ol.innerHTML = L.arr.map((x, i) => `<li class="be-item${k === 'seg' && x.revelado ? ' revelado' : ''}"><span class="be-n" aria-hidden="true">${k === 'seg' ? ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'][i] : i + 1}</span>
+        <div class="m-campo"><label for="be-${k}-${i}">${L.rot} ${i + 1}${k === 'seg' && x.revelado ? ' <i>(já revelada)</i>' : ''}</label>${k === 'seg' ? `<textarea id="be-${k}-${i}" data-i="${i}" maxlength="${L.tam}" rows="2" placeholder="${esc(L.ph)}">${v(L.texto(x))}</textarea>` : `<input type="text" id="be-${k}-${i}" data-i="${i}" maxlength="${L.tam}" value="${v(L.texto(x))}" placeholder="${esc(L.ph)}" autocomplete="off">`}</div>
+        <button type="button" class="link-remover be-x" data-i="${i}">Tirar<span class="sr-only"> ${L.rot.toLowerCase()} ${i + 1}</span></button></li>`).join('') || `<li class="hint m-vazio">${L.vazio}</li>`;
+      ol.querySelectorAll('[data-i]:is(input,textarea)').forEach(inp => inp.addEventListener('input', () => L.por(+inp.dataset.i, inp.value)));
+      ol.querySelectorAll('.be-x').forEach(bt => bt.addEventListener('click', () => { L.arr.splice(+bt.dataset.i, 1); desenharLista(k); fundo.querySelector(L.mais).focus(); }));
+      fundo.querySelector(L.mais).disabled = L.arr.length >= L.max;
+      if (foco != null) { const f = fundo.querySelector(`#be-${k}-${foco}`); if (f) f.focus(); }
+    };
+    Object.keys(LISTAS).forEach(k => { const L = LISTAS[k]; desenharLista(k);
+      fundo.querySelector(L.mais).addEventListener('click', () => { if (L.arr.length < L.max) { L.arr.push(L.novo()); desenharLista(k, L.arr.length - 1); } }); });
+    // Criatura ou NPC: o bloco "Quem é" só aparece para NPC (os dados ficam guardados se trocar e voltar)
+    const catAtual = () => /** @type {HTMLInputElement} */ (fundo.querySelector('input[name=be-cat]:checked') || {}).value === 'npc' ? 'npc' : 'criatura';
+    const trocarCat = () => { const n = catAtual() === 'npc'; fundo.querySelector('#be-npc').hidden = !n; if (novo) fundo.querySelector('#be-tit').textContent = n ? 'Novo NPC' : 'Nova criatura';
+      fundo.querySelector('#be-nome').setAttribute('placeholder', n ? 'Ex.: Dunn Smith' : 'Ex.: Lobo de olhos de vidro');
+      fundo.querySelector('#be-tipo').setAttribute('placeholder', n ? 'Ex.: Capitão · Dona da pensão (vazio: mostra o Caminho)' : 'Ex.: Fera corrompida · Beyonder Seq. 8'); };
+    fundo.querySelectorAll('input[name=be-cat]').forEach(r => r.addEventListener('change', trocarCat)); trocarCat();
     // − e + próprios no lugar das setinhas do navegador (−10 a +20); o valor mostra o sinal, como na carta
     const pintarMod = inp => { const v = num(inp.value, -10, 20) || 0; inp.closest('.be-passo').dataset.s = v > 0 ? 'pos' : v < 0 ? 'neg' : ''; };
     fundo.querySelectorAll('.be-passo input').forEach(inp => { pintarMod(inp); inp.addEventListener('input', () => pintarMod(inp)); });
@@ -1084,19 +1174,27 @@ ${secaoDados()}
       fundo.querySelector('#be-erro').hidden = true;
       const val = id => fundo.querySelector(id).value.trim(), nome = val('#be-nome'), pvT = val('#be-pv'), defT = val('#be-def');
       const falha = (m, sel) => { erroEm('#be-erro', new Rede.ErroRede(m)); if (sel) fundo.querySelector(sel).focus(); };
-      if (!nome) return falha('Dê um nome à criatura.', '#be-nome');
+      const npc = catAtual() === 'npc';
+      if (!nome) return falha(npc ? 'Dê um nome ao NPC.' : 'Dê um nome à criatura.', '#be-nome');
       const pv = pvT ? num(pvT, 1, 9999) : null, def = defT ? num(defT, 0, 99) : null;
       if (pvT && (pv == null || +pvT < 1)) return falha('PV vai de 1 a 9999.', '#be-pv');
       if (defT && def == null) return falha('Defesa vai de 0 a 99.', '#be-def');
       const mods = Object.fromEntries(ATTRS.map(a => [a.key, num(fundo.querySelector('#be-m-' + a.key).value, -10, 20) || 0]));
       const dados = { nome, tipo: val('#be-tipo') || null, perigo: +((fundo.querySelector('input[name=be-perigo]:checked') || {}).value || 2), pv_max: pv, defesa: def,
         horror: val('#be-horror') || null, mods, habilidades: habs.map(h => ({ nome: h.nome.trim().slice(0, 60), efeito: h.efeito.trim().slice(0, 60), desc: h.desc.trim().slice(0, 400) })).filter(h => h.nome),
-        descricao: val('#be-desc') || null, notas: val('#be-notas') || null, imagem };
+        descricao: val('#be-desc') || null, notas: val('#be-notas') || null, imagem, categoria: npc ? 'npc' : 'criatura' };
+      // os campos de pessoa só valem para NPC; virar criatura limpa (o banco não guarda meio-NPC)
+      const seqV = val('#be-seq');
+      Object.assign(dados, npc ? { caminho: val('#be-caminho') || null, sequencia: seqV === '' ? null : num(seqV, 0, 9), faccao: val('#be-fac') || null, relacao: val('#be-rel') || null,
+        local: val('#be-local') || null, personalidade: val('#be-pers') || null, falas: falas.map(t => t.trim().slice(0, 200)).filter(Boolean),
+        segredos: segs.map(s => ({ texto: s.texto.trim().slice(0, 400), revelado: !!s.revelado })).filter(s => s.texto) }
+        : { caminho: null, sequencia: null, faccao: null, relacao: null, local: null, personalidade: null, falas: [], segredos: [] });
       try {
         const t = await Rede.tabela('mestre', 'bestiario');
         const r = novo ? await t.insert(dados).select('id') : await t.update(dados).eq('id', b.id);
         if (r.error) throw r.error;
-        fechar(false); anunciar(nome + (novo ? ' entrou no bestiário' : ' foi atualizada')); await carregarBestiario();
+        if (S.besFiltro !== 'todos' && S.besFiltro !== dados.categoria) { S.besFiltro = 'todos'; document.querySelectorAll('.bs-f').forEach(x => x.setAttribute('aria-pressed', String(/** @type {HTMLElement} */ (x).dataset.f === 'todos'))); }
+        fechar(false); anunciar(nome + (novo ? ' entrou no bestiário' : ': ficha atualizada')); await carregarBestiario();
         const id = novo ? (r.data && r.data[0] && r.data[0].id) : b.id, alvo = id && document.querySelector(`.bs-carta[data-b="${CSS.escape(id)}"] .bs-ver`);
         (alvo || $('#bs-nova') || document.body).focus();
       } catch (e) { erroEm('#be-erro', e); }

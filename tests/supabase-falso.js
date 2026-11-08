@@ -296,9 +296,20 @@ function criarServidor() {
     if (tem('imagem') && v.imagem != null && (v.imagem.length > 300000 || !IMG.test(v.imagem))) return 'imagem';
     if (tem('descricao') && v.descricao != null && v.descricao.length > 1000) return 'descricao';
     if (tem('notas') && v.notas != null && v.notas.length > 1500) return 'notas';
+    // NPC (migração 20261113)
+    if (tem('categoria') && v.categoria != null && !['criatura', 'npc'].includes(v.categoria)) return 'categoria';
+    if (tem('caminho') && v.caminho != null && !/^[a-z]{2,20}$/.test(v.caminho)) return 'caminho';
+    if (tem('sequencia') && v.sequencia != null && !(Number.isInteger(v.sequencia) && v.sequencia >= 0 && v.sequencia <= 9)) return 'sequencia';
+    if (tem('faccao') && v.faccao != null && v.faccao.length > 60) return 'faccao';
+    if (tem('relacao') && v.relacao != null && !['aliado', 'amigavel', 'neutro', 'desconfiado', 'hostil'].includes(v.relacao)) return 'relacao';
+    if (tem('local') && v.local != null && v.local.length > 120) return 'local';
+    if (tem('personalidade') && v.personalidade != null && v.personalidade.length > 600) return 'personalidade';
+    if (tem('falas') && (!Array.isArray(v.falas ?? []) || (v.falas || []).length > 10)) return 'falas';
+    if (tem('segredos') && (!Array.isArray(v.segredos ?? []) || (v.segredos || []).length > 8)) return 'segredos';
     return null;
   }
-  const limparBestiario = v => ({ nome: v.nome, tipo: v.tipo || null, perigo: v.perigo || 1, pv_max: v.pv_max ?? null, defesa: v.defesa ?? null, horror: v.horror || null, mods: v.mods || {}, habilidades: v.habilidades || [], descricao: v.descricao || null, notas: v.notas || null, imagem: v.imagem || null });
+  const limparBestiario = v => ({ nome: v.nome, tipo: v.tipo || null, perigo: v.perigo || 1, pv_max: v.pv_max ?? null, defesa: v.defesa ?? null, horror: v.horror || null, mods: v.mods || {}, habilidades: v.habilidades || [], descricao: v.descricao || null, notas: v.notas || null, imagem: v.imagem || null,
+    categoria: v.categoria || 'criatura', caminho: v.caminho || null, sequencia: v.sequencia ?? null, faccao: v.faccao || null, relacao: v.relacao || null, local: v.local || null, personalidade: v.personalidade || null, falas: v.falas || [], segredos: v.segredos || [] });
   function consulta(q) {
     const u = q.uid; if (!u) return erro('JWT ausente');
     let linhas = q.tabela === 'resultados_mestre' ? visao(u) : (db[q.tabela] || []).filter(r => VE[q.tabela](u, r));
@@ -349,7 +360,7 @@ function criarServidor() {
       return { data: null, error: null };
     }
     if (q.op === 'update') {
-      const COLS = { jogadores: ['nome', 'ficha'], notas_mestre: ['texto'], figuras: ['nome', 'bonus', 'pv', 'pv_max'], bestiario: ['nome', 'tipo', 'perigo', 'pv_max', 'defesa', 'horror', 'mods', 'habilidades', 'descricao', 'notas', 'imagem'], habilidades: ['nome', 'descricao', 'custo', 'efeito', 'estado', 'resposta', 'alterada'], efeitos: ['rotulo', 'descricao', 'secreto', 'valor'] }[q.tabela];
+      const COLS = { jogadores: ['nome', 'ficha'], notas_mestre: ['texto'], figuras: ['nome', 'bonus', 'pv', 'pv_max'], bestiario: ['nome', 'tipo', 'perigo', 'pv_max', 'defesa', 'horror', 'mods', 'habilidades', 'descricao', 'notas', 'imagem', 'categoria', 'caminho', 'sequencia', 'faccao', 'relacao', 'local', 'personalidade', 'falas', 'segredos'], habilidades: ['nome', 'descricao', 'custo', 'efeito', 'estado', 'resposta', 'alterada'], efeitos: ['rotulo', 'descricao', 'secreto', 'valor'] }[q.tabela];
       if (!COLS) return erro('permission denied for table ' + q.tabela);
       if (['bestiario', 'habilidades', 'efeitos'].includes(q.tabela) && Object.keys(q.valores).some(k => !COLS.includes(k))) return erro('permission denied for table ' + q.tabela);   // grant de update só nas colunas permitidas
       if (q.tabela === 'bestiario') { const ch = validarBestiario(q.valores, true); if (ch) return erro('new row violates check constraint "bestiario_' + ch + '_check"'); }

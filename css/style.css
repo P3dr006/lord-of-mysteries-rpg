@@ -1986,3 +1986,69 @@ button.m-link:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 .dec-anel{position:absolute;inset:-4px;border-radius:50%;border:2px solid #ff9a8acc;pointer-events:none;box-shadow:0 0 22px #ff6a5a88}
 .decreto.ef-bencao .dec-anel{border-color:#ffe27acc;box-shadow:0 0 22px #ffd24a88}
 .decreto.recusa .dec-anel{border-color:#8a8a9acc;box-shadow:none}
+
+/* ===== NPCs no bestiário: dossiê com a cor do Caminho, falas entre aspas e segredos em camadas lacradas ===== */
+.bs-filtro{display:flex;flex-wrap:wrap;gap:6px;margin:-4px 0 14px}
+.bs-f{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;min-height:38px;border-radius:999px;border:1px solid #3a3050;background:#0a0810;color:var(--muted);font:inherit;font-size:.8rem;letter-spacing:.06em;cursor:pointer}
+.bs-f[aria-pressed=true]{border-color:var(--gold);color:var(--gold2);background:linear-gradient(180deg,#2a2010,#140f08);box-shadow:0 0 14px #d9b86a22}
+.bs-f:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+.bs-f-n{font-size:.7rem;color:#8a84a8;min-width:1.4em;padding:1px 6px;border-radius:999px;background:#ffffff0d}
+.bs-carta.npc,.bs-ficha.npc{--pc:var(--cc,#7d8aa6)}
+.bs-carta.npc{background:linear-gradient(180deg,#1a1a26,#0e0d16)}
+.bs-carta.npc .bs-retrato{aspect-ratio:1/1;border-radius:50% 50% 4px 4px/38% 38% 4px 4px}
+.bs-sigilo{position:absolute;right:6px;bottom:6px;z-index:1;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#0b0910e6;border:1px solid var(--pc);box-shadow:0 0 12px color-mix(in srgb,var(--pc) 50%,transparent)}
+.bf-retrato .bs-sigilo{width:40px;height:40px;right:10px;bottom:10px}
+.bs-npc{display:inline-block;padding:1px 6px;margin-right:4px;border:1px solid var(--pc);border-radius:2px;color:var(--gold2);letter-spacing:.18em;font-size:.95em}
+.bs-fac{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:-2px 0 8px;font-size:.78rem;color:#b8b0d0;font-style:italic}
+.bs-rel{font-style:normal;font-size:.62rem;letter-spacing:.16em;text-transform:uppercase;padding:2px 8px;border-radius:999px;border:1px solid currentColor}
+.bs-rel.r-aliado{color:#7ad0a0}.bs-rel.r-amigavel{color:#a8d07a}.bs-rel.r-neutro{color:#a8a4c0}.bs-rel.r-desconfiado{color:#e0b060}.bs-rel.r-hostil{color:#ff7a6a}
+.bf-local{border-left-color:var(--pc);background:#0f1220;color:#d0d8ef}
+.bf-local span{color:var(--gold)}
+/* falas: aspas grandes, como fala anotada no roteiro */
+.bf-falas{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.bf-falas li{display:flex;align-items:center;gap:12px;padding:10px 12px 10px 38px;position:relative;border-radius:4px;background:#0d0a16;border:1px solid #2e2640}
+.bf-falas li::before{content:'\201C';position:absolute;left:10px;top:-2px;font:italic 2.4rem/1 Georgia,serif;color:var(--pc)}
+.bf-falas q{flex:1;quotes:none;font-family:Georgia,serif;font-style:italic;color:#e6dff5;line-height:1.45}
+.bf-falas button{flex:0 0 auto}
+/* segredos: cada camada é um lacre numerado; revelado = lacre aberto e borda dourada */
+.bf-seg{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.bf-seg li{display:grid;grid-template-columns:38px 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-radius:4px;border:1px dashed #5a3a8a;background:#120c22}
+.bf-seg li.aberto{border:1px solid #d9b86a88;background:linear-gradient(90deg,#221a0c,#120e08)}
+.bf-seg p{margin:2px 0 0;color:#d8d2ea;white-space:pre-wrap;line-height:1.45}
+.bf-seg li.aberto p{color:#f0e2c0}
+.bf-seg-est{font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:#b08cff}
+.bf-seg li.aberto .bf-seg-est{color:var(--gold)}
+.bf-selo{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;font:bold .72rem Georgia,serif;color:#ffd8d0;background:radial-gradient(circle at 35% 30%,#d24a4a,#7a1020 70%);box-shadow:inset 0 -2px 4px #0008,0 0 0 2px #4a0810,0 0 10px #d9233a55}
+.bf-seg li.aberto .bf-selo{background:linear-gradient(118deg,transparent 46%,#3a2404 47% 50%,transparent 51%),radial-gradient(circle at 35% 30%,#f0d080,#8a6420 72%);color:#2a1a04;box-shadow:inset 0 -2px 4px #0006,0 0 0 2px #5a4010,0 0 12px #d9b86a66}
+.rv-previa{margin:8px 0 6px;padding:10px 12px;border-left:3px solid var(--gold);background:#0d0a16;color:#e6dff5;font-family:Georgia,serif;font-style:italic;white-space:pre-wrap;max-height:160px;overflow:auto}
+/* editor: escolha Criatura / NPC e o bloco "Quem é" */
+.be-cat{display:grid;grid-template-columns:1fr 1fr;gap:10px;border:0;padding:0;margin:6px 0 18px}
+.be-cat label{position:relative;cursor:pointer}
+.be-cat input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.be-cat span{display:flex;flex-direction:column;gap:2px;height:100%;padding:12px 14px;border-radius:6px;border:1px solid #3a3050;background:#0a0810;transition:border-color .2s,box-shadow .2s}
+.be-cat b{font-weight:normal;font-size:1.05rem;color:var(--text)}
+.be-cat small{color:#8a84a8;font-size:.78rem}
+.be-cat input:checked+span{border-color:var(--gold);background:linear-gradient(180deg,#221a0c,#0f0b06);box-shadow:inset 0 0 0 1px #d9b86a44,0 0 18px #d9b86a22}
+.be-cat input:checked+span b{color:var(--gold2)}
+.be-cat input:focus-visible+span{outline:2px solid var(--gold2);outline-offset:2px}
+.be-npc{border:1px solid #3a4060;border-radius:6px;padding:12px 14px;margin:16px 0;background:linear-gradient(180deg,#10121e,#0b0b14)}
+.be-npc legend{padding:0 6px;color:var(--gold);font-size:.8rem;letter-spacing:.06em}
+.be-npc[hidden]{display:none}
+.be-npc .m-grade{gap:12px 12px;margin-bottom:12px}
+.be-npc .m-grade .m-campo{margin:0}
+.bs-editor select{padding:10px 12px;border-radius:6px;background:linear-gradient(180deg,#0a0820,#0e0c24);border:1px solid #2f2a5c;color:var(--text);font:inherit;min-height:44px;width:100%}
+.bs-editor select:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 1px #d9b86a55,0 0 18px #d9b86a33}
+.be-lista{margin-top:14px}
+.be-sub{margin:0 0 8px;font-weight:normal;font-size:.8rem;color:var(--gold);letter-spacing:.06em}
+.be-sub i{font-style:normal;color:#8a84a8;font-size:.85em}
+.be-lista ol{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:8px}
+.be-item{display:grid;grid-template-columns:28px 1fr auto;gap:0 10px;align-items:end;padding:10px;border-radius:4px;background:#0d0a16;border:1px solid #2e2640}
+.be-item.revelado{border-color:#d9b86a55}
+.be-item .m-campo{margin:0}
+.be-item textarea{resize:vertical}
+@media (max-width:640px){
+  .be-cat{grid-template-columns:1fr}
+  .be-item{grid-template-columns:1fr auto}.be-item .be-n{display:none}
+  .bf-seg li{grid-template-columns:34px 1fr}.bf-seg li button{grid-column:1/-1;justify-self:start}
+  .bf-falas li{flex-wrap:wrap}
+}

@@ -63,6 +63,14 @@ nos Duelos.
 (testes com dificuldade e veredito, duelos, sussurros, golpes, Terror e momentos). Dá para imprimir e baixar em .md.
 Só o mestre lê.
 
+**NPCs (no Bestiário):** "Novo NPC" (ou trocar Criatura/NPC no topo do editor) abre o bloco "Quem é": Caminho (guarda o
+id de `js/caminhos.js`, então renomear um Caminho não quebra fichas), Sequência 9 a 0 ou nenhuma, facção, relação com o
+grupo (aliado, amigável, neutro, desconfiado, hostil), onde achar, personalidade, até 10 falas prontas e até 8 camadas de
+segredo. Na ficha: **Sussurrar** uma fala (vai entre aspas, com o retrato, para quem você escolher), **Revelar** uma
+camada (manda só aquela camada e a marca como revelada; as outras nunca saem do Grimório) e **Ocultar de novo** (só
+desmarca, para reusar o NPC em outra mesa). Filtros Tudo / Criaturas / NPCs com contagem; a busca acha nome, tipo, Caminho
+e facção. Chamar à cena, Duelo, Roda e batalhas funcionam igual às criaturas. Virar criatura limpa os campos de pessoa.
+
 **Bestiário (fichas de criatura):** aba Bestiário. "Nova criatura": retrato (reduzido no navegador como nas pistas), nome,
 tipo, perigo (1 a 5 olhos), PV, Defesa, os 6 modificadores, Horror, até 12 poderes (um dado no efeito, como "2d6+3",
 vira botão de rolar), o que os jogadores veem e notas secretas. O bestiário é **do mestre**, vale em todas as mesas dele
@@ -141,6 +149,10 @@ Arquivo: `supabase/migrations/20261106_mesa_do_mestre.sql`. Tudo com RLS.
 | `cronica` | **só o mestre** | só o mestre (direto na tabela) |
 | `bestiario` | **só o dono** (mestre com e-mail) | só o dono; anônimo nunca |
 | `habilidades` | o mestre; o jogador só as suas (enquanto está na mesa) | mestre concede/edita/apaga; jogador só por `propor_habilidade` e `retirar_habilidade` |
+
+NPCs: `20261113_npcs_no_bestiario.sql`, verificado em 22 cenários com papéis reais **sem aplicar**
+(`supabase/verificacoes/20261113_npcs_no_bestiario.sql`: criatura antiga continua, todos os checks, dono fora do grant,
+outro mestre não lê nem altera, jogador anônimo não lê nem insere, camada revelada fica salva).
 
 Bestiário e habilidades: `20261110_bestiario_e_habilidades.sql`, verificado em 39 cenários com papéis reais **sem aplicar**
 (mestre, outro mestre, 2 jogadores, intruso, visitante; inclui: jogador não se autoaprova, limite de 5, outro mestre não vê,
