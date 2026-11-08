@@ -579,7 +579,8 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('Esc fecha só a lista (a janela do editor fica)', await ate(() => m.evaluate(() => !document.querySelector('.esc-lista') && !!document.querySelector('.bs-editor'))));
     await m.evaluate(() => { /** @type {HTMLSelectElement} */ (document.querySelector('#be-rel')).value = 'hostil'; });
     ok('atribuir .value no select atualiza o botão', /Hostil/.test(await m.textContent('#be-rel-esc')));
-    await m.fill('#be-nome', 'Dunn Smith'); await m.selectOption('#be-caminho', 'louco'); await m.selectOption('#be-seq', '7');
+    await m.fill('#be-nome', 'Dunn Smith'); await m.selectOption('#be-caminho', 'louco');
+    ok('escolher o Caminho põe os nomes oficiais nas Sequências', await ate(() => m.evaluate(() => [...document.querySelectorAll('#be-seq option')].some(o => o.value === '7' && /Mágico/.test(o.textContent))))); await m.selectOption('#be-seq', '7');
     await m.fill('#be-fac', 'Falcões Noturnos'); await m.selectOption('#be-rel', 'aliado'); await m.fill('#be-local', 'Rua Zouteland, 36'); await m.fill('#be-pers', 'Distraído, leal.');
     await m.click('#be-fala-mais'); await m.fill('#be-fala-0', 'Ah, esqueci de novo.');
     await m.click('#be-seg-mais'); await m.fill('#be-seg-0', 'É capitão dos Falcões.'); await m.click('#be-seg-mais'); await m.fill('#be-seg-1', 'Sonha com a Deusa.');
@@ -587,7 +588,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     await m.click('#be-salvar');
     ok('o NPC entra no bestiário com Caminho, Sequência, facção, falas e camadas', await ate(() => { const x = srv.db.bestiario.find(b => b.nome === 'Dunn Smith'); return !!x && x.categoria === 'npc' && x.caminho === 'louco' && x.sequencia === 7 && x.faccao === 'Falcões Noturnos' && x.relacao === 'aliado' && x.local === 'Rua Zouteland, 36' && x.falas.length === 1 && x.segredos.length === 2 && x.segredos.every(s => s.revelado === false); }), JSON.stringify(srv.db.bestiario.find(b => b.nome === 'Dunn Smith')));
     const npcB = srv.db.bestiario.find(b => b.nome === 'Dunn Smith') || { id: '' };
-    ok('a carta do NPC mostra Caminho e relação', await ate(async () => /Caminho Louco · Seq\. 7/.test(await m.textContent(`.bs-carta[data-b="${npcB.id}"]`)) && /Aliado/.test(await m.textContent(`.bs-carta[data-b="${npcB.id}"]`))));
+    ok('a carta do NPC mostra Sequência oficial, Caminho e relação', await ate(async () => /Mágico · Caminho Louco · Seq\. 7/.test(await m.textContent(`.bs-carta[data-b="${npcB.id}"]`)) && /Aliado/.test(await m.textContent(`.bs-carta[data-b="${npcB.id}"]`))));
     await m.click('.bs-f[data-f="npc"]');
     ok('filtro NPCs mostra só o NPC', await m.evaluate(() => [...document.querySelectorAll('.bs-carta')].map(x => x.querySelector('.bs-nome').textContent).join() === 'Dunn Smith'));
     await m.click('.bs-f[data-f="criatura"]');

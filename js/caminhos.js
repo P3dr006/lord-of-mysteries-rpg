@@ -91,6 +91,34 @@ const CAMINHOS = [
     g:'<path d="M12 3v18M6 21h12M4 7h16M4 7l-3 7a3 3 0 006 0zM20 7l-3 7a3 3 0 006 0z"/>' },
 ];
 const caminhoPorId = id => CAMINHOS.find(c => c.id === id);
+// Nomes das Sequências, da 9 (índice 0) à 0 (índice 9). Não há tradução oficial em português: são os nomes da
+// tradução oficial em inglês (Webnovel) vertidos no mesmo estilo do site. A 9 é a mesma de seq9 e a 0 é o próprio Caminho.
+const SEQUENCIAS = {
+  louco: ['Vidente', 'Palhaço', 'Mágico', 'Sem Rosto', 'Marionetista', 'Feiticeiro Bizarro', 'Erudito de Outrora', 'Invocador de Milagres', 'Servo dos Mistérios', 'Louco'],
+  erro: ['Saqueador', 'Trapaceiro', 'Criptólogo', 'Prometeu', 'Ladrão de Sonhos', 'Parasita', 'Mentor do Engano', 'Cavalo de Troia do Destino', 'Verme do Tempo', 'Erro'],
+  porta: ['Aprendiz', 'Mestre dos Truques', 'Astrólogo', 'Escriba', 'Viajante', 'Feiticeiro dos Segredos', 'Andarilho', 'Caminhante dos Planos', 'Chave das Estrelas', 'Porta'],
+  visionario: ['Espectador', 'Telepata', 'Psiquiatra', 'Hipnotizador', 'Caminhante dos Sonhos', 'Manipulador', 'Tecelão de Sonhos', 'Discernidor', 'Autor', 'Visionário'],
+  sol: ['Bardo', 'Suplicante da Luz', 'Sumo Sacerdote Solar', 'Notário', 'Sacerdote da Luz', 'Sem Sombra', 'Mentor da Justiça', 'Buscador da Luz', 'Anjo Branco', 'Sol'],
+  tirano: ['Marinheiro', 'Povo da Fúria', 'Navegante', 'Abençoado pelo Vento', 'Cantor do Oceano', 'Sepultador de Cataclismos', 'Rei dos Mares', 'Calamidade', 'Deus do Trovão', 'Tirano'],
+  torre: ['Leitor', 'Estudante do Raciocínio', 'Detetive', 'Polímata', 'Magistrado do Misticismo', 'Profeta', 'Cognitor', 'Anjo da Sabedoria', 'Olho Onisciente', 'Torre Branca'],
+  enforcado: ['Suplicante de Segredos', 'Ouvinte', 'Asceta das Sombras', 'Bispo da Rosa', 'Pastor', 'Cavaleiro Negro', 'Templário da Trindade', 'Presbítero Profano', 'Anjo Sombrio', 'Enforcado'],
+  escuridao: ['Insone', 'Poeta da Meia-Noite', 'Pesadelo', 'Assegurador de Almas', 'Bruxo Espiritual', 'Vigia Noturno', 'Bispo do Horror', 'Servo da Ocultação', 'Cavaleiro do Infortúnio', 'Escuridão'],
+  morte: ['Coletor de Cadáveres', 'Coveiro', 'Médium Espiritual', 'Guia Espiritual', 'Guardião do Portão', 'Imorredouro', 'Barqueiro', 'Cônsul da Morte', 'Imperador Pálido', 'Morte'],
+  gigante: ['Guerreiro', 'Pugilista', 'Mestre das Armas', 'Paladino da Aurora', 'Guardião', 'Caçador de Demônios', 'Cavaleiro de Prata', 'Glória', 'Mão de Deus', 'Gigante do Crepúsculo'],
+  demonessa: ['Assassina', 'Instigadora', 'Bruxa', 'Prazer', 'Aflição', 'Desespero', 'Eterna', 'Catástrofe', 'Apocalipse', 'Demonessa'],
+  sacerdote: ['Caçador', 'Provocador', 'Piromaníaco', 'Conspirador', 'Ceifador', 'Cavaleiro de Sangue de Ferro', 'Bispo da Guerra', 'Bruxo do Clima', 'Conquistador', 'Sacerdote Rubro'],
+  eremita: ['Investigador de Mistérios', 'Erudito do Combate', 'Bruxo', 'Professor de Pergaminhos', 'Mestre das Constelações', 'Misticólogo', 'Clarividente', 'Sábio', 'Imperador do Conhecimento', 'Eremita'],
+  paragono: ['Erudito', 'Arqueólogo', 'Avaliador', 'Artesão', 'Astrônomo', 'Alquimista', 'Estudioso Arcano', 'Magistrado do Conhecimento', 'Iluminador', 'Paragono'],
+  roda: ['Monstro', 'Robô', 'Sortudo', 'Sacerdote da Calamidade', 'Vencedor', 'Mago do Infortúnio', 'Caminhante do Caos', 'Adivinho', 'Serpente de Mercúrio', 'Roda da Fortuna'],
+  mae: ['Plantador', 'Médico', 'Sacerdote da Colheita', 'Biólogo', 'Druida', 'Alquimista Clássico', 'Carregador de Caixão', 'Matriarca da Desolação', 'Caminhante da Natureza', 'Mãe'],
+  lua: ['Boticário', 'Domador de Feras', 'Vampiro', 'Professor de Poções', 'Erudito Escarlate', 'Rei Xamã', 'Sumo Invocador', 'Doador de Vida', 'Deusa da Beleza', 'Lua'],
+  abismo: ['Criminoso', 'Anjo sem Asas', 'Assassino em Série', 'Diabo', 'Apóstolo do Desejo', 'Demônio', 'Falastrão', 'Arquiduque Sangrento', 'Monarca Imundo', 'Abismo'],
+  acorrentado: ['Prisioneiro', 'Lunático', 'Lobisomem', 'Zumbi', 'Espectro', 'Marionete', 'Discípulo do Silêncio', 'Flagelo Antigo', 'Abominação', 'Acorrentado'],
+  imperador: ['Advogado', 'Bárbaro', 'Subornador', 'Barão da Corrupção', 'Mentor da Desordem', 'Conde dos Caídos', 'Mago Frenético', 'Duque da Entropia', 'Príncipe da Abolição', 'Imperador Negro'],
+  justiceiro: ['Árbitro', 'Xerife', 'Interrogador', 'Juiz', 'Paladino Disciplinar', 'Mago Imperativo', 'Caçador do Caos', 'Equilibrador', 'Mão da Ordem', 'Justiceiro'],
+};
+// nome da Sequência n (9 a 0) do Caminho; '' se não houver Caminho ou número
+const nomeDaSequencia = (caminhoId, n) => { const l = SEQUENCIAS[caminhoId]; const s = Number(n); return l && Number.isInteger(s) && s >= 0 && s <= 9 ? l[9 - s] : ''; };
 const svgGlifo = (c, tam) =>
   `<svg viewBox="0 0 24 24" width="${tam}" height="${tam}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="color:${c.cor}">${c.g}</svg>`;
 // Sigilo oficial (img/sigilos/<id>.webp); se faltar, cai no desenho SVG.

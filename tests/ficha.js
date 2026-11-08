@@ -27,6 +27,13 @@ const armazenado = (p, chave) => p.evaluate(k => localStorage.getItem(k), chave)
     const lista = await p.evaluate(() => listarPersonagens().map(x => x.p.nome));
     ok('ficha antiga (uma só) é migrada para a lista', lista.length === 1 && lista[0] === 'Klein Antigo' && await armazenado(p, 'lotm-rpg-personagem') === null, JSON.stringify(lista));
     ok('o botão Continuar mostra o nome', (await p.textContent('#continue-txt')).includes('Klein Antigo')); await p.ctx.close(); }
+  { const p = await nova(browser);
+    const r = await p.evaluate(() => { const ok2 = CAMINHOS.every(c => SEQUENCIAS[c.id] && SEQUENCIAS[c.id].length === 10 && SEQUENCIAS[c.id][0] === c.seq9 && SEQUENCIAS[c.id][9] === c.nome);
+      const antes = { c: P.caminho, n: P.nomesSeq }; P.caminho = 'louco'; P.nomesSeq = {}; const a = nomeSeq(7), b = nomeSeq(0); P.nomesSeq = { 7: 'Meu nome' }; const d = nomeSeq(7);
+      P.caminho = antes.c; P.nomesSeq = antes.n; return { ok2, a, b, d }; });
+    ok('as 22 tabelas de Sequência têm 10 nomes, a 9 e a 0 batem com o Caminho', r.ok2);
+    ok('a ficha mostra o nome oficial da Sequência no Caminho (Louco 7 = Mágico, 0 = Louco)', r.a === 'Mágico' && r.b === 'Louco', JSON.stringify(r));
+    ok('o nome que o jogador escreveu continua valendo sobre o oficial', r.d === 'Meu nome'); await p.ctx.close(); }
   { const p = await nova(browser); await semear(p, [FICHA('Alice'), FICHA('Bruno', { caminho: 'sol' }), FICHA('Carla', { caminho: 'louco', sequencia: 2 })]); await p.waitForTimeout(300);
     ok('três personagens ficam salvos', await p.evaluate(() => listarPersonagens().length) === 3);
     ok('a capa oferece "Meus personagens (3)"', (await p.textContent('#lib-txt')).includes('3'));

@@ -11,10 +11,11 @@ const PATAMARES = [
 const patamarDe = seq => PATAMARES.find(p => p.seqs.includes(seq));
 const idxPatamar = seq => PATAMARES.indexOf(patamarDe(seq));
 
-// nome da Sequência: o que o jogador escreveu; senão o nome oficial da 9; senão o patamar (ou "Sequência N")
+// nome da Sequência: o que o jogador escreveu; senão o nome oficial no Caminho dele; senão o patamar (ou "Sequência N")
 function nomeSeq(seq, rotulo = false) {
   if (P.nomesSeq && P.nomesSeq[seq]) return P.nomesSeq[seq];
-  if (seq === 9 && P.caminho) return caminhoPorId(P.caminho).seq9;
+  const oficial = P.caminho ? nomeDaSequencia(P.caminho, seq) : '';
+  if (oficial) return oficial;
   return rotulo ? `Sequência ${seq}` : patamarDe(seq).nome;
 }
 
@@ -51,8 +52,8 @@ function frascoSVG(nivel, cor) {
 function ladderHTML() {
   let h = '';
   for (let s = 9; s >= 0; s--) {
-    const pt = patamarDe(s), cl = s === P.sequencia ? 'atual' : s > P.sequencia ? 'passado' : 'futuro';
-    h += `<div class="deg ${cl}" style="--tc:${pt.cor}" title="${pt.nome}" role="listitem" aria-label="Sequência ${s}, ${pt.nome}${s === P.sequencia ? ', atual' : s > P.sequencia ? ', já alcançada' : ''}" ${s === P.sequencia ? 'aria-current="step"' : ''}><span class="n">${s}</span><span class="t">${s > P.sequencia ? '✓' : pt.nome.replace(' Sequência', '')}</span></div>`;
+    const pt = patamarDe(s), cl = s === P.sequencia ? 'atual' : s > P.sequencia ? 'passado' : 'futuro', of = P.caminho ? nomeDaSequencia(P.caminho, s) : '';
+    h += `<div class="deg ${cl}" style="--tc:${pt.cor}" title="${of ? of + ' · ' : ''}${pt.nome}" role="listitem" aria-label="Sequência ${s}, ${of ? of + ', ' : ''}${pt.nome}${s === P.sequencia ? ', atual' : s > P.sequencia ? ', já alcançada' : ''}" ${s === P.sequencia ? 'aria-current="step"' : ''}><span class="n">${s}</span><span class="t">${s > P.sequencia ? '✓' : pt.nome.replace(' Sequência', '')}</span></div>`;
   }
   return h;
 }

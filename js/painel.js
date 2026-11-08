@@ -872,7 +872,8 @@ ${secaoDados()}
   const ehNpc = b => !!b && b.categoria === 'npc';
   const caminhoDe = b => (b && b.caminho && typeof caminhoPorId === 'function' && caminhoPorId(b.caminho)) || null;
   const seqDe = b => b && b.sequencia != null ? num(b.sequencia, 0, 9) : null;
-  const seqTxt = b => { const c = caminhoDe(b), s = seqDe(b); return c ? `Caminho ${c.nome}${s != null ? ' · Seq. ' + s : ''}` : s != null ? 'Sequência ' + s : ''; };
+  const seqTxt = b => { const c = caminhoDe(b), s = seqDe(b), of = c && s != null && typeof nomeDaSequencia === 'function' ? nomeDaSequencia(c.id, s) : '';
+    return c ? (of && s > 0 ? `${of} · ` : '') + `Caminho ${c.nome}${s != null ? ' · Seq. ' + s : ''}` : s != null ? 'Sequência ' + s : ''; };
   const rotulo = b => txt(b.tipo, 60) || (ehNpc(b) ? seqTxt(b) || 'Pessoa comum' : 'Criatura');
   const relSelo = b => RELACAO[b.relacao] ? `<span class="bs-rel r-${b.relacao}">${RELACAO[b.relacao]}</span>` : '';
   const falasDe = b => lista(b.falas).map(f => txt(f, 200).trim()).filter(Boolean);
@@ -1082,6 +1083,9 @@ ${secaoDados()}
     const falas = falasDe(b), segs = segredosDe(b);
     const v = x => esc(x == null ? '' : x);
     const opc = (val, t, atual, glifo) => `<option value="${esc(val)}" ${String(atual ?? '') === String(val) ? 'selected' : ''}${glifo ? ` data-glifo="${esc(glifo)}"` : ''}>${esc(t)}</option>`;
+    // Sequências com o nome oficial do Caminho escolhido ("Sequência 7 · Mágico"); sem Caminho, só o número
+    const opcSeq = (cam, atual) => opc('', '—', atual) + [9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map(n => { const of = cam && typeof nomeDaSequencia === 'function' ? nomeDaSequencia(cam, n) : '';
+      return opc(n, `Sequência ${n} · ${of || (n === 9 ? 'início' : n === 0 ? 'divindade' : '')}`.replace(/ · $/, ''), atual); }).join('');
     const { fundo, fechar } = janela('m-bes-editor', 'bs-fundo', `<section class="bs-editor" role="dialog" aria-modal="true" aria-labelledby="be-tit" tabindex="-1"><form id="be-form" novalidate>
       <button type="button" class="icon bf-x" aria-label="Fechar sem salvar">✕</button>
       <small class="bf-tipo">Bestiário</small><h2 id="be-tit">${novo ? (ehNpc(b) ? 'Novo NPC' : 'Nova criatura') : 'Editar ' + esc(b.nome)}</h2>
@@ -1101,7 +1105,7 @@ ${secaoDados()}
       <fieldset class="be-npc" id="be-npc"><legend>Quem é <i>só para NPCs</i></legend>
         <div class="m-grade be-grade">
           <div class="m-campo"><label for="be-caminho">Caminho</label><select id="be-caminho">${opc('', 'Nenhum · pessoa comum', b.caminho)}${(typeof CAMINHOS !== 'undefined' ? CAMINHOS : []).map(c => opc(c.id, c.nome, b.caminho, c.id)).join('')}</select></div>
-          <div class="m-campo"><label for="be-seq">Sequência</label><select id="be-seq">${opc('', '—', seqDe(b))}${[9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map(n => opc(n, `Sequência ${n}${n === 9 ? ' (início)' : n === 0 ? ' (topo)' : ''}`, seqDe(b))).join('')}</select></div>
+          <div class="m-campo"><label for="be-seq">Sequência</label><select id="be-seq">${opcSeq(b.caminho, seqDe(b))}</select></div>
           <div class="m-campo"><label for="be-fac">Facção <i>(opcional)</i></label><input type="text" id="be-fac" maxlength="60" value="${v(b.faccao)}" placeholder="Ex.: Falcões Noturnos · Igreja da Deusa" autocomplete="off"></div>
           <div class="m-campo"><label for="be-rel">Com o grupo</label><select id="be-rel">${opc('', 'Não definido', b.relacao)}${Object.entries(RELACAO).map(([k, t]) => opc(k, t, b.relacao)).join('')}</select></div>
           <div class="m-campo m-largo"><label for="be-local">Onde achar <i>(opcional)</i></label><input type="text" id="be-local" maxlength="120" value="${v(b.local)}" placeholder="Ex.: Rua Zouteland, 36 · Tingen, depois das dez" autocomplete="off"></div>
@@ -1158,6 +1162,9 @@ ${secaoDados()}
       fundo.querySelector('#be-nome').setAttribute('placeholder', n ? 'Ex.: Dunn Smith' : 'Ex.: Lobo de olhos de vidro');
       fundo.querySelector('#be-tipo').setAttribute('placeholder', n ? 'Ex.: Capitão · Dona da pensão (vazio: mostra o Caminho)' : 'Ex.: Fera corrompida · Beyonder Seq. 8'); };
     fundo.querySelectorAll('input[name=be-cat]').forEach(r => r.addEventListener('change', trocarCat)); trocarCat();
+    // trocar o Caminho reescreve os nomes das Sequências, mantendo o número escolhido
+    fundo.querySelector('#be-caminho').addEventListener('change', () => { const s = /** @type {HTMLSelectElement} */ (fundo.querySelector('#be-seq')), v = s.value;
+      s.innerHTML = opcSeq(/** @type {HTMLSelectElement} */ (fundo.querySelector('#be-caminho')).value, v === '' ? null : +v); });
     // − e + próprios no lugar das setinhas do navegador (−10 a +20); o valor mostra o sinal, como na carta
     const pintarMod = inp => { const v = num(inp.value, -10, 20) || 0; inp.closest('.be-passo').dataset.s = v > 0 ? 'pos' : v < 0 ? 'neg' : ''; };
     fundo.querySelectorAll('.be-passo input').forEach(inp => { pintarMod(inp); inp.addEventListener('input', () => pintarMod(inp)); });
