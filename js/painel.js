@@ -51,18 +51,25 @@
       <p class="modal-txt">Entre com seu e-mail para criar mesas e conduzir a sessão. Os jogadores não precisam de conta: entram com o código da mesa.</p>
       <form id="m-form-login" class="m-form" novalidate>
         <label for="m-email">E-mail</label><input type="email" id="m-email" autocomplete="email" required>
-        <label for="m-senha">Senha</label><input type="password" id="m-senha" autocomplete="current-password" minlength="6" required>
+        <label for="m-senha">Senha</label><input type="password" id="m-senha" autocomplete="current-password" required>
+        <p class="modal-txt m-dica">Para criar conta: mínimo de 10 caracteres, com letra minúscula, maiúscula e número.</p>
         <p class="m-erro" id="m-erro-login" role="alert" hidden></p>
         <div class="cover-btns"><button type="submit" class="primary" id="m-entrar">Entrar</button><button type="button" class="ghost" id="m-criar">Criar conta</button></div>
       </form></section>`);
     const ler = () => ({ email: $('#m-email').value.trim(), senha: $('#m-senha').value });
-    const validar = ({ email, senha }) => { if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return 'Digite um e-mail válido.'; if (senha.length < 6) return 'A senha precisa ter pelo menos 6 caracteres.'; return ''; };
+    // Entrar: contas antigas com senha mais curta continuam entrando. Criar conta: regra nova (igual à do Supabase).
+    const validar = ({ email, senha }, nova) => {
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return 'Digite um e-mail válido.';
+      if (!senha) return 'Digite a senha.';
+      if (nova && !Rede.senhaForte(senha)) return Rede.REGRA_SENHA;
+      return '';
+    };
     $('#m-form-login').addEventListener('submit', ev => { ev.preventDefault(); const b = $('#m-entrar'); ocupado(b, async () => {
       const d = ler(), v = validar(d); if (v) return erroEm('#m-erro-login', new Rede.ErroRede(v));
       try { S.user = await Rede.entrarEmail(d.email, d.senha); mostrarQuem(); listaMesas(); } catch (e) { erroEm('#m-erro-login', e); }
     }); });
     $('#m-criar').addEventListener('click', e => ocupado(e.currentTarget, async () => {
-      const d = ler(), v = validar(d); if (v) return erroEm('#m-erro-login', new Rede.ErroRede(v));
+      const d = ler(), v = validar(d, true); if (v) return erroEm('#m-erro-login', new Rede.ErroRede(v));
       try {
         const r = await Rede.criarConta(d.email, d.senha);
         if (r.precisaConfirmar) { const el = $('#m-erro-login'); el.hidden = false; el.classList.add('m-ok'); el.textContent = 'Conta criada. Abra o link que enviamos para o seu e-mail e depois entre aqui.'; }

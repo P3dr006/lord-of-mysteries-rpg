@@ -41,17 +41,22 @@ const Rede = (() => {
     return clientes[papel];
   }
 
+  // Regra de senha para criar conta: a mesma configurada no Supabase (mínimo 10, minúscula, maiúscula e número).
+  const REGRA_SENHA = 'A senha precisa ter pelo menos 10 caracteres, com letra minúscula, maiúscula e número.';
+  const senhaForte = s => typeof s === 'string' && s.length >= 10 && /[a-z]/.test(s) && /[A-Z]/.test(s) && /\d/.test(s);
+
   // Erros do banco viram frases para pessoas (a frase das funções do servidor já vem em português).
   function mensagem(e) {
     if (!e) return 'Algo deu errado.';
     if (e instanceof ErroRede) return e.message;
+    // (REGRA_SENHA e senhaForte ficam logo abaixo desta função)
     const m = String(e.message || e.error_description || e);
     if (/Anonymous sign-ins are disabled/i.test(m)) return 'A mesa online ainda não aceita jogadores sem conta. Avise o mestre: no Supabase, ligar “Allow anonymous sign-ins”.';
     if (/Signups not allowed|Email signups are disabled/i.test(m)) return 'O cadastro por e-mail está desligado no Supabase (Authentication → Sign In / Providers → Email).';
     if (/Invalid login credentials/i.test(m)) return 'E-mail ou senha incorretos.';
     if (/Email not confirmed/i.test(m)) return 'Confirme o e-mail pelo link que enviamos antes de entrar.';
     if (/User already registered/i.test(m)) return 'Este e-mail já tem conta. Use “Entrar”.';
-    if (/Password should be/i.test(m)) return 'A senha precisa ter pelo menos 6 caracteres.';
+    if (/Password should|weak.password|password.*(known|easy to guess|pwned)/i.test(m)) return REGRA_SENHA;
     if (/rate limit|too many/i.test(m)) return 'Muitas tentativas seguidas. Espere um pouco e tente de novo.';
     if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Sem conexão com a mesa online. Tente de novo em instantes.';
     if (/[áéíóúâêôãõç]/i.test(m) || /^(Entre|Limite|Mesa|A mesa|Pedido|Este|Jogador|Só|Escreva|Sussurro)\b/.test(m)) return m;   // frases das nossas funções
@@ -97,5 +102,5 @@ const Rede = (() => {
     return () => { try { c.removeChannel(canal); } catch (e) { /* já fechado */ } };
   }
 
-  return { cliente, configurada, mensagem, usuario, entrarAnonimo, entrarEmail, criarConta, sair, rpc, tabela, ouvir, presenca, SDK, ErroRede };
+  return { cliente, configurada, mensagem, usuario, entrarAnonimo, entrarEmail, criarConta, sair, rpc, tabela, ouvir, presenca, SDK, ErroRede, senhaForte, REGRA_SENHA };
 })();

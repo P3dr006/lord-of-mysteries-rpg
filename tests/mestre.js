@@ -91,6 +91,9 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('entrar sem rede mostra mensagem clara', await ate(() => p.isVisible('.on-erro')), await p.textContent('.on-erro').catch(() => ''));
     ok('a mensagem não é técnica', /conexão|internet/i.test(await p.textContent('.on-erro')));
     ok('login anônimo desligado no Supabase vira instrução em português', /Allow anonymous sign-ins/.test(await p.evaluate(() => Rede.mensagem({ message: 'Anonymous sign-ins are disabled' }))));
+    ok('regra de senha nova: recusa curta, sem maiúscula, sem minúscula e sem número', await p.evaluate(() => ['Abc12345', 'abcdefgh12', 'ABCDEFGH12', 'Abcdefghij', ''].every(s => !Rede.senhaForte(s))));
+    ok('regra de senha nova: aceita 10+ com minúscula, maiúscula e número', await p.evaluate(() => Rede.senhaForte('Grimorio2026') && Rede.senhaForte('aB3' + 'x'.repeat(7))));
+    ok('erro de senha fraca do Supabase vira a regra em português', await p.evaluate(() => ['Password should be at least 10 characters', 'Password is known to be weak and easy to guess'].every(m => Rede.mensagem({ message: m }) === Rede.REGRA_SENHA)));
     await p.click('.aba[data-aba=livre]'); await p.click('#rolar');
     ok('os dados comuns continuam rolando', await ate(() => p.isVisible('#resultado'), 4000));
     ok('nenhum erro de script', p.erros.length === 0, p.erros[0] || '');

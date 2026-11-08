@@ -12,7 +12,8 @@ Decisões do autor:
 ## Como usar
 
 **Mestre:** abra `mestre.html` (na capa: "Abrir o Grimório do Mestre"). Entre com e-mail e senha
-(ou "Criar conta" e confirme pelo link do e-mail). Crie uma mesa: o código de 6 letras aparece em destaque.
+(ou "Criar conta" e confirme pelo link do e-mail). Senha nova: mínimo de 10 caracteres, com minúscula,
+maiúscula e número (regra igual à do Supabase; contas antigas continuam entrando). Crie uma mesa: o código de 6 letras aparece em destaque.
 No painel: jogadores ao vivo (PV, Sanidade, modificadores), formulário de teste (para quem, atributo, o que é
 testado, dado, dificuldade), botões **Pedir teste aberto** e **Rolar em segredo** (aceita "Todos os jogadores"),
 e a lista de resultados com dificuldade e veredito.
