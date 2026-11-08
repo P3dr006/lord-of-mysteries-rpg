@@ -63,6 +63,8 @@ const Jogador = (() => {
     try {
       await Rede.entrarAnonimo();
       const mesa = await Rede.rpc('jogador', 'entrar_na_mesa', { p_codigo: codigo, p_nome: P.nome.trim().slice(0, 40), p_ficha: ficha() });
+      // O servidor devolve vazio (e não erro) quando o código não existe: assim ele consegue contar as tentativas erradas.
+      if (!mesa) throw new Rede.ErroRede('Mesa não encontrada. Confira o código com o mestre.');
       con = { mesa, codigo, nome: P.nome.trim().slice(0, 40), slot: idAtual() }; gravarConexao(con);
       ultimaFicha = JSON.stringify(ficha());
       await ligar();

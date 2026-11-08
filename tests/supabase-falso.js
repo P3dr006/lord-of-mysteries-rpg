@@ -224,7 +224,7 @@ function criarServidor() {
       if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre sussurra.');
       const t = String(a.p_texto || '').trim().slice(0, 1000) || null, ti = String(a.p_titulo || '').trim().slice(0, 80) || null, img = a.p_imagem || null;
       if (!t && !img) return erro('Escreva algo ou escolha uma imagem.');
-      if (img && (img.length > 450000 || !/^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(img))) return erro('new row violates check constraint "sussurros_imagem_check"');
+      if (img && (img.length > 300000 || !/^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(img))) return erro('new row violates check constraint "sussurros_imagem_check"');
       if (a.p_para && !naMesa(a.p_para, a.p_mesa)) return erro('Jogador não encontrado.');
       const s = { id: id('sus'), mesa_id: a.p_mesa, para: a.p_para || null, titulo: ti, texto: t, imagem: img, tem_imagem: !!img, criado_em: new Date().toISOString() };
       db.sussurros.push(s); avisar('sussurros', s); return { data: s.id, error: null };
@@ -243,7 +243,10 @@ function criarServidor() {
     },
     entrar_na_mesa(u, a) {
       if (!u) return erro('Entre primeiro.');
-      const m = db.mesas.find(x => x.codigo === String(a.p_codigo).trim().toUpperCase()); if (!m) return erro('Mesa não encontrada.');
+      // igual ao banco real: 15 códigos errados por hora por usuário; código errado devolve vazio (um erro desfaria a contagem)
+      db.tentativas = db.tentativas || []; const agora = Date.now();
+      if (db.tentativas.filter(t => t.u === u && agora - t.t < 3600e3).length >= 15) return erro('Muitas tentativas com código errado. Espere um pouco e tente de novo.');
+      const m = db.mesas.find(x => x.codigo === String(a.p_codigo).trim().toUpperCase()); if (!m) { db.tentativas.push({ u, t: agora }); return { data: null, error: null }; }
       let j = db.jogadores.find(x => x.mesa_id === m.id && x.user_id === u);
       if (j) Object.assign(j, { nome: a.p_nome, ficha: a.p_ficha || {} });
       else db.jogadores.push(j = { mesa_id: m.id, user_id: u, nome: String(a.p_nome).trim().slice(0, 40), ficha: a.p_ficha || {}, atualizado_em: new Date().toISOString() });
@@ -288,7 +291,7 @@ function criarServidor() {
     if (tem('defesa') && v.defesa != null && !(v.defesa >= 0 && v.defesa <= 99)) return 'defesa';
     if (tem('habilidades') && v.habilidades != null && (!Array.isArray(v.habilidades) || v.habilidades.length > 12)) return 'habilidades';
     if (tem('mods') && v.mods != null && (typeof v.mods !== 'object' || Array.isArray(v.mods))) return 'mods';
-    if (tem('imagem') && v.imagem != null && (v.imagem.length > 450000 || !IMG.test(v.imagem))) return 'imagem';
+    if (tem('imagem') && v.imagem != null && (v.imagem.length > 300000 || !IMG.test(v.imagem))) return 'imagem';
     if (tem('descricao') && v.descricao != null && v.descricao.length > 1000) return 'descricao';
     if (tem('notas') && v.notas != null && v.notas.length > 1500) return 'notas';
     return null;
@@ -301,6 +304,7 @@ function criarServidor() {
     if (q.op === 'insert' && q.tabela === 'bestiario') {   // o bestiário é do mestre (dono), não da mesa
       const v = q.valores; if (!u || anonimo(u)) return erro('new row violates row-level security policy for table "bestiario"');
       const ch = validarBestiario(v); if (ch) return erro('new row violates check constraint "bestiario_' + ch + '_check"');
+      if (db.bestiario.filter(x => x.dono === u).length >= 100) return erro('Limite de 100 criaturas no bestiário. Apague algumas antigas.');   // gatilho do banco
       const agora = new Date().toISOString(), linha = { id: id('bes'), dono: u, ...limparBestiario(v), criado_em: agora, atualizado_em: agora };
       db.bestiario.push(linha); return { data: q.devolver ? [{ ...linha }] : null, error: null };
     }

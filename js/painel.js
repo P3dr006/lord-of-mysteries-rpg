@@ -309,19 +309,26 @@ ${secaoDados()}
   }
 
   // ---------- sussurros e pistas ----------
-  // A imagem é reduzida no navegador do mestre (até 1280 px, WebP) para caber no banco (~330 KB) sem perder a leitura.
+  // A imagem é reduzida no navegador do mestre para ocupar pouco do banco (alvo ~185 KB; o banco recusa acima de 300 mil
+  // caracteres). Começa na melhor qualidade (1280 px, WebP) e só desce se passar do alvo: figuras simples ficam nítidas e
+  // pequenas, fotos pesadas perdem um pouco de detalhe. Redesenhar no canvas também apaga os metadados (EXIF, GPS).
+  const IMG_ALVO = 250000;
   async function comprimirImagem(arquivo) {
     if (!arquivo || !/^image\//.test(arquivo.type)) throw new Rede.ErroRede('Escolha um arquivo de imagem.');
     if (arquivo.size > 25e6) throw new Rede.ErroRede('Imagem grande demais (máx. 25 MB).');
     const url = URL.createObjectURL(arquivo);
     try {
       const img = await new Promise((ok2, falha) => { const i = new Image(); i.onload = () => ok2(i); i.onerror = () => falha(new Rede.ErroRede('Não consegui abrir essa imagem.')); i.src = url; });
-      for (const [lado, q] of [[1280, .82], [1280, .7], [1024, .7], [900, .6], [720, .55], [560, .5]]) {
+      for (const [lado, q] of [[1280, .8], [1024, .78], [1024, .68], [860, .62], [720, .56], [560, .5]]) {
         const k = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight));
         const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(img.naturalWidth * k)); cv.height = Math.max(1, Math.round(img.naturalHeight * k));
-        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-        let d = cv.toDataURL('image/webp', q); if (!d.startsWith('data:image/webp')) d = cv.toDataURL('image/jpeg', q);
-        if (d.length <= 440000) return d;
+        const cx = cv.getContext('2d'); cx.imageSmoothingQuality = 'high'; cx.drawImage(img, 0, 0, cv.width, cv.height);
+        let d = cv.toDataURL('image/webp', q);
+        if (!d.startsWith('data:image/webp')) {   // navegador sem WebP: JPEG, com fundo branco no lugar da transparência
+          cx.globalCompositeOperation = 'destination-over'; cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+          d = cv.toDataURL('image/jpeg', q);
+        }
+        if (d.length <= IMG_ALVO) return d;
       }
       throw new Rede.ErroRede('Não consegui reduzir essa imagem o bastante. Tente outra.');
     } finally { URL.revokeObjectURL(url); }

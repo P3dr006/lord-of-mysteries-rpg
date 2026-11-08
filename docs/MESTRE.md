@@ -193,6 +193,17 @@ Em **Authentication → URL Configuration**: Site URL e Redirect URLs =
 `https://p3dr006.github.io/lord-of-mysteries-rpg/` (e `.../mestre.html`). Sem isso, o link de confirmação
 do e-mail leva para o endereço errado. Confira também se "Confirm email" está ligado.
 
+### Limites contra abuso (migração `20261112`)
+
+- **Código de mesa errado:** 15 erros por hora por usuário; depois disso a entrada é bloqueada até passar uma hora.
+  O banco devolve *vazio* (e não erro) para código inexistente, porque um erro desfaria o registro da tentativa;
+  o site traduz o vazio em "Mesa não encontrada".
+- **Código sorteado** com `gen_random_uuid()` (criptográfico), 6 caracteres de um alfabeto de 32.
+- **Imagens:** o navegador do mestre reduz para WebP (até 1280 px; alvo de ~185 KB, descendo a qualidade só se precisar) e
+  o banco recusa acima de 300 mil caracteres. Redesenhar no canvas apaga os metadados (EXIF, GPS).
+- **Bestiário:** no máximo 100 criaturas por mestre (gatilho `bestiario_limite`).
+- Verificação com papéis reais: `supabase/verificacoes/20261112_endurece_codigo_e_imagens.sql`.
+
 ### Anti-robô (Cloudflare Turnstile) — opcional, desligado por padrão
 
 O código já está pronto: com `CONFIG.captcha.chave` vazia (`js/config.js`) nada é pedido. Para ligar, **nesta ordem**

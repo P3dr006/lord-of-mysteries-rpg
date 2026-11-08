@@ -247,6 +247,19 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     await m.selectOption('#s-para', ''); await m.fill('#s-titulo', 'O mapa rasgado'); await m.fill('#s-texto', 'Alguém deixou isto sob a porta.');
     await m.setInputFiles('#s-img', { name: 'mapa.png', mimeType: 'image/png', buffer: PNG });
     ok('a imagem é reduzida e mostrada antes de enviar', await ate(() => m.evaluate(() => /^data:image\/(webp|jpeg);base64,/.test(document.querySelector('#s-prev img').getAttribute('src') || ''))));
+    // foto pesada (3200x2000 com ruído, difícil de comprimir): tem que sair WebP, até 1280 px e abaixo do alvo de ~185 KB
+    await m.click('#s-tirar');
+    const med = await m.evaluate(async () => {
+      const cv = document.createElement('canvas'); cv.width = 3200; cv.height = 2000; const x = cv.getContext('2d');
+      const g = x.createLinearGradient(0, 0, 3200, 2000); g.addColorStop(0, '#2a1a4a'); g.addColorStop(1, '#c9a24b'); x.fillStyle = g; x.fillRect(0, 0, 3200, 2000);
+      for (let i = 0; i < 4000; i++) { x.fillStyle = 'rgba(' + (i * 37 % 255) + ',' + (i * 91 % 255) + ',' + (i * 53 % 255) + ',.5)'; x.fillRect((i * 733) % 3200, (i * 421) % 2000, 20 + i % 60, 20 + i % 40); }
+      const blob = await new Promise(r => cv.toBlob(r, 'image/png')); const dt = new DataTransfer(); dt.items.add(new File([blob], 'foto.png', { type: 'image/png' }));
+      const inp = document.querySelector('#s-img'); inp.files = dt.files; inp.dispatchEvent(new Event('change', { bubbles: true }));
+      let src = ''; for (let i = 0; i < 80 && !/^data:image/.test(src); i++) { await new Promise(r => setTimeout(r, 100)); src = document.querySelector('#s-prev img').getAttribute('src') || ''; }
+      const dim = await new Promise(r => { const im = new Image(); im.onload = () => r([im.naturalWidth, im.naturalHeight]); im.onerror = () => r([0, 0]); im.src = src; });
+      return { tipo: src.slice(0, 16), tam: src.length, dim, origem: blob.size };
+    });
+    ok('foto pesada vira WebP até ~185 KB e no máximo 1280 px', med.tipo.startsWith('data:image/webp') && med.tam <= 250000 && Math.max(...med.dim) <= 1280 && med.dim[0] > 0, JSON.stringify(med));
     await m.click('#s-enviar');
     ok('o jogador recebe a pista na hora, com a cena do sussurro', await ate(() => j.isVisible('.sussurro')));
     ok('a cena mostra título, texto e a imagem', await j.evaluate(() => { const s = document.querySelector('.sussurro'); return /O mapa rasgado/.test(s.textContent) && /sob a porta/.test(s.textContent) && /^data:image\/(webp|jpeg);base64,/.test(s.querySelector('.sus-pista img').getAttribute('src')); }));
@@ -715,6 +728,34 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
   await m.click('#m-sair');
   ok('sair do grimório volta ao login', await ate(() => m.isVisible('#m-email')));
   await ctxM.close(); await ctxJ.close();
+
+  console.log('\n10b) Endurecimento: código errado e limites');
+  { const s2 = criarServidor(); s2.criarMestre(EMAIL, SENHA); const c = await contexto(browser, s2);
+    const p = await pagina(c, URL_SITE);
+    const r = await p.evaluate(async () => {
+      await Rede.entrarAnonimo(); const msgs = []; let vazios = 0;
+      for (let i = 0; i < 15; i++) { const m = await Rede.rpc('jogador', 'entrar_na_mesa', { p_codigo: 'ZZZZZ' + (i % 8 + 2), p_nome: 'Tentador', p_ficha: {} }); if (!m) vazios++; }
+      try { await Rede.rpc('jogador', 'entrar_na_mesa', { p_codigo: 'ZZZZZ9', p_nome: 'Tentador', p_ficha: {} }); msgs.push('passou'); } catch (e) { msgs.push(Rede.mensagem(e)); }
+      return { vazios, bloqueio: msgs[0] };
+    });
+    ok('15 códigos errados devolvem vazio (e o servidor conta)', r.vazios === 15, String(r.vazios));
+    ok('a 16ª tentativa errada é bloqueada com mensagem em português', /Muitas tentativas/.test(r.bloqueio), r.bloqueio);
+    await c.close(); }
+  { const s2 = criarServidor(); s2.criarMestre(EMAIL, SENHA); const c = await contexto(browser, s2);
+    const p = await jogadorPronto(c);
+    await p.fill('#on-cod', 'zzzzz2'); await p.click('#on-entrar');
+    ok('código inexistente: o site mostra "Mesa não encontrada" em português', await ate(() => p.isVisible('.on-erro')) && /Mesa não encontrada/.test(await p.textContent('.on-erro')), await p.textContent('.on-erro').catch(() => ''));
+    await c.close(); }
+  { const s2 = criarServidor(); s2.criarMestre(EMAIL, SENHA); const c = await contexto(browser, s2);
+    const p = await mestreLogado(c);
+    const r = await p.evaluate(async () => {
+      const tb = await Rede.tabela('mestre', 'bestiario'); const u = await Rede.usuario('mestre'); let aceitas = 0, erro = '';
+      for (let i = 0; i < 101; i++) { const x = await tb.insert({ nome: 'Criatura ' + i }).select('id'); if (x.error) { erro = Rede.mensagem(x.error); break; } aceitas++; }
+      const grande = await (await Rede.tabela('mestre', 'sussurros')).select('id').limit(1);
+      return { aceitas, erro };
+    });
+    ok('bestiário: aceita 100 criaturas e recusa a 101ª em português', r.aceitas === 100 && /Limite de 100/.test(r.erro), r.aceitas + ' | ' + r.erro);
+    await c.close(); }
 
   console.log('\n11) Celular');
   { const s2 = criarServidor(); s2.criarMestre(EMAIL, SENHA); const c = await contexto(browser, s2, { viewport: { width: 375, height: 812 } });
