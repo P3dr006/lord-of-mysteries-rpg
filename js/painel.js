@@ -781,7 +781,7 @@ ${secaoDados()}
     dus.forEach(d => { const A = obj(d.a), B = obj(d.b); ev.push({ t: d.criado_em, tipo: 'duelo', txt: `Duelo — ${d.rotulo}: ${A.nome} ${A.total} × ${B.total} ${B.nome}${A.total === B.total ? ' · empate' : ` · ${(A.total > B.total ? A : B).nome} leva a melhor`}` }); });
     cro.forEach(c => ev.push({ t: c.criado_em, tipo: 'momento', txt: c.texto }));
     const vistos = new Set();   // um "Terror" para a mesa gera uma ordem por jogador: aparece uma vez só
-    return ev.filter(e => !e.chave || (!vistos.has(e.chave) && vistos.add(e.chave))).sort((a, b) => new Date(a.t) - new Date(b.t));
+    return ev.filter(e => !e.chave || (!vistos.has(e.chave) && vistos.add(e.chave))).sort((a, b) => +new Date(a.t) - +new Date(b.t));
   }
   const ROT_TIPO = { teste: 'Teste', sussurro: 'Sussurro', golpe: 'Golpe', terror: 'Terror', duelo: 'Duelo', momento: 'Momento' };
   function cronicaMarkdown(ev) {

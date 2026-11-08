@@ -176,7 +176,7 @@ function importarJSON(file, cb) {
   r.onerror = () => cb(false);
   r.onload = () => {
     try {
-      const obj = JSON.parse(r.result);
+      const obj = JSON.parse(String(r.result));
       if (!_objeto(obj)) return cb(false);                     // lista, texto, número ou null não são uma ficha
       cb(sanear(obj));                                         // quem chama decide onde guardar (como um personagem novo)
     } catch (e) { cb(false); }

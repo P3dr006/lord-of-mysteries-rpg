@@ -1,7 +1,7 @@
 // Mesa online (Supabase): cliente compartilhado pela página do mestre e pelo lado do jogador.
 // É OPCIONAL: a biblioteca só é baixada quando alguém usa a mesa online, e só se houver rede.
 // Sem rede, sem banco ou com a CDN fora do ar, o resto do site continua funcionando igual.
-const Rede = (() => {
+const Rede = Object.freeze((() => {
   // Versão FIXA + hash de integridade: se o arquivo da CDN mudar, o navegador recusa.
   const SDK = {
     src: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js',
@@ -23,6 +23,7 @@ const Rede = (() => {
       const s = document.createElement('script');
       s.src = SDK.src; s.integrity = SDK.sri; s.crossOrigin = 'anonymous'; s.async = true;
       const fim = setTimeout(() => { s.remove(); falha(new ErroRede('A conexão demorou demais. Tente de novo.', 'tempo')); }, ESPERA_MS);
+      // @ts-expect-error resolve sem valor é válido; o verificador exige um argumento
       s.onload = () => { clearTimeout(fim); temSDK() ? ok() : falha(new ErroRede('Não foi possível iniciar a mesa online.', 'sdk')); };
       s.onerror = () => { clearTimeout(fim); s.remove(); falha(new ErroRede('Sem conexão com a mesa online. O resto do site continua funcionando.', 'sem-rede')); };
       document.head.appendChild(s);
@@ -83,6 +84,7 @@ const Rede = (() => {
       const s = document.createElement('script');
       s.src = CAPTCHA_SRC; s.async = true;   // sem SRI: a Cloudflare exige carregar a versão dela, sempre atual
       const fim = setTimeout(() => { s.remove(); falha(erroCaptcha('A verificação anti-robô demorou demais. Tente de novo.')); }, ESPERA_MS);
+      // @ts-expect-error resolve sem valor é válido; o verificador exige um argumento
       s.onload = () => { clearTimeout(fim); window.turnstile ? ok() : falha(erroCaptcha()); };
       s.onerror = () => { clearTimeout(fim); s.remove(); falha(erroCaptcha('Sem conexão com a verificação anti-robô. Tente de novo.')); };
       document.head.appendChild(s);
@@ -162,4 +164,4 @@ const Rede = (() => {
   }
 
   return { cliente, configurada, mensagem, usuario, entrarAnonimo, entrarEmail, criarConta, pedirRecuperacao, novaSenha, linkDeRecuperacao, limparLink, sair, rpc, tabela, ouvir, presenca, SDK, ErroRede, senhaForte, REGRA_SENHA };
-})();
+})());

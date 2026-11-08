@@ -1,5 +1,5 @@
 // Pôster do Beyonder: A4 desenhado em canvas (fundo por Caminho, moldura por raça) + PDF próprio.
-const Poster = (() => {
+const Poster = Object.freeze((() => {
   const W = 1000, H = 1414, ESC = 1.654;                 // unidades de desenho; 1654×2339 px (A4 a 200 dpi)
   const TAU = Math.PI * 2, FONTE = 'Georgia, "Times New Roman", serif';
   const rnd = seed => () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -100,6 +100,7 @@ const Poster = (() => {
       cantos(c, k => { k.strokeStyle = ouro; k.lineWidth = 6; k.lineCap = 'round'; [[20, 0, 90, 90], [48, 0, 118, 90], [76, 0, 146, 90]].forEach(([a, b, d, e]) => { k.beginPath(); k.moveTo(a, b + 10); k.lineTo(d, e); k.stroke(); }); k.strokeStyle = rgba('#000', .5); k.lineWidth = 2; [[20, 10, 90, 90], [48, 10, 118, 90]].forEach(([a, b, d, e]) => { k.beginPath(); k.moveTo(a + 4, b); k.lineTo(d + 4, e); k.stroke(); }); }); },
     escamas(c, ouro, cor) { c.fillStyle = rgba(cor, .5); c.strokeStyle = ouro; c.lineWidth = 2; for (let r = 0; r < 2; r++) perimetro(34, (x, y, nx, ny, i) => { const a = Math.atan2(ny, nx); c.save(); c.translate(x + nx * (10 + r * 14), y + ny * (10 + r * 14) + (i % 2 ? 0 : 0)); c.rotate(a - Math.PI / 2); c.beginPath(); c.arc(0, 0, 17, 0, Math.PI); c.fill(); c.stroke(); c.restore(); });
       retFrame(c, ouro, 0, 3.5); cantos(c, k => { k.fillStyle = ouro; k.beginPath(); k.moveTo(0, 0); k.lineTo(100, 0); k.lineTo(70, 22); k.lineTo(90, 40); k.lineTo(44, 44); k.lineTo(40, 90); k.lineTo(22, 70); k.lineTo(0, 100); k.closePath(); k.fill(); }); },
+    // @ts-expect-error lista com texto e número juntos: o verificador não separa os tipos
     chamas(c, ouro, cor) { retFrame(c, rgba(ouro, .7), 14, 1.6); const R = rnd(31); for (const [col, sc] of [['#ff5a1a', 1], ['#ffa030', .7], ['#ffe27a', .4]]) { c.fillStyle = rgba(col, .85); perimetro(34, (x, y, nx, ny, i) => { const h = (30 + (i * 17 % 20)) * sc; c.save(); c.translate(x, y); c.rotate(Math.atan2(ny, nx) - Math.PI / 2); c.beginPath(); c.moveTo(-14 * sc, 0); c.quadraticCurveTo(-8 * sc, h * .5, (R() - .5) * 6, h); c.quadraticCurveTo(8 * sc, h * .5, 14 * sc, 0); c.closePath(); c.fill(); c.restore(); }); }
       retFrame(c, ouro, 0, 3); },
     espinhos(c, ouro, cor) { retFrame(c, ouro, 0, 3); retFrame(c, rgba(ouro, .45), 12, 1.4); c.fillStyle = rgba('#1a0508', .9); c.strokeStyle = ouro; c.lineWidth = 2; perimetro(40, (x, y, nx, ny, i) => { const a = Math.atan2(ny, nx) - Math.PI / 2, h = i % 2 ? 44 : 28; c.save(); c.translate(x, y); c.rotate(a); c.beginPath(); c.moveTo(-14, 0); c.lineTo(0, h); c.lineTo(14, 0); c.closePath(); c.fill(); c.stroke(); c.restore(); });
@@ -219,4 +220,4 @@ const Poster = (() => {
   }
   function baixar(nome, dados, tipo) { try { const u = typeof dados === 'string' ? dados : URL.createObjectURL(new Blob([dados], { type: tipo })); const a = document.createElement('a'); a.href = u; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); if (typeof dados !== 'string') setTimeout(() => URL.revokeObjectURL(u), 4000); return true; } catch (e) { return false; } }
   return { desenhar, gerarArquivos, baixar, montarPDF, ESTILO, MOLDURA, FUNDOS, MOLD };
-})();
+})());

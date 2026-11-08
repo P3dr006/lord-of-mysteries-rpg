@@ -1,9 +1,10 @@
 // Mesa do Destino: dados flutuantes (d4–d100, d22), vantagem, testes de atributo e de sanidade.
-const Mesa = (() => {
+const Mesa = Object.freeze((() => {
   const LADOS = [4, 6, 8, 10, 12, 20, 22, 100];
   const soma = v => v.reduce((a, b) => a + b, 0);
   const sinal = n => (n >= 0 ? '+' : '−') + Math.abs(n);
   const PADRAO = { lados: 20, qtd: 1, mod: 0, modo: 'normal' };
+  // @ts-expect-error o objeto é preenchido com os padrões logo em seguida
   const cfg = () => { if (!P.mesa || typeof P.mesa !== 'object') P.mesa = {}; for (const k in PADRAO) if (P.mesa[k] === undefined) P.mesa[k] = PADRAO[k]; return P.mesa; };
   let aberta = false, rolando = false, aba = 'livre', ultimo = null;
 
@@ -117,6 +118,7 @@ const Mesa = (() => {
     const iv = setInterval(() => els.forEach(([e]) => { if (e.classList.contains('rolando')) e.querySelector('.dv').textContent = d(o.lados); }), 70);
     await new Promise(r => setTimeout(r, 1000 + o.qtd * 60));
     clearInterval(iv);
+    // biome-ignore lint/correctness/noSelfAssign: reler o innerHTML reinicia a animacao do SVG (de proposito)
     els.forEach(([e, v, gi], i) => { setTimeout(() => { e.classList.remove('rolando'); e.classList.add('pousou'); e.querySelector('.dv').textContent = v; const sv = e.querySelector('svg'); sv.innerHTML = sv.innerHTML; Som.tick(); }, i * 70); });
     await new Promise(r => setTimeout(r, els.length * 70 + 250));
     // resultado
@@ -141,5 +143,5 @@ const Mesa = (() => {
   function irParaTestes() { aba = 'testes'; document.querySelectorAll('#mesa .aba').forEach(x => x.classList.toggle('on', x.dataset.aba === 'testes')); if (!aberta) alternar(true); else corpo(); }
   const atualizar = () => { if (aberta && aba === 'testes') corpo(); };
   return { montar, alternar, rolar, irParaTestes, atualizar, get rolando() { return rolando; } };
-})();
+})());
 document.addEventListener('DOMContentLoaded', () => Mesa.montar());

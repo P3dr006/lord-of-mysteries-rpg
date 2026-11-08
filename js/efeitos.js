@@ -183,6 +183,7 @@ const FX = {
       draw(c, p) { const t0 = .1, t = Math.max(0, p - t0), g = ease(t / .4), e = env(p, .02, .85), col = T ? '230,20,30' : '255,150,40';
         if (p < t0 + .06) { c.fillStyle = rgba(255, 255, 255, (1 - (p - t0) / .06) * .6 * (p > t0 ? 1 : 0)); c.fillRect(0, 0, w, h); }
         dk.forEach(d => glow(c, cx + Math.cos(d.a) * t * 900, cy + Math.sin(d.a) * t * 500, d.s * (1 + t * 3), T ? '70,20,25' : '160,140,120', .3 * (1 - clamp(t / .7)) * (p > t0 ? 1 : 0)));
+        // @ts-expect-error lista com texto e número juntos: o verificador não separa os tipos
         c.lineJoin = 'round'; ls.forEach(L => { const n = g * (L.length - 1), f = Math.floor(n); for (const [lw, a, cl] of [[9, .25, col], [4, .9, col], [1.5, 1, '255,240,200']]) { c.strokeStyle = rgba(...cl.split(',').map(Number), a * e); c.lineWidth = lw; c.beginPath(); c.moveTo(L[0][0], L[0][1]); for (let i = 1; i <= f; i++) c.lineTo(L[i][0], L[i][1]); if (f < L.length - 1) c.lineTo(lerp(L[f][0], L[f + 1][0], n - f), lerp(L[f][1], L[f + 1][1], n - f)); c.stroke(); } });
         if (p > t0) rk.forEach(r => { const x = cx + Math.cos(r.a) * r.v * t * .9, y = cy - Math.abs(Math.sin(r.a)) * r.v * t * 1.3 + r.g * t * t * .5; if (y > h + 20) return; c.save(); c.translate(x, y); c.rotate(r.w * t * 4); c.globalAlpha = e; c.fillStyle = T ? (r.s > 7 ? '#d8d4c4' : '#2a1014') : '#6a5a4a'; c.fillRect(-r.s / 2, -r.s / 3, r.s, r.s * .66); c.restore(); });
         for (let i = 0; i < 3; i++) { const q = clamp((p - t0 - i * .06) / .5); if (q > 0 && q < 1) { c.strokeStyle = rgba(255, 255, 255, (1 - q) * .7); c.lineWidth = 8 * (1 - q) + 1; c.beginPath(); c.ellipse(cx, cy, q * w * .8, q * w * .8 * .35, 0, 0, TAU); c.stroke(); } } } }; },
@@ -203,6 +204,7 @@ const FX = {
     return { dur: 3800, page: p => ({ filter: T ? `contrast(1.15) brightness(${1 - env(p, .2, .8) * .25})` : `brightness(${1 + env(p, .2, .8) * .15}) sepia(${env(p, .2, .8) * .35})` }),
       draw(c, p) { const e = env(p, .14, .8), g = ease(p / .35); c.save(); c.globalCompositeOperation = 'lighter';
         const camadas = T ? [['40,0,55', 1.0], ['120,0,28', .75], ['200,16,34', .5], ['255,110,90', .2]] : [['180,30,0', 1.0], ['255,90,10', .75], ['255,170,30', .5], ['255,240,170', .25]];
+        // @ts-expect-error lista com texto e número juntos: o verificador não separa os tipos
         camadas.forEach(([col, sc], li) => { c.fillStyle = rgba(...col.split(',').map(Number), .55 * e); c.beginPath(); c.moveTo(0, h); for (let x = 0; x <= w; x += 10) { const n = Math.sin(x * .017 + p * 14 + li) + Math.sin(x * .043 - p * 21) * .6 + Math.sin(x * .09 + p * 33) * .3; c.lineTo(x, h - h * .42 * sc * g * (.65 + .35 * n * .5 + .2) ); } c.lineTo(w, h); c.fill(); }); c.restore();
         es.forEach(k => { const q = (p - k.d) * k.v * 1.5; if (q < 0 || q > 1) return; const x = k.x + Math.sin(q * 10 + k.x) * 24, y = h - q * h * 1.0; glow(c, x, y, k.s * 3 * (1 - q * .5), T ? '255,60,70' : '255,190,60', (1 - q) * .9); }); } }; },
 
@@ -311,7 +313,7 @@ const FX = {
       if (p > .6) { const t = ease((p - .6) / .15); c.save(); c.globalAlpha = t * e; c.fillStyle = cs; c.font = `${Math.min(w, h) * .06}px Georgia, serif`; c.textAlign = 'center'; c.shadowColor = cs; c.shadowBlur = 20; c.fillText(T ? 'C U L P A D O' : 'V E R E D I T O', cx, cy + S * 1.15); c.restore(); } } }),
 };
 
-const Efeitos = (() => {
+const Efeitos = Object.freeze((() => {
   let cv = null, raf = 0; const IMG = {};
   const img = id => IMG[id] || (IMG[id] = Object.assign(new Image(), { src: `img/sigilos/${id}.webp` }));
   const cor = id => { const c = typeof caminhoPorId === 'function' ? caminhoPorId(id) : null; return c ? c.cor : '#fff'; };
@@ -341,6 +343,7 @@ const Efeitos = (() => {
         const p = Math.max(0, Math.min(1, (now - t0) / fx.dur));   // o carimbo do quadro pode vir um pouco antes de t0: sem isso p fica negativo e o canvas recusa raios negativos
         ctx.clearRect(0, 0, w, h); ctx.save(); ctx.globalAlpha = 1; fx.draw(ctx, p); ctx.restore(); ctx.save(); selo(ctx, id, w, h, p, terror); ctx.restore();
         if (fx.page) aplicarPagina(fx.page(p));
+        // @ts-expect-error resolve sem valor é válido; o verificador exige um argumento
         if (p < 1) raf = requestAnimationFrame(passo); else { ctx.clearRect(0, 0, w, h); aplicarPagina(null); res(); }
       };
       raf = requestAnimationFrame(passo);
@@ -348,6 +351,6 @@ const Efeitos = (() => {
   }
   function quadro(id, terror, p, ctx, w, h) { const fx = FX[id](w, h, terror); ctx.save(); fx.draw(ctx, p); ctx.restore(); }
   return { tocar, quadro, ids: Object.keys(FX) };
-})();
+})());
 
 function tocarCaminho(id) { Som.caminho(id); Efeitos.tocar(id); }

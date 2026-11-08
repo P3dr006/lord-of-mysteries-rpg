@@ -13,13 +13,18 @@
     "proteger": "git config core.hooksPath .githooks && node tools/verificar-segredos.js --tudo",
     "segredos": "node tools/verificar-segredos.js --tudo",
     "segredos:historico": "node tools/verificar-segredos.js --historico",
+    "tipos": "tsc -p .",
+    "lint": "biome lint .",
+    "verificar": "npm run tipos && npm run lint",
     "test:segredos": "node tests/segredos.js",
     "test:mestre": "node tests/mestre.js",
     "test:quieto": "node tests/segredos.js --quieto && node tests/robustez.js --quieto && node tests/ficha.js --quieto && node tests/acessibilidade.js --quieto && node tests/audio.js --quieto && node tests/mestre.js --quieto"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.6",
     "axe-core": "^4.10.0",
     "pg": "^8.23.1",
-    "playwright": "^1.40.0"
+    "playwright": "^1.40.0",
+    "typescript": "7.0.2"
   }
 }

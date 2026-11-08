@@ -27,6 +27,7 @@ function criarDado() {
     cube.appendChild(f);
   }
   wrap.appendChild(cube);
+  // @ts-expect-error guarda o cubo no próprio elemento (propriedade extra de propósito)
   wrap._cube = cube;
   return wrap;
 }

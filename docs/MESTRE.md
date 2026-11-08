@@ -185,6 +185,17 @@ Configuração (uma vez, feita pelo Pedro no terminal dele, **nunca** no projeto
 Travas: só aceita o projeto lotm-rpg, só lê `.sql`, verifica o TLS (não há modo inseguro), nunca imprime a URL nem a senha
 (nem em erros), `aplicar` exige `--sim`. Sem a variável, as migrações continuam pelo conector do Supabase.
 
+Verificação de código (fase 3 do roteiro; só ferramentas de desenvolvimento, o site continua sem build):
+
+- `npm run verificar` = `npm run tipos` + `npm run lint`. **O normal é terminar sem nenhuma linha de erro.**
+- `npm run tipos`: TypeScript lê os `.js` (`checkJs`, `tsconfig.json`) e acha nome de função trocado, chamada com argumentos
+  demais e valor de tipo errado. `js/tipos.d.ts` só afrouxa as propriedades de DOM mais usadas (o site não carrega esse arquivo).
+  Falsos alarmes conhecidos ficam com `// @ts-expect-error` e o motivo ao lado.
+- `npm run lint`: Biome (só verifica, não reformata). `biome.jsonc` explica cada regra desligada. Se aparecer um aviso
+  novo, é sinal real: corrija ou comente com `biome-ignore` e o motivo.
+- Os 6 módulos globais (`Rede`, `Mesa`, `Jogador`, `Efeitos`, `Poster`, `Som`) são `Object.freeze(...)`: o verificador só
+  acusa nome de propriedade errado em objeto fechado, e ninguém altera módulo depois de criado.
+
 Testes enxutos: `npm run test:quieto` (só falhas + placar) e `node tests/mestre.js --quieto --ate=7d` (para depois da seção).
 
 ## Configuração que falta no painel do Supabase

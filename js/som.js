@@ -1,5 +1,5 @@
 // Sons 100% sintetizados no navegador (Web Audio) — nenhum arquivo de áudio.
-const Som = (() => {
+const Som = Object.freeze((() => {
   let ctx = null, master = null, pm = 1, noiseBuf = null, amb = null, saida = null;
   let mudo = false, terror = false, vol = 1, uiSons = true;
   try {
@@ -74,7 +74,7 @@ const Som = (() => {
   // ---------- 22 trilhas, uma por Caminho ----------
   const TEMAS = {
     louco:      t => { [523, 659, 784, 1047, 1319].forEach((f, i) => sino(f, t + i * 0.16, 0.12, 2.6)); },
-    erro:       t => { for (let i = 0; i < 24; i++) { osc('square', 200 + Math.random() * 2200, t + i * 0.05, 0.05, 0.1, { pan: Math.random() * 2 - 1 }); if (i % 3 == 0) ruido(t + i * 0.05, 0.04, 0.15, { type: 'highpass', f: 4000 }); } },
+    erro:       t => { for (let i = 0; i < 24; i++) { osc('square', 200 + Math.random() * 2200, t + i * 0.05, 0.05, 0.1, { pan: Math.random() * 2 - 1 }); if (i % 3 === 0) ruido(t + i * 0.05, 0.04, 0.15, { type: 'highpass', f: 4000 }); } },
     porta:      t => { osc('sawtooth', 90, t, 1.1, 0.12, { slide: 160, vib: 7, lp: 700 }); osc('sawtooth', 160, t + 0.7, 0.8, 0.1, { slide: 70, lp: 600 }); bumbo(t + 1.5, 0.5, 70); },
     visionario: t => { acorde([261, 329, 392, 493], t, 3, 0.25, 'sine', { vib: 5 }); [1047, 1319, 1568].forEach((f, i) => osc('sine', f, t + 0.4 + i * 0.3, 1.6, 0.05, { vib: 6 })); },
     sol:        t => { acorde([392, 494, 587, 784], t, 2.6, 0.32, 'triangle'); sino(1568, t + 0.1, 0.1, 2.5); sino(2093, t + 0.35, 0.07, 2); },
@@ -196,4 +196,4 @@ const Som = (() => {
     get mudo() { return mudo; }, get terror() { return terror; }, get volume() { return vol; }, get uiSons() { return uiSons; },
     ids: Object.keys(TEMAS),
   };
-})();
+})());

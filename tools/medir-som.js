@@ -32,6 +32,7 @@ async function medirUm(browser, s) {
   }, [s.modo === 't']);
   await p.goto(URL);
   const m = await p.evaluate(async chamada => {
+    // biome-ignore lint/security/noGlobalEval: ferramenta local de medição; só roda os trechos escritos neste mesmo script
     if (chamada.includes('setTerror(false)')) { Som.setTerror(false); Som.init(); Som.setTerror(true); } else eval(chamada);
     const buf = await window.__oc.startRendering(), a = buf.getChannelData(0), b = buf.getChannelData(1), W = Math.round(1.2 * 44100), H = Math.round(0.1 * 44100);
     let pico = 0, melhor = 0; const n = a.length;

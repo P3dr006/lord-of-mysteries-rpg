@@ -1,0 +1,49 @@
+{
+	// Biome só como VERIFICADOR (npm run lint). Não reformata nada: o estilo denso do projeto é de propósito.
+	// Regra de ouro: o comando deve terminar com zero avisos. Assim, qualquer aviso novo é um sinal real.
+	"$schema": "https://biomejs.dev/schemas/2.6.6/schema.json",
+	"files": {
+		"includes": [
+			"js/**",
+			"tests/**",
+			"tools/**",
+			"!**/node_modules",
+			"!js/**/*.d.ts"
+		]
+	},
+	"formatter": { "enabled": false },
+	"assist": { "enabled": false },
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"correctness": {
+				// Os arquivos de js/ são scripts clássicos que dividem funções globais (state.js define, app.js usa...).
+				// Dentro de um arquivo só, tudo isso parece "sem uso", e os parâmetros de catch (e) também: só dá falso alarme.
+				"noUnusedVariables": "off",
+				"noUnusedFunctionParameters": "off"
+			},
+			"style": {
+				// Só estilo. O código do projeto é escrito em linhas densas, com "+" e "||" de propósito.
+				"useTemplate": "off",
+				"useConst": "off",
+				"useNodejsImportProtocol": "off",
+				"useExponentiationOperator": "off"
+			},
+			"complexity": {
+				"useOptionalChain": "off",
+				"useArrowFunction": "off",
+				"noCommaOperator": "off",
+				"noArguments": "off"
+			},
+			"suspicious": {
+				"useIterableCallbackReturn": "off",
+				"noAssignInExpressions": "off",
+				"noApproximativeNumericConstant": "off",
+				// tools/migracao.js é CommonJS e precisa do "use strict" dele
+				"noRedundantUseStrict": "off"
+			},
+			"performance": { "useDomNodeTextContent": "off" }
+		}
+	}
+}

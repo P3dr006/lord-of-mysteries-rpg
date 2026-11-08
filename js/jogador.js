@@ -1,6 +1,6 @@
 // Lado do jogador na mesa online: entrar com o código, receber pedidos do mestre, enviar a ficha.
 // Fica na aba "Testes" da Mesa do Destino. Sem rede, nada disso aparece quebrado: só uma mensagem.
-const Jogador = (() => {
+const Jogador = Object.freeze((() => {
   const K = 'lotm-rpg-online';
   const CODIGO = /^[A-HJ-NP-Z2-9]{6}$/;          // o mesmo alfabeto do servidor (sem I, O, 0, 1)
   let con = lerConexao();                         // { mesa, codigo, nome, slot } ou null
@@ -544,6 +544,7 @@ const Jogador = (() => {
 
   document.addEventListener('DOMContentLoaded', () => {
     // a ficha vai ao mestre sempre que é salva (sem mexer em state.js)
+    // @ts-expect-error intencional: embrulha salvar() para também avisar o mestre
     if (typeof salvar === 'function') { const original = salvar; salvar = function () { const r = original.apply(this, arguments); fichaMudou(); return r; }; }
     // volta para a mesa sozinho se o jogador já estava numa (só com rede)
     if (con && navigator.onLine !== false && Rede.configurada()) setTimeout(ligar, 600);
@@ -561,4 +562,4 @@ const Jogador = (() => {
   });
 
   return { desenhar, entrar, sairDaMesa, ligar, rolarPedido, fichaParaMestre: ficha, propor, retirar, podePropor, desenharHabsMesa, get habilidades() { return habs.slice(); }, get efeitos() { return efeitos.slice(); }, get estado() { return estado; }, get encontro() { return encontro; }, get pedidos() { return pedidos.slice(); } };
-})();
+})());
