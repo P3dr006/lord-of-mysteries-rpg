@@ -20,6 +20,8 @@ async function ate(fn, ms = 5000) { const t = Date.now(); while (Date.now() - t 
 async function contexto(browser, srv, extra = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1180, height: 900 }, ...extra });
   if (srv) await srv.ligar(ctx);
+  // O config.js real tem a chave do anti-robô: aqui a Cloudflare é trocada por uma falsa que entrega o token na hora.
+  await ctx.addInitScript(() => { window.turnstile = { render: (el, o) => { setTimeout(() => o.callback('tok-teste'), 0); return 'w'; }, remove: () => {} }; });
   return ctx;
 }
 async function pagina(ctx, url) { const p = await ctx.newPage(); p.erros = []; p.on('pageerror', e => p.erros.push(e.message)); await p.goto(url); await p.waitForTimeout(300); if (url === URL_MESTRE) grimorio(p); return p; }
@@ -217,6 +219,23 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
   ok('o jogador NUNCA recebeu um teste secreto', !/"secreto"/.test(tudoJ));
   ok('consultar a visão do mestre como jogador não devolve nada', (await j.evaluate(async () => (await (await Rede.tabela('jogador', 'resultados_mestre')).select('*')).data.length)) === 0);
   ok('o jogador não consegue pedir teste (só o mestre)', /Só o mestre/.test(await j.evaluate(async m2 => { try { await Rede.rpc('jogador', 'pedir_teste', { p_mesa: m2, p_para: 'x', p_rotulo: 'x', p_atributo: '', p_lados: 20, p_dificuldade: 1 }); return 'aceitou'; } catch (e) { return Rede.mensagem(e); } }, srv.db.mesas[0].id)));
+    const cap = await j.evaluate(async () => {
+      const chaveReal = CONFIG.captcha, turnstileFalso = window.turnstile; CONFIG.captcha = { chave: '' };
+      const antes = []; const c0 = await Rede.cliente('mestre'); const orig0 = c0.auth.signUp; c0.auth.signUp = async a => { antes.push(a); return orig0(a); };
+      try { await Rede.criarConta('sem-captcha@teste.com', 'Grimorio2026'); } catch (e) { /* o falso pode recusar: só interessa o que foi enviado */ }
+      CONFIG.captcha = { chave: '0xTESTE' };
+      window.turnstile = { render: (el, o) => { setTimeout(() => o.callback('tok-123'), 5); return 'w1'; }, remove: () => {} };
+      const com = []; const orig = c0.auth.signUp; c0.auth.signUp = async a => { com.push(a); return orig(a); };
+      try { await Rede.criarConta('com-captcha@teste.com', 'Grimorio2026'); } catch (e) { /* idem */ }
+      const sobrou = document.querySelectorAll('.captcha-caixa').length;
+      window.turnstile = { render: (el, o) => { setTimeout(() => o['error-callback'](), 5); return 'w2'; }, remove: () => {} };
+      const falha = await Rede.criarConta('falha@teste.com', 'Grimorio2026').then(() => 'passou', e => Rede.mensagem(e));
+      window.turnstile = turnstileFalso; CONFIG.captcha = chaveReal;
+      return { semToken: antes[0] && antes[0].options.captchaToken, comToken: com[0] && com[0].options.captchaToken, sobrou, falha, msgServidor: Rede.mensagem({ message: 'captcha verification process failed' }) };
+    });
+    ok('anti-robô desligado (sem chave): nenhum token é enviado', cap.semToken === undefined);
+    ok('anti-robô ligado: o token vai junto com o cadastro e a caixa some depois', cap.comToken === 'tok-123' && cap.sobrou === 0, JSON.stringify(cap));
+    ok('anti-robô com erro na Cloudflare: o cadastro nem é tentado e a mensagem é em português', /robô/.test(cap.falha) && /robô/.test(cap.msgServidor), cap.falha);
 
   console.log('\n7b) Sussurros e pistas');
   { const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');

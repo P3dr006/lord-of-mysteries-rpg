@@ -193,4 +193,14 @@ Em **Authentication → URL Configuration**: Site URL e Redirect URLs =
 `https://p3dr006.github.io/lord-of-mysteries-rpg/` (e `.../mestre.html`). Sem isso, o link de confirmação
 do e-mail leva para o endereço errado. Confira também se "Confirm email" está ligado.
 
+### Anti-robô (Cloudflare Turnstile) — opcional, desligado por padrão
+
+O código já está pronto: com `CONFIG.captcha.chave` vazia (`js/config.js`) nada é pedido. Para ligar, **nesta ordem**
+(se o Supabase for ligado antes de o site enviar o token, o login para de funcionar, até o dos jogadores):
+1. Cloudflare (conta grátis) → **Turnstile → Add widget**: hostname `p3dr006.github.io`, modo **Managed**.
+2. Copie a **Site Key** (pública) para `captcha.chave` em `js/config.js` e publique o site.
+3. Só então, no Supabase: **Authentication → Attack Protection → Enable CAPTCHA**, provedor **Turnstile**, e cole a
+   **Secret Key** ali. A Secret Key **nunca** vai no código nem no chat.
+Para desligar: Supabase primeiro (desliga o CAPTCHA), depois esvazie `captcha.chave` e publique.
+
 Lembretes: o plano grátis não tem backup e **pausa após 1 semana sem uso** (reative no painel).

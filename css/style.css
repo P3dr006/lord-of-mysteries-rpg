@@ -1959,3 +1959,5 @@ li.perdida>div>b,li.perdida>b{text-decoration:line-through;text-decoration-color
   .m-aba-p:not([hidden]),.rd-p.vez::after,.mf-selo,.mf-bloco,.hab-lista li{animation:none}
   .m-ficha-fundo,.m-ficha-fundo>[role=dialog]{transition:none}
 }
+/* verificação anti-robô: a caixa fica vazia e invisível; só ganha tamanho se a Cloudflare pedir um clique */
+.captcha-caixa{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9999}

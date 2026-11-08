@@ -57,6 +57,7 @@ const Rede = (() => {
     if (/Email not confirmed/i.test(m)) return 'Confirme o e-mail pelo link que enviamos antes de entrar.';
     if (/User already registered/i.test(m)) return 'Este e-mail já tem conta. Use “Entrar”.';
     if (/Password should|weak.password|password.*(known|easy to guess|pwned)/i.test(m)) return REGRA_SENHA;
+    if (/captcha/i.test(m)) return 'A verificação anti-robô falhou. Recarregue a página e tente de novo.';
     if (/rate limit|too many/i.test(m)) return 'Muitas tentativas seguidas. Espere um pouco e tente de novo.';
     if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Sem conexão com a mesa online. Tente de novo em instantes.';
     if (/[áéíóúâêôãõç]/i.test(m) || /^(Entre|Limite|Mesa|A mesa|Pedido|Este|Jogador|Só|Escreva|Sussurro)\b/.test(m)) return m;   // frases das nossas funções
@@ -65,17 +66,61 @@ const Rede = (() => {
 
   const resposta = r => { if (r.error) throw r.error; return r.data; };
 
+  // ---------- verificação anti-robô (Cloudflare Turnstile) ----------
+  // Só vale quando CONFIG.captcha.chave existir (a chave do SITE é pública). Sem ela nada é pedido, e o CAPTCHA
+  // do Supabase (Authentication > Attack Protection) precisa estar desligado: os dois andam juntos.
+  const CAPTCHA_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  const captchaLigado = () => typeof CONFIG === 'object' && CONFIG && CONFIG.captcha && !!CONFIG.captcha.chave;
+  const erroCaptcha = msg => new ErroRede(msg || 'Não foi possível confirmar que você não é um robô. Recarregue a página e tente de novo.', 'captcha');
+  let baixandoCaptcha = null;
+  function baixarCaptcha() {
+    if (window.turnstile) return Promise.resolve();
+    if (baixandoCaptcha) return baixandoCaptcha;
+    baixandoCaptcha = new Promise((ok, falha) => {
+      const s = document.createElement('script');
+      s.src = CAPTCHA_SRC; s.async = true;   // sem SRI: a Cloudflare exige carregar a versão dela, sempre atual
+      const fim = setTimeout(() => { s.remove(); falha(erroCaptcha('A verificação anti-robô demorou demais. Tente de novo.')); }, ESPERA_MS);
+      s.onload = () => { clearTimeout(fim); window.turnstile ? ok() : falha(erroCaptcha()); };
+      s.onerror = () => { clearTimeout(fim); s.remove(); falha(erroCaptcha('Sem conexão com a verificação anti-robô. Tente de novo.')); };
+      document.head.appendChild(s);
+    }).catch(e => { baixandoCaptcha = null; throw e; });
+    return baixandoCaptcha;
+  }
+  // Um token novo por tentativa (vale uma vez só). O desafio só aparece na tela se a Cloudflare achar necessário.
+  async function tokenCaptcha() {
+    if (!captchaLigado()) return undefined;
+    await baixarCaptcha();
+    return new Promise((ok, falha) => {
+      const caixa = document.createElement('div'); caixa.className = 'captcha-caixa'; document.body.appendChild(caixa);
+      let id;
+      const limpar = () => { clearTimeout(fim); try { window.turnstile.remove(id); } catch (e) { /* já removido */ } caixa.remove(); };
+      const fim = setTimeout(() => { limpar(); falha(erroCaptcha('A verificação anti-robô demorou demais. Tente de novo.')); }, 60000);
+      try {
+        id = window.turnstile.render(caixa, {
+          sitekey: CONFIG.captcha.chave, appearance: 'interaction-only',
+          callback: t => { limpar(); ok(t); },
+          'error-callback': () => { limpar(); falha(erroCaptcha()); },
+        });
+      } catch (e) { limpar(); falha(erroCaptcha()); }
+    });
+  }
+  const comCaptcha = (t, o = {}) => (t ? { ...o, captchaToken: t } : o);
+
   // ---------- autenticação ----------
   async function usuario(papel) { const c = await cliente(papel); const s = resposta(await c.auth.getSession()); return s && s.session ? s.session.user : null; }
   async function entrarAnonimo() {
     const atual = await usuario('jogador'); if (atual) return atual;
-    const c = await cliente('jogador'); return resposta(await c.auth.signInAnonymously()).user;
+    const c = await cliente('jogador'), t = await tokenCaptcha();
+    return resposta(await c.auth.signInAnonymously(t ? { options: { captchaToken: t } } : undefined)).user;
   }
-  async function entrarEmail(email, senha) { const c = await cliente('mestre'); return resposta(await c.auth.signInWithPassword({ email, password: senha })).user; }
+  async function entrarEmail(email, senha) {
+    const c = await cliente('mestre'), t = await tokenCaptcha();
+    return resposta(await c.auth.signInWithPassword(t ? { email, password: senha, options: { captchaToken: t } } : { email, password: senha })).user;
+  }
   async function criarConta(email, senha) {
-    const c = await cliente('mestre');
+    const c = await cliente('mestre'), t = await tokenCaptcha();
     const volta = /^https?:/.test(location.protocol) ? location.origin + location.pathname : undefined;
-    const d = resposta(await c.auth.signUp({ email, password: senha, options: volta ? { emailRedirectTo: volta } : {} }));
+    const d = resposta(await c.auth.signUp({ email, password: senha, options: comCaptcha(t, volta ? { emailRedirectTo: volta } : {}) }));
     return { user: d.user, precisaConfirmar: !d.session };
   }
   async function sair(papel) { const c = clientes[papel]; if (c) await c.auth.signOut(); }
