@@ -1081,7 +1081,7 @@ ${secaoDados()}
     const habs = lista(b.habilidades).map(obj).map(h => ({ nome: txt(h.nome, 60), efeito: txt(h.efeito, 60), desc: txt(h.desc, 400) }));
     const falas = falasDe(b), segs = segredosDe(b);
     const v = x => esc(x == null ? '' : x);
-    const opc = (val, t, atual) => `<option value="${esc(val)}" ${String(atual ?? '') === String(val) ? 'selected' : ''}>${esc(t)}</option>`;
+    const opc = (val, t, atual, glifo) => `<option value="${esc(val)}" ${String(atual ?? '') === String(val) ? 'selected' : ''}${glifo ? ` data-glifo="${esc(glifo)}"` : ''}>${esc(t)}</option>`;
     const { fundo, fechar } = janela('m-bes-editor', 'bs-fundo', `<section class="bs-editor" role="dialog" aria-modal="true" aria-labelledby="be-tit" tabindex="-1"><form id="be-form" novalidate>
       <button type="button" class="icon bf-x" aria-label="Fechar sem salvar">✕</button>
       <small class="bf-tipo">Bestiário</small><h2 id="be-tit">${novo ? (ehNpc(b) ? 'Novo NPC' : 'Nova criatura') : 'Editar ' + esc(b.nome)}</h2>
@@ -1100,7 +1100,7 @@ ${secaoDados()}
       </div>
       <fieldset class="be-npc" id="be-npc"><legend>Quem é <i>só para NPCs</i></legend>
         <div class="m-grade be-grade">
-          <div class="m-campo"><label for="be-caminho">Caminho</label><select id="be-caminho">${opc('', 'Nenhum · pessoa comum', b.caminho)}${(typeof CAMINHOS !== 'undefined' ? CAMINHOS : []).map(c => opc(c.id, c.nome, b.caminho)).join('')}</select></div>
+          <div class="m-campo"><label for="be-caminho">Caminho</label><select id="be-caminho">${opc('', 'Nenhum · pessoa comum', b.caminho)}${(typeof CAMINHOS !== 'undefined' ? CAMINHOS : []).map(c => opc(c.id, c.nome, b.caminho, c.id)).join('')}</select></div>
           <div class="m-campo"><label for="be-seq">Sequência</label><select id="be-seq">${opc('', '—', seqDe(b))}${[9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map(n => opc(n, `Sequência ${n}${n === 9 ? ' (início)' : n === 0 ? ' (topo)' : ''}`, seqDe(b))).join('')}</select></div>
           <div class="m-campo"><label for="be-fac">Facção <i>(opcional)</i></label><input type="text" id="be-fac" maxlength="60" value="${v(b.faccao)}" placeholder="Ex.: Falcões Noturnos · Igreja da Deusa" autocomplete="off"></div>
           <div class="m-campo"><label for="be-rel">Com o grupo</label><select id="be-rel">${opc('', 'Não definido', b.relacao)}${Object.entries(RELACAO).map(([k, t]) => opc(k, t, b.relacao)).join('')}</select></div>

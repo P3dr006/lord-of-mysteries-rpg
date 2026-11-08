@@ -570,6 +570,15 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     // ---- NPC: a mesma ficha do bestiário, com Caminho, facção, falas e segredos em camadas
     await m.click('#bs-novo-npc'); await m.waitForSelector('#be-nome');
     ok('"Novo NPC" abre o editor já como NPC, com o bloco "Quem é"', await m.evaluate(() => document.querySelector('input[name=be-cat][value=npc]').checked && !document.querySelector('#be-npc').hidden));
+    // seletor próprio (js/escolha.js): teclado escolhe e o <select> escondido acompanha
+    await m.focus('#be-caminho-esc'); await m.keyboard.press('Enter');
+    ok('o seletor abre uma lista própria (role=listbox) com os sigilos', await ate(() => m.evaluate(() => { const l = document.querySelector('.esc-lista[role=listbox]'); return !!l && document.activeElement === l && l.querySelectorAll('.esc-g svg').length === 22; })));
+    await m.keyboard.press('End'); await m.keyboard.press('Enter');
+    ok('End + Enter escolhe o último, dispara change e devolve o foco', await ate(() => m.evaluate(() => document.querySelector('#be-caminho').value === 'justiceiro' && !document.querySelector('.esc-lista') && document.activeElement.id === 'be-caminho-esc' && /Justiceiro/.test(document.activeElement.textContent))));
+    await m.focus('#be-rel-esc'); await m.keyboard.press('ArrowDown'); await m.keyboard.press('Escape');
+    ok('Esc fecha só a lista (a janela do editor fica)', await ate(() => m.evaluate(() => !document.querySelector('.esc-lista') && !!document.querySelector('.bs-editor'))));
+    await m.evaluate(() => { /** @type {HTMLSelectElement} */ (document.querySelector('#be-rel')).value = 'hostil'; });
+    ok('atribuir .value no select atualiza o botão', /Hostil/.test(await m.textContent('#be-rel-esc')));
     await m.fill('#be-nome', 'Dunn Smith'); await m.selectOption('#be-caminho', 'louco'); await m.selectOption('#be-seq', '7');
     await m.fill('#be-fac', 'Falcões Noturnos'); await m.selectOption('#be-rel', 'aliado'); await m.fill('#be-local', 'Rua Zouteland, 36'); await m.fill('#be-pers', 'Distraído, leal.');
     await m.click('#be-fala-mais'); await m.fill('#be-fala-0', 'Ah, esqueci de novo.');
