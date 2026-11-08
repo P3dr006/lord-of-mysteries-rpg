@@ -57,6 +57,9 @@ const Rede = (() => {
     if (/Email not confirmed/i.test(m)) return 'Confirme o e-mail pelo link que enviamos antes de entrar.';
     if (/User already registered/i.test(m)) return 'Este e-mail já tem conta. Use “Entrar”.';
     if (/Password should|weak.password|password.*(known|easy to guess|pwned)/i.test(m)) return REGRA_SENHA;
+    if (/different from the old password|same_password/i.test(m)) return 'A nova senha precisa ser diferente da senha antiga.';
+    if (/current password/i.test(m)) return 'O Supabase pediu a senha atual para trocar a senha. Avise o administrador do site.';
+    if (/session missing|not authenticated/i.test(m)) return 'O link de recuperação venceu. Peça um novo em “Esqueci minha senha”.';
     if (/captcha/i.test(m)) return 'A verificação anti-robô falhou. Recarregue a página e tente de novo.';
     if (/rate limit|too many/i.test(m)) return 'Muitas tentativas seguidas. Espere um pouco e tente de novo.';
     if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Sem conexão com a mesa online. Tente de novo em instantes.';
@@ -123,6 +126,17 @@ const Rede = (() => {
     const d = resposta(await c.auth.signUp({ email, password: senha, options: comCaptcha(t, volta ? { emailRedirectTo: volta } : {}) }));
     return { user: d.user, precisaConfirmar: !d.session };
   }
+  // ---------- recuperar a senha ----------
+  // O link do e-mail volta para esta página com "#...type=recovery". O supabase-js apaga esse trecho da barra ao lê-lo,
+  // por isso o tipo do link é lido ANTES de criar o cliente. Devolve 'ok' (link de recuperação), 'erro' (link vencido/usado) ou ''.
+  const linkDeRecuperacao = () => { const h = location.hash || ''; return /[#&]type=recovery\b/.test(h) ? 'ok' : /[#&]error(_code)?=/.test(h) ? 'erro' : ''; };
+  const limparLink = () => { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* sem histórico: segue */ } };
+  async function pedirRecuperacao(email) {
+    const c = await cliente('mestre'), t = await tokenCaptcha();
+    const volta = /^https?:/.test(location.protocol) ? location.origin + location.pathname : undefined;
+    resposta(await c.auth.resetPasswordForEmail(email, comCaptcha(t, volta ? { redirectTo: volta } : {})));
+  }
+  async function novaSenha(senha) { const c = await cliente('mestre'); return resposta(await c.auth.updateUser({ password: senha })).user; }
   async function sair(papel) { const c = clientes[papel]; if (c) await c.auth.signOut(); }
 
   // ---------- dados ----------
@@ -147,5 +161,5 @@ const Rede = (() => {
     return () => { try { c.removeChannel(canal); } catch (e) { /* já fechado */ } };
   }
 
-  return { cliente, configurada, mensagem, usuario, entrarAnonimo, entrarEmail, criarConta, sair, rpc, tabela, ouvir, presenca, SDK, ErroRede, senhaForte, REGRA_SENHA };
+  return { cliente, configurada, mensagem, usuario, entrarAnonimo, entrarEmail, criarConta, pedirRecuperacao, novaSenha, linkDeRecuperacao, limparLink, sair, rpc, tabela, ouvir, presenca, SDK, ErroRede, senhaForte, REGRA_SENHA };
 })();

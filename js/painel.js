@@ -11,7 +11,7 @@
 
   const S = { user: null, mesa: null, jogadores: [], resultados: [], pendentes: [], sussurros: [], leituras: [], ordens: [], notas: {}, figuras: [], batalhas: [], disputas: [], cronica: [], bestiario: [], habs: [], efeitos: [], habModo: {}, keep: {}, habsCarregadas: false, online: new Set(), pararDeOuvir: [], ultimoSecreto: null, fichaAberta: null, fichaGatilho: null };
   const tela = html => { $('#m-tela').innerHTML = html; if (typeof decorarTudo === 'function') decorarTudo(); };
-  const erroEm = (sel, e) => { const el = $(sel); if (el) { el.textContent = Rede.mensagem(e); el.hidden = false; } };
+  const erroEm = (sel, e) => { const el = $(sel); if (el) { el.classList.remove('m-ok'); el.textContent = Rede.mensagem(e); el.hidden = false; } };
   // desativa o botão enquanto espera o servidor; o foco do teclado volta para ele depois (desativar tira o foco)
   const ocupado = async (botao, fn) => {
     if (botao.disabled) return; const tinhaFoco = document.activeElement === botao;
@@ -24,10 +24,35 @@
   // ---------- início ----------
   async function iniciar() {
     $('#m-sair').addEventListener('click', sair);
+    const rec = Rede.linkDeRecuperacao();   // precisa vir ANTES de criar o cliente (ele apaga o trecho da barra de endereço)
     try { S.user = await Rede.usuario('mestre'); }
     catch (e) { return semRede(e); }
+    if (rec) Rede.limparLink();
+    if (rec === 'ok' && S.user && !S.user.is_anonymous) return novaSenhaTela();   // veio do link do e-mail: pede a senha nova
+    if (rec) return login('O link para trocar a senha venceu ou já foi usado. Peça um novo em “Esqueci minha senha”.');
     if (S.user && !S.user.is_anonymous) { mostrarQuem(); return listaMesas(); }
     login();
+  }
+
+  // Tela aberta pelo link do e-mail de recuperação: o Supabase já entrou na conta com esse link; falta só a senha nova.
+  function novaSenhaTela() {
+    tela(`<section class="m-cartao m-login">
+      <div class="m-selo" aria-hidden="true"><span>✦</span></div>
+      <h2>Nova senha</h2>
+      <p class="modal-txt">Escolha a nova senha do seu grimório: mínimo de 10 caracteres, com letra minúscula, maiúscula e número.</p>
+      <form id="m-form-nova" class="m-form" novalidate>
+        <label for="m-nova1">Nova senha</label><input type="password" id="m-nova1" autocomplete="new-password" required>
+        <label for="m-nova2">Repita a nova senha</label><input type="password" id="m-nova2" autocomplete="new-password" required>
+        <p class="m-erro" id="m-erro-nova" role="alert" hidden></p>
+        <div class="cover-btns"><button type="submit" class="primary" id="m-salvar-nova">Salvar nova senha</button></div>
+      </form></section>`);
+    $('#m-nova1').focus();
+    $('#m-form-nova').addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#m-salvar-nova'), async () => {
+      const a = $('#m-nova1').value, b = $('#m-nova2').value;
+      if (!Rede.senhaForte(a)) return erroEm('#m-erro-nova', new Rede.ErroRede(Rede.REGRA_SENHA));
+      if (a !== b) return erroEm('#m-erro-nova', new Rede.ErroRede('As duas senhas precisam ser iguais.'));
+      try { S.user = await Rede.novaSenha(a); mostrarQuem(); anunciar('Senha trocada.'); listaMesas(); } catch (e) { erroEm('#m-erro-nova', e); }
+    }); });
   }
 
   function semRede(e) {
@@ -44,7 +69,7 @@
   }
 
   // ---------- login ----------
-  function login() {
+  function login(aviso) {
     tela(`<section class="m-cartao m-login">
       <div class="m-selo" aria-hidden="true"><span>✦</span></div>
       <h2>Grimório do Mestre</h2>
@@ -55,7 +80,18 @@
         <p class="modal-txt m-dica">Para criar conta: mínimo de 10 caracteres, com letra minúscula, maiúscula e número.</p>
         <p class="m-erro" id="m-erro-login" role="alert" hidden></p>
         <div class="cover-btns"><button type="submit" class="primary" id="m-entrar">Entrar</button><button type="button" class="ghost" id="m-criar">Criar conta</button></div>
+        <p class="m-esqueci"><button type="button" class="m-link" id="m-esqueci">Esqueci minha senha</button></p>
       </form></section>`);
+    if (aviso) { const el = $('#m-erro-login'); el.textContent = aviso; el.hidden = false; }
+    $('#m-esqueci').addEventListener('click', e => ocupado(e.currentTarget, async () => {
+      const email = $('#m-email').value.trim();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return erroEm('#m-erro-login', new Rede.ErroRede('Digite seu e-mail no campo acima e clique de novo em “Esqueci minha senha”.'));
+      try {
+        await Rede.pedirRecuperacao(email);   // a resposta é a mesma exista a conta ou não (não revela quem tem cadastro)
+        const el = $('#m-erro-login'); el.hidden = false; el.classList.add('m-ok');
+        el.textContent = 'Se existir uma conta com esse e-mail, enviamos um link para criar uma nova senha. Confira também o spam. O link vale por pouco tempo.';
+      } catch (er) { erroEm('#m-erro-login', er); }
+    }));
     const ler = () => ({ email: $('#m-email').value.trim(), senha: $('#m-senha').value });
     // Entrar: contas antigas com senha mais curta continuam entrando. Criar conta: regra nova (igual à do Supabase).
     const validar = ({ email, senha }, nova) => {

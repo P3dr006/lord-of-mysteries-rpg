@@ -1961,3 +1961,8 @@ li.perdida>div>b,li.perdida>b{text-decoration:line-through;text-decoration-color
 }
 /* verificação anti-robô: a caixa fica vazia e invisível; só ganha tamanho se a Cloudflare pedir um clique */
 .captcha-caixa{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9999}
+/* link de texto em botão (Esqueci minha senha) */
+button.m-link{all:unset;cursor:pointer;color:var(--muted);font-size:.85rem;padding:8px;text-decoration:underline;text-underline-offset:3px}
+button.m-link:hover{color:inherit}
+button.m-link:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.m-esqueci{text-align:center;margin:4px 0 0}

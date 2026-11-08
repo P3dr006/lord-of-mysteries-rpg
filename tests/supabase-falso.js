@@ -18,6 +18,8 @@ const CLIENTE = `(() => {
       signInWithPassword: async c => { const r = await chamar('login', c); return r.error ? { data: {}, error: r.error } : guardar(r.data); },
       signUp: async c => { const r = await chamar('signup', c); return r.error ? { data: {}, error: r.error } : { data: { user: r.data, session: null }, error: null }; },
       signOut: async () => { localStorage.removeItem(K); return { error: null }; },
+      resetPasswordForEmail: async (email, o) => chamar('recuperar', { email, ...(o || {}) }),
+      updateUser: async a => { const r = await chamar('novasenha', { uid: uid(), password: a && a.password }); return r.error ? { data: {}, error: r.error } : guardar(r.data); },
     };
     function consulta(tabela) {
       const q = { tabela, op: 'select', filtros: [], ordem: null, limite: null, valores: null, devolver: true };
@@ -382,6 +384,13 @@ function criarServidor() {
   async function tratar(page, op, d) {
     if (op === 'anon') { const u = { id: id('anon'), is_anonymous: true }; db.usuarios.push({ ...u, anon: true }); return { data: u, error: null }; }
     if (op === 'signup') { if (db.usuarios.some(x => x.email === d.email)) return erro('User already registered'); db.usuarios.push({ id: id('user'), email: d.email, senha: d.password, confirmado: false }); return { data: { email: d.email }, error: null }; }
+    // recuperar senha: o servidor real manda o e-mail (sem revelar se a conta existe) e o link devolve uma sessão de recuperação
+    if (op === 'recuperar') { (db.recuperacoes = db.recuperacoes || []).push({ email: d.email, redirectTo: d.redirectTo, captchaToken: d.captchaToken }); return { data: {}, error: null }; }
+    if (op === 'novasenha') {
+      const x = db.usuarios.find(y => y.id === d.uid); if (!x) return erro('Auth session missing!');
+      if (x.senha === d.password) return erro('New password should be different from the old password.');
+      x.senha = d.password; return { data: { id: x.id, email: x.email, is_anonymous: false }, error: null };
+    }
     if (op === 'login') { const x = db.usuarios.find(y => y.email === d.email && y.senha === d.password); if (!x) return erro('Invalid login credentials'); if (x.confirmado === false) return erro('Email not confirmed'); return { data: { id: x.id, email: x.email, is_anonymous: false }, error: null }; }
     if (op === 'sub') { assinaturas.push({ ...d, page }); return { data: null, error: null }; }
     if (op === 'pjoin' || op === 'ptrack' || op === 'pleave') {   // Presence: { chave: [dados] } como no Supabase

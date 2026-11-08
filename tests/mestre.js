@@ -757,6 +757,34 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('bestiário: aceita 100 criaturas e recusa a 101ª em português', r.aceitas === 100 && /Limite de 100/.test(r.erro), r.aceitas + ' | ' + r.erro);
     await c.close(); }
 
+  console.log('\n10c) Esqueci minha senha');
+  { const s2 = criarServidor(); s2.criarMestre(EMAIL, SENHA); const c = await contexto(browser, s2);
+    const p = await pagina(c, URL_MESTRE);
+    ok('a tela de entrada tem "Esqueci minha senha"', await p.isVisible('#m-esqueci'));
+    await p.click('#m-esqueci');
+    ok('sem e-mail digitado: pede o e-mail antes de enviar', await ate(async () => /Digite seu e-mail/.test(await p.textContent('#m-erro-login'))) && !(s2.db.recuperacoes || []).length);
+    await p.fill('#m-email', EMAIL); await p.click('#m-esqueci');
+    ok('com e-mail: avisa que enviou, sem revelar se a conta existe', await ate(async () => /enviamos um link/.test(await p.textContent('#m-erro-login'))));
+    const rec = s2.db.recuperacoes || [];
+    ok('o servidor recebeu o pedido com o e-mail e o token do anti-robô', rec.length === 1 && rec[0].email === EMAIL && rec[0].captchaToken === 'tok-teste', JSON.stringify(rec));
+    await c.close(); }
+  { const s2 = criarServidor(); const u = s2.criarMestre(EMAIL, SENHA); const c = await contexto(browser, s2);
+    await c.addInitScript(usr => { if (!localStorage.getItem('lotm-rpg-auth-mestre')) localStorage.setItem('lotm-rpg-auth-mestre', JSON.stringify({ user: usr })); }, { id: u.id, email: u.email, is_anonymous: false });
+    const p = await pagina(c, URL_MESTRE + '#access_token=abc&refresh_token=def&type=recovery');
+    ok('o link do e-mail abre a tela "Nova senha" (e não a lista de mesas)', await ate(() => p.isVisible('#m-form-nova')) && !(await p.isVisible('#m-nome-mesa')));
+    ok('o trecho secreto do link some da barra de endereço', (await p.evaluate(() => location.hash)) === '');
+    await p.fill('#m-nova1', 'curta'); await p.fill('#m-nova2', 'curta'); await p.click('#m-salvar-nova');
+    ok('senha fraca é recusada com a regra em português', await ate(async () => /10 caracteres/.test(await p.textContent('#m-erro-nova'))));
+    await p.fill('#m-nova1', 'Grimorio2026'); await p.fill('#m-nova2', 'Grimorio2027'); await p.click('#m-salvar-nova');
+    ok('senhas diferentes são recusadas', await ate(async () => /iguais/.test(await p.textContent('#m-erro-nova'))));
+    await p.fill('#m-nova1', 'NovaSenha2026'); await p.fill('#m-nova2', 'NovaSenha2026'); await p.click('#m-salvar-nova');
+    ok('senha boa: troca no servidor e abre a lista de mesas', await ate(() => p.isVisible('#m-nome-mesa')) && s2.db.usuarios.find(x => x.id === u.id).senha === 'NovaSenha2026');
+    await c.close(); }
+  { const s2 = criarServidor(); s2.criarMestre(EMAIL, SENHA); const c = await contexto(browser, s2);
+    const p = await pagina(c, URL_MESTRE + '#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
+    ok('link vencido: volta à entrada com aviso claro', await p.isVisible('#m-form-login') && /venceu/.test(await p.textContent('#m-erro-login')));
+    await c.close(); }
+
   console.log('\n11) Celular');
   { const s2 = criarServidor(); s2.criarMestre(EMAIL, SENHA); const c = await contexto(browser, s2, { viewport: { width: 375, height: 812 } });
     const p = await mestreLogado(c); await p.fill('#m-nome-mesa', 'Mesa pequena'); await p.click('#m-nova'); await p.waitForSelector('#m-codigo');
