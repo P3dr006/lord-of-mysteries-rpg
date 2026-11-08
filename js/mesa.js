@@ -59,7 +59,7 @@ const Mesa = Object.freeze((() => {
   function alternar(v) {
     aberta = v === undefined ? !aberta : v; const m = $('#mesa'), fab = $('#fab-mesa');
     m.hidden = !aberta; fab.setAttribute('aria-expanded', String(aberta)); document.body.classList.toggle('mesa-aberta', aberta);
-    if (aberta) { marcarModo(); corpo(); Som.click(); setTimeout(() => (m.querySelector('.rolar') || m.querySelector('#mesa-x')).focus(), 60); } else fab.focus();
+    if (aberta) { Dado3D.preparar(); marcarModo(); corpo(); Som.click(); setTimeout(() => (m.querySelector('.rolar') || m.querySelector('#mesa-x')).focus(), 60); } else fab.focus();
   }
 
   // ---------- abas ----------
@@ -113,14 +113,29 @@ const Mesa = Object.freeze((() => {
     // mesa
     const mesa = $('#dados-mesa'), rz = $('#resultado'); rz.hidden = true; $('#feltro').classList.remove('crit', 'fumble', 'com-res'); mesa.innerHTML = '';
     const tam = (o.qtd > 6 ? 46 : o.qtd > 3 ? 56 : 70) * (B ? .78 : 1), els = [];
-    grupos.forEach((g, gi) => { const linha = document.createElement('div'); linha.className = 'linha-dados' + (B && gi !== esc2 ? ' descartada' : ''); g.forEach((v, i) => { const e = document.createElement('div'); e.className = 'dado rolando'; e.style.setProperty('--r', (Math.random() * 720 - 360) + 'deg'); e.style.setProperty('--dx', (Math.random() * 60 - 30) + 'px'); e.style.animationDelay = (i * 60 + gi * 120) + 'ms'; e.innerHTML = dadoSVG(o.lados, '?', tam); linha.appendChild(e); els.push([e, v, gi]); }); mesa.appendChild(linha); });
-    Som.dado();
-    const iv = setInterval(() => els.forEach(([e]) => { if (e.classList.contains('rolando')) e.querySelector('.dv').textContent = d(o.lados); }), 70);
-    await new Promise(r => setTimeout(r, 1000 + o.qtd * 60));
-    clearInterval(iv);
-    // biome-ignore lint/correctness/noSelfAssign: reler o innerHTML reinicia a animacao do SVG (de proposito)
-    els.forEach(([e, v, gi], i) => { setTimeout(() => { e.classList.remove('rolando'); e.classList.add('pousou'); e.querySelector('.dv').textContent = v; const sv = e.querySelector('svg'); sv.innerHTML = sv.innerHTML; Som.tick(); }, i * 70); });
-    await new Promise(r => setTimeout(r, els.length * 70 + 250));
+    // Dado 3D (js/dado3d.js): gira e pousa exatamente no número já decidido. Sem GSAP/3D (rede, "reduzir movimento"),
+    // d10/d22/d100 ou erro, cai na animação 2D de sempre.
+    let feito3d = false;
+    if (Dado3D.LADOS.includes(o.lados) && await Dado3D.pronto(1500) && Dado3D.suporta(o.lados)) {
+      try {
+        const dd3 = [];
+        grupos.forEach((g, gi) => { const linha = document.createElement('div'); linha.className = 'linha-dados' + (B && gi !== esc2 ? ' descartada' : ''); g.forEach((v, i) => { const x = Dado3D.criar(o.lados, tam); linha.appendChild(x.el); dd3.push([x, v, i, gi]); }); mesa.appendChild(linha); });
+        Som.dado();
+        await Promise.all(dd3.map(([x, v, i, gi]) => x.rolar(v, { atraso: i * 70 + gi * 120 }).then(() => Som.tick())));
+        await new Promise(r => setTimeout(r, 350));
+        feito3d = true;
+      } catch (e) { mesa.innerHTML = ''; }   // qualquer falha no 3D: refaz com a animação 2D
+    }
+    if (!feito3d) {
+      grupos.forEach((g, gi) => { const linha = document.createElement('div'); linha.className = 'linha-dados' + (B && gi !== esc2 ? ' descartada' : ''); g.forEach((v, i) => { const e = document.createElement('div'); e.className = 'dado rolando'; e.style.setProperty('--r', (Math.random() * 720 - 360) + 'deg'); e.style.setProperty('--dx', (Math.random() * 60 - 30) + 'px'); e.style.animationDelay = (i * 60 + gi * 120) + 'ms'; e.innerHTML = dadoSVG(o.lados, '?', tam); linha.appendChild(e); els.push([e, v, gi]); }); mesa.appendChild(linha); });
+      Som.dado();
+      const iv = setInterval(() => els.forEach(([e]) => { if (e.classList.contains('rolando')) e.querySelector('.dv').textContent = d(o.lados); }), 70);
+      await new Promise(r => setTimeout(r, 1000 + o.qtd * 60));
+      clearInterval(iv);
+      // biome-ignore lint/correctness/noSelfAssign: reler o innerHTML reinicia a animacao do SVG (de proposito)
+      els.forEach(([e, v, gi], i) => { setTimeout(() => { e.classList.remove('rolando'); e.classList.add('pousou'); e.querySelector('.dv').textContent = v; const sv = e.querySelector('svg'); sv.innerHTML = sv.innerHTML; Som.tick(); }, i * 70); });
+      await new Promise(r => setTimeout(r, els.length * 70 + 250));
+    }
     // resultado
     const det = grupos.map((g, gi) => `[${g.join(', ')}]${B ? (gi === esc2 ? ' ✓' : ' ✗') : ''}`).join(' ou ');
     const rotulo = o.rotulo, tipo = res;

@@ -83,6 +83,7 @@ const Jogador = Object.freeze((() => {
   function desligar() { parar.forEach(f => f()); parar = []; clearInterval(vigia); vigia = null; mostrarRoda(null); }
   async function ligar() {
     if (!con) return;
+    Animar.preparar();   // baixa o GSAP em segundo plano: as cenas e o dado 3D já o encontram pronto
     desligar(); estado = 'ligando'; erro = ''; redesenhar();
     try {
       const u = await Rede.usuario('jogador');
@@ -303,7 +304,7 @@ const Jogador = Object.freeze((() => {
         ${h.efeito || h.custo ? `<p class="hm-tags">${h.efeito ? `<span><i>Efeito</i>${esc2(h.efeito)}</span>` : ''}${h.custo ? `<span><i>Custo</i>${esc2(h.custo)}</span>` : ''}</p>` : ''}</div>
       ${h.resposta ? `<blockquote class="dec-recado">${esc2(h.resposta)}<cite>o mestre</cite></blockquote>` : ''}
       <button type="button" class="primary" id="dec-ok">${rej ? 'Entendi' : 'Guardar na ficha'}</button></div>`;
-    document.body.appendChild(m);
+    document.body.appendChild(m); Cenas.decreto(m);
     if (typeof Som === 'object') { try { rej ? Som.falha() : Som.selar(); } catch (e) { /* sem som */ } }
     anunciar(`${titulo}: ${h.nome}${h.resposta ? '. O mestre diz: ' + h.resposta : ''}`);
     let soltar = () => {};
@@ -339,7 +340,7 @@ const Jogador = Object.freeze((() => {
       <small class="dec-olho">${ef.tipo === 'bencao' ? 'Bênção' : ef.tipo === 'maldicao' ? 'Maldição' : 'Selo sobre você'}</small><h2 id="dec-t">${esc2(titulo)}</h2>
       <div class="dec-hab"><b class="${ef.tipo === 'perda' ? 'riscado' : ''}">${esc2(ef.rotulo)}</b><p class="hm-tags"><span><i>Efeito</i>${esc2(oQueFaz(ef))}</span></p>${ef.descricao ? `<p>${esc2(ef.descricao)}</p>` : ''}</div>
       <button type="button" class="primary" id="dec-ok">${ef.tipo === 'bencao' ? 'Aceitar' : 'Entendi'}</button></div>`;
-    document.body.appendChild(m);
+    document.body.appendChild(m); Cenas.decreto(m);
     if (typeof Som === 'object') { try { ruim ? Som.falha() : Som.selar(); } catch (e) { /* sem som */ } }
     anunciar(`${titulo}: ${ef.rotulo}. ${oQueFaz(ef)}`);
     let soltar = () => {};
@@ -439,6 +440,7 @@ const Jogador = Object.freeze((() => {
       </div>`;
     document.body.appendChild(m); document.body.classList.add('com-sussurro');
     if (typeof decorarTudo === 'function') decorarTudo();
+    Cenas.sussurro(m);   // linha do tempo do GSAP (sem GSAP, o CSS conduz a cena sozinho)
     if (!relendo && typeof Som === 'object') Som.carta();
     anunciar((relendo ? '' : 'O mestre sussurra. ') + titulo + (s.texto ? ': ' + s.texto : ''));
     let soltar = () => {};

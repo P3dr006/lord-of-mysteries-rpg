@@ -185,6 +185,19 @@ Configuração (uma vez, feita pelo Pedro no terminal dele, **nunca** no projeto
 Travas: só aceita o projeto lotm-rpg, só lê `.sql`, verifica o TLS (não há modo inseguro), nunca imprime a URL nem a senha
 (nem em erros), `aplicar` exige `--sim`. Sem a variável, as migrações continuam pelo conector do Supabase.
 
+Dados 3D e cenas com GSAP (fase 4 do roteiro; **tudo é enfeite opcional**, o conteúdo já está na página e as animações CSS continuam):
+
+- `js/animar.js`: baixa o **GSAP 3.15.0** da CDN com hash de integridade (sha384), só quando a mesa liga. Sem rede ou com
+  "reduzir movimento" ligado, `Animar.pode()` é falso e tudo cai nas animações CSS de sempre. Nenhuma mudança na CSP
+  (`cdn.jsdelivr.net` já estava liberada). Para trocar a versão: baixe o arquivo, calcule o sha384 e atualize `src` e `sri`.
+- `js/dado3d.js`: d4, d6, d8, d12 e d20 em CSS 3D (sólidos de verdade, faces numeradas com opostos somando lados+1). O dado
+  **nunca decide o número**: `Mesa.rolar` já tem o valor (do servidor, nos testes pedidos pelo mestre) e o dado gira, quica
+  e pousa nessa face. d10, d22 e d100 usam a animação 2D de antes. O elemento termina com `data-valor` e `aria-label`.
+  (O dice-box foi descartado: a física dele decide o número e não dá para forçá-lo, o que quebraria o teste do servidor.)
+- `js/cenas.js`: linhas do tempo do GSAP para o sussurro (palavras saem do desfoque, pista se desdobra), o decreto (o selo
+  carimba com impacto e um anel) e a virada de turno da Roda (mola, chama e rolagem até o token). A classe `gs` desliga as
+  animações CSS dos elementos conduzidos pelo GSAP.
+
 Verificação de código (fase 3 do roteiro; só ferramentas de desenvolvimento, o site continua sem build):
 
 - `npm run verificar` = `npm run tipos` + `npm run lint`. **O normal é terminar sem nenhuma linha de erro.**

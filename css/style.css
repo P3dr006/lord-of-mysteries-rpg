@@ -1966,3 +1966,23 @@ button.m-link{all:unset;cursor:pointer;color:var(--muted);font-size:.85rem;paddi
 button.m-link:hover{color:inherit}
 button.m-link:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 .m-esqueci{text-align:center;margin:4px 0 0}
+
+/* dado 3D (js/dado3d.js): sólido de CSS 3D; as faces são SVG e a sombra de luz muda a cada quadro */
+.d3{position:relative;display:inline-block;flex:none}
+.d3-corpo{position:absolute;inset:0;transform-style:preserve-3d;will-change:transform}
+.d3-face{position:absolute;left:50%;top:50%;backface-visibility:hidden}
+.d3-face svg{display:block;overflow:visible}
+.d3-p{fill:#2c2160;stroke:#d9b86a;stroke-width:2;stroke-linejoin:round}
+.d3-s{fill:#000;fill-opacity:0;pointer-events:none}
+.d3-n{fill:#fff3c4;font-family:Georgia,serif;paint-order:stroke;stroke:#0a0820;stroke-width:2.5px;stroke-linejoin:round}
+.d3-n.sub{text-decoration:underline}
+.d3-sombra{position:absolute;left:10%;right:10%;bottom:-10%;height:16%;border-radius:50%;background:radial-gradient(#000d,#0000 70%);filter:blur(3px);opacity:.55}
+.d3.pousou .d3-p{filter:drop-shadow(0 0 5px #d9b86a88)}
+
+/* cenas com GSAP (js/cenas.js): a classe gs desliga as animações CSS dos elementos que o GSAP conduz */
+.gs.sussurro:not(.saindo),.gs.decreto:not(.saindo){animation:none}
+.gs .sus-olho,.gs.sussurro h2,.gs .sus-texto span,.gs.sussurro .primary,.gs .sus-pista{animation:none}
+.gs .dec-papel,.gs .dec-selo,.gs.decreto .dec-hab,.gs.decreto .dec-recado,.gs.decreto .primary{animation:none}
+.dec-anel{position:absolute;inset:-4px;border-radius:50%;border:2px solid #ff9a8acc;pointer-events:none;box-shadow:0 0 22px #ff6a5a88}
+.decreto.ef-bencao .dec-anel{border-color:#ffe27acc;box-shadow:0 0 22px #ffd24a88}
+.decreto.recusa .dec-anel{border-color:#8a8a9acc;box-shadow:none}

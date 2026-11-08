@@ -24,6 +24,7 @@
   // ---------- início ----------
   async function iniciar() {
     $('#m-sair').addEventListener('click', sair);
+    Animar.preparar();   // GSAP em segundo plano (a virada de turno da Roda usa; sem ele, o CSS cuida)
     const rec = Rede.linkDeRecuperacao();   // precisa vir ANTES de criar o cliente (ele apaga o trecho da barra de endereço)
     try { S.user = await Rede.usuario('mestre'); }
     catch (e) { return semRede(e); }
@@ -641,6 +642,7 @@ ${secaoDados()}
     try { const r = await (await Rede.tabela('mestre', 'encontros')).select('id,nome,ativo,rodada,vez,ordem,jogadores,criado_em,atualizado_em').eq('mesa_id', S.mesa.id).order('criado_em'); if (r.error) throw r.error; S.batalhas = r.data || []; } catch (e) { return; }
     desenharRoda();
   }
+  const ultimaVez = {};   // por batalha: "rodada:vez" do último desenho (para animar só quando muda)
   function desenharRoda() {
     const bs = batalhas(), faixa = $('#m-roda'), ctrl = $('#m-roda-ctrl');
     // o redesenho troca os botões: o foco volta ao mesmo botão (ou ao próximo passo natural), nunca ao vazio
@@ -655,6 +657,13 @@ ${secaoDados()}
         <ol class="rd-fila" aria-label="Ordem de ${esc(b.nome)}">${o.map((p, i) => `<li class="rd-p ${i === v ? 'vez' : ''} ${i < v ? 'foi' : ''} ${p.tipo}" style="--i:${i}" ${i === v ? 'aria-current="true"' : ''}>
           <span class="rd-chama" aria-hidden="true"></span>${medalhao(p, 40)}<span class="rd-nome">${esc(p.nome)}</span><small>${num(p.total, -99, 99)}</small></li>`).join('')}</ol></div>`; }).join('');
       faixa.querySelectorAll('[data-prox]').forEach(bt => bt.addEventListener('click', ev => ocupado(ev.currentTarget, () => passarTurno(bt.dataset.prox))));
+      // virada de turno: só anima quando a vez (ou a rodada) MUDOU desde o último desenho; o primeiro desenho fica quieto
+      bs.forEach(b => {
+        const { v } = vezDe(b), chave = num(b.rodada, 1, 999) + ':' + v, ant = ultimaVez[b.id]; ultimaVez[b.id] = chave;
+        if (ant === undefined || ant === chave) return;
+        const li = faixa.querySelector(`.rd-bat[data-b="${CSS.escape(String(b.id))}"] .rd-p.vez`);
+        Cenas.turno(li, { rodada: ant.split(':')[0] !== chave.split(':')[0] });
+      });
     }
     if (ctrl) {
       const livresJ = S.jogadores.filter(j => !ondeEsta('jogador', j.user_id)), livresF = (S.figuras || []).filter(f => !ondeEsta('figura', f.id));

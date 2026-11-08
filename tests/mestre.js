@@ -21,6 +21,8 @@ async function contexto(browser, srv, extra = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1180, height: 900 }, ...extra });
   if (srv) await srv.ligar(ctx);
   // O config.js real tem a chave do anti-robô: aqui a Cloudflare é trocada por uma falsa que entrega o token na hora.
+  // GSAP falso (as linhas do tempo terminam na hora): o dado 3D roda sem depender de rede. O GSAP de verdade é testado à parte.
+  await ctx.addInitScript(() => { const plano = x => !!x && Object.getPrototypeOf(x) === Object.prototype, pula = ['duration', 'ease', 'delay', 'clearProps', 'stagger', 'transformOrigin', 'transformPerspective']; const aplicar = (obj, v) => { if (plano(obj)) for (const k of Object.keys(v)) if (!pula.includes(k)) obj[k] = v[k]; }; const marca = a => { if (a && a.classList && a.classList.contains('rd-p')) window.__turnoAnimado = (window.__turnoAnimado || 0) + 1; }; window.gsap = { timeline: o => { const tw = []; const api = { to: (a, v) => { tw.push([a, v]); return api; }, fromTo: (a, d, v) => { tw.push([a, v]); return api; } }; setTimeout(() => { for (const [a, v] of tw) aplicar(a, v); if (o && o.onUpdate) o.onUpdate(); if (o && o.onComplete) o.onComplete(); }, 10); return api; }, to: (a, v) => aplicar(a, v), fromTo: (a, d, v) => { marca(a); aplicar(a, v); } }; });
   await ctx.addInitScript(() => { window.turnstile = { render: (el, o) => { setTimeout(() => o.callback('tok-teste'), 0); return 'w'; }, remove: () => {} }; });
   return ctx;
 }
@@ -189,6 +191,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
   const modAgil = esperado.mods.agil;
   await j.click('.rolar-pedido');
   ok('a animação para no número do servidor', await ate(async () => (await j.textContent('#resultado .rz-n')) === String(17 + modAgil), 6000), await j.textContent('#resultado .rz-n').catch(() => ''));
+  ok('o dado 3D pousou na face sorteada pelo servidor (d20 → 17) e diz isso a quem usa leitor de tela', await j.evaluate(() => { const d = document.querySelector('#dados-mesa .d3'); return !!d && d.dataset.valor === '17' && /d20: 17/.test(d.getAttribute('aria-label') || ''); }));
   ok('o pedido some da lista do jogador', await ate(async () => !(await j.isVisible('.pedido'))));
   ok('o registro guarda o teste do mestre', await j.evaluate(() => P.historico[0].rotulo) === 'Saltar entre os telhados');
   ok('o mestre recebe o resultado com dificuldade e veredito', await ate(() => m.isVisible('.m-r')));
@@ -262,6 +265,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('foto pesada vira WebP até ~185 KB e no máximo 1280 px', med.tipo.startsWith('data:image/webp') && med.tam <= 250000 && Math.max(...med.dim) <= 1280 && med.dim[0] > 0, JSON.stringify(med));
     await m.click('#s-enviar');
     ok('o jogador recebe a pista na hora, com a cena do sussurro', await ate(() => j.isVisible('.sussurro')));
+    ok('a cena do sussurro é conduzida pelo GSAP (classe gs) e o conteúdo continua à vista', await j.evaluate(() => { const s = document.querySelector('.sussurro'); return s.classList.contains('gs') && /O mapa rasgado/.test(s.textContent); }));
     ok('a cena mostra título, texto e a imagem', await j.evaluate(() => { const s = document.querySelector('.sussurro'); return /O mapa rasgado/.test(s.textContent) && /sob a porta/.test(s.textContent) && /^data:image\/(webp|jpeg);base64,/.test(s.querySelector('.sus-pista img').getAttribute('src')); }));
     ok('o foco vai para o botão da cena', await ate(() => j.evaluate(() => document.activeElement.id === 'sus-ok')));
     { const v = await axe(j); ok('cena do sussurro sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
@@ -410,6 +414,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     { const v = await axe(j); ok('jogador com a Roda sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
     await m.click('[id^="rd-prox2-"]');
     ok('próximo turno: vez da figura', await ate(async () => /Vez de Lobo de Tingen/.test(await j.textContent('#roda-jog'))));
+    ok('a virada de turno da Roda é animada (e o primeiro desenho da faixa não foi)', (await m.evaluate(() => window.__turnoAnimado || 0)) >= 1);
     await m.click('[id^="rd-prox2-"]');
     ok('e a Audrey sente "É a sua vez"', await ate(() => a2.isVisible('.sua-vez')));
     await m.click('[id^="rd-prox2-"]');
@@ -592,6 +597,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     await m.fill(`#q${hid}-efeito`, 'Perde metade da ação'); await m.fill(`#q${hid}-resp`, 'Reduzi para a Sequência 9.'); await m.click(`#q${hid}-okm`);
     ok('aprovar com mudanças grava a versão do mestre e o recado', await ate(() => { const h = srv.db.habilidades.find(x => x.id === hid); return h.estado === 'aprovada' && h.alterada && h.efeito === 'Perde metade da ação' && h.resposta === 'Reduzi para a Sequência 9.'; }));
     ok('o jogador recebe o decreto "Aprovada, com mudanças"', await ate(() => j.evaluate(() => /Aprovada, com mudanças/.test((document.querySelector('.decreto') || {}).textContent || '') && /Reduzi/.test(document.querySelector('.decreto').textContent))));
+    ok('o decreto é conduzido pelo GSAP: selo com anel de impacto e o texto à vista', await j.evaluate(() => { const d = document.querySelector('.decreto.gs'); return !!d && !!d.querySelector('.dec-selo .dec-anel') && /Aprovada, com mudanças/.test(d.textContent); }));
     await semViolacoes(j, 'decreto do mestre');
     await j.click('#dec-ok');
     ok('o decreto lido fica marcado (não volta ao reconectar)', await ate(() => j.evaluate(id => (JSON.parse(localStorage.getItem('lotm-rpg-habs-vistas') || '{}')[id] || '').startsWith('aprovada|'), hid)));
@@ -784,6 +790,31 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     const p = await pagina(c, URL_MESTRE + '#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
     ok('link vencido: volta à entrada com aviso claro', await p.isVisible('#m-form-login') && /venceu/.test(await p.textContent('#m-erro-login')));
     await c.close(); }
+
+  console.log('\n10d) Dado 3D');
+  { const c = await contexto(browser, null); const p0 = await pagina(c, URL_SITE);
+    const g = await p0.evaluate(() => { const o = {}; for (const n of Dado3D.LADOS) { const d = Dado3D.criar(n, 90), ruins = []; for (let v = 1; v <= n; v++) { d.mostrar(v); if (d.faceDeFrente() !== v || d.el.dataset.valor !== String(v)) ruins.push(v); } const s = Dado3D.solido(n); o['d' + n] = { faces: s.faces.length, distintas: new Set(s.faces.map(x => x.valor)).size, ruins }; } return o; });
+    for (const n of [4, 6, 8, 12, 20]) ok('d' + n + ': ' + n + ' faces numeradas e cada número fica de frente quando pedido', g['d' + n].faces === n && g['d' + n].distintas === n && !g['d' + n].ruins.length, JSON.stringify(g['d' + n]));
+    await c.close(); }
+  { const c = await contexto(browser, null); const p = await jogadorPronto(c);
+    await p.click('.aba[data-aba=livre]'); await p.click('#rolar');
+    ok('rolagem livre de d20 usa o dado 3D e ele pousa no número do resultado', await ate(async () => { if (!(await p.isVisible('#resultado'))) return false; return await p.evaluate(() => { const d = document.querySelector('#dados-mesa .d3'); return !!d && d.dataset.valor === document.querySelector('#resultado .rz-n').textContent; }); }, 6000));
+    await p.click('.tipo[data-l="22"]'); await p.click('#rolar');
+    ok('d22 (sem sólido 3D) cai na animação 2D de sempre', await ate(async () => (await p.isVisible('#resultado')) && (await p.evaluate(() => document.querySelectorAll('#dados-mesa .d3').length === 0 && document.querySelectorAll('#dados-mesa .dado').length === 1)), 6000));
+    await p.emulateMedia({ reducedMotion: 'reduce' }); await p.click('.tipo[data-l="20"]'); await p.click('#rolar');
+    ok('com "reduzir movimento" ligado, usa a animação 2D (sem giro 3D)', await ate(async () => (await p.isVisible('#resultado')) && (await p.evaluate(() => document.querySelectorAll('#dados-mesa .d3').length === 0 && document.querySelectorAll('#dados-mesa .dado').length === 1)), 6000));
+    ok('nenhum erro de script no dado 3D', p.erros.length === 0, p.erros[0] || '');
+    await c.close(); }
+  { // GSAP de verdade (precisa de rede; sem rede o teste é pulado, como o do hash da CDN)
+    const src = fs.readFileSync(path.join(RAIZ, 'js/animar.js'), 'utf8'); const m = /src:\s*'([^']+)'/.exec(src), s = /sri:\s*'([^']+)'/.exec(src);
+    ok('GSAP: versão exata na URL e hash sha384 declarado', !!m && /@\d+\.\d+\.\d+\//.test(m[1]) && !!s && /^sha384-[A-Za-z0-9+/=]{64}$/.test(s[1]), m && m[1]);
+    try { const buf = await baixar(m[1]); const h = 'sha384-' + crypto.createHash('sha384').update(buf).digest('base64');
+      ok('GSAP: o hash confere com o arquivo da CDN', h === s[1], h === s[1] ? '' : h);
+      const c2 = await browser.newContext({ viewport: { width: 900, height: 600 } }); const p2 = await c2.newPage(); await p2.goto(URL_SITE);
+      const real = await p2.evaluate(async () => { if (!(await Dado3D.pronto(8000))) return 'sem-gsap'; const out = []; for (const [n, v] of [[20, 13], [12, 7], [8, 5], [6, 3], [4, 2]]) { const d = Dado3D.criar(n, 80); document.body.appendChild(d.el); await d.rolar(v, { duracao: .4 }); out.push(d.faceDeFrente() === v && d.el.dataset.valor === String(v)); } return out.every(Boolean); });
+      if (real === 'sem-gsap') console.log('  (GSAP de verdade não carregou: conferência da animação real pulada)'); else ok('GSAP de verdade: o dado gira e pousa exatamente na face pedida (d20, d12, d8, d6, d4)', real === true);
+      await c2.close();
+    } catch (e) { console.log('  (sem rede: conferência do GSAP na CDN pulada — ' + (e.message || e.code || 'falha de rede') + ')'); } }
 
   console.log('\n11) Celular');
   { const s2 = criarServidor(); s2.criarMestre(EMAIL, SENHA); const c = await contexto(browser, s2, { viewport: { width: 375, height: 812 } });

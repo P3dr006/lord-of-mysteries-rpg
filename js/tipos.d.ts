@@ -13,6 +13,6 @@ interface Node { contains(outro: any): boolean; }
 interface EventTarget { value: any; replaceWith(...nos: any[]): void; closest(seletor: string): any; classList: any; dataset: any; files: any; }
 interface Event { pointerId: any; key: any; clientX: any; clientY: any; deltaY: any; }
 interface Window {
-  turnstile: any; supabase: any; webkitAudioContext: any; __onRetrato: any; Painel: any;
+  turnstile: any; supabase: any; gsap: any; webkitAudioContext: any; __onRetrato: any; Painel: any;
   sincronizarPainelSom: any; onTick: any; aplicarVitalFicha: any;
 }
