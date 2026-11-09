@@ -169,8 +169,13 @@ deixava quem estava fora da mesa marcar como lido) e `…c_sussurros_tem_imagem.
 papéis reais (mestre, 2 jogadores, intruso, visitante), dentro de uma transação desfeita no fim.
 
 O dado é rolado **no servidor** (`responder_pedido`, `rolar_secreto`); o site só anima até o número.
-No teste secreto o modificador vem de `ficha.mods.<atributo>` do jogador. No aberto, o modificador vem do
-navegador do jogador (o dado não); opção futura: usar a ficha também no aberto.
+Desde `20261115_regras_da_mesa.sql`, o modificador **não** vem mais de `ficha.mods` (que o navegador manda): o servidor calcula
+a partir de `ficha.base` (os dados rolados, 3 a 18), Caminho, Raça e Sequência, com as regras da mesa (`mesa_regras`, a versão mais
+nova; sem regras = predefinição `lotm`, idêntica ao site). Vale para o teste secreto, o aberto, a Roda e o Duelo. Ao gravar a ficha,
+um gatilho regrava `mods`, `attrs`, `pvMax`, `sanMax`, `espMax`, `maximos` e `regras_versao`: o mestre vê o número verdadeiro.
+Fórmulas das regras: mini-linguagem sem `eval` (números, `+ - * /`, parênteses, `NdM`, abreviações, `SEQ`, `NIVEL`, `mod/min/max/floor`),
+com o mesmo intérprete em `js/regras.js` e em plpgsql; fórmula inválida é recusada com a posição. Verificada em 83 cenários com
+papéis reais, desfeita (`supabase/verificacoes/20261115_regras_da_mesa.sql`). Resta: a Sequência ainda é declarada pelo jogador.
 
 Verificado em 24 cenários com papéis reais (mestre, 2 jogadores anônimos, visitante sem login).
 

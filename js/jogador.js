@@ -19,14 +19,15 @@ const Jogador = Object.freeze((() => {
   // O que o mestre vê: modificadores, PV e Sanidade (nada além disso sai do navegador).
   function ficha() {
     // atributo ainda não rolado não vai (o mestre vê "—"; no teste secreto o servidor usa 0)
-    const mods = {}, attrs = {}; ATTRS.forEach(a => { const t = total(a.key); if (t != null) { mods[a.key] = mod(t); attrs[a.key] = t; } });
+    const mods = {}, attrs = {}, base = {}; ATTRS.forEach(a => { const t = total(a.key); if (t != null) { mods[a.key] = mod(t); attrs[a.key] = t; base[a.key] = P.attrs[a.key].total; } });
     const c = P.caminho && caminhoPorId(P.caminho), temVigor = total('vigor') != null, temPres = total('pres') != null, temEsp = total('espir') != null;
     const r = P.raca && racaPorId(P.raca), o = P.origem && origemPorId(P.origem);
     const tr = P.traco != null ? TRACOS[P.traco] : null, ar = P.artefato != null ? ARTEFATOS[P.artefato] : null;
     const corta = (s, n) => String(s || '').trim().slice(0, n);
     // a ficha vai "resolvida" (nomes e textos), para o mestre não depender dos dados do jogo nem da versão do site
     const f = {
-      v: 2, mods, attrs,
+      // base = os dados rolados (3 a 18): o servidor recalcula mods/attrs/máximos com as regras da mesa (mods daqui não valem)
+      v: 2, mods, attrs, base, racaId: P.raca || '',
       pv: temVigor ? (P.pv == null ? pvMax() : P.pv) : null, pvMax: temVigor ? pvMax() : null,
       san: temPres ? (P.san == null ? sanMax() : P.san) : null, sanMax: temPres ? sanMax() : null,
       espMax: temEsp ? espMax() : null,

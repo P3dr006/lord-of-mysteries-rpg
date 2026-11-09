@@ -90,6 +90,47 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('sem nome, pede o nome (e guarda o código digitado)', await ate(async () => /nome/.test(await p.textContent('.on-erro'))) && (await p.inputValue('#on-cod')) === 'ABC234');
     await ctx.close(); }
 
+  console.log('\n1c) Motor de regras (js/regras.js = o banco; predefinição lotm = o site de hoje)');
+  { const Regras = require('../js/regras.js'), CASOS = require('./formulas-casos.json');
+    const ab = ['FOR', 'AGI', 'VIG', 'INT', 'ESP', 'PRE', 'SEQ', 'NIVEL'], CTX = { atr: { nomes: ['ATR'], mod: false, dados: false }, ficha: { nomes: ab, mod: true, dados: false }, dados: { nomes: ab, mod: true, dados: true } };
+    const op = { vars: { VIG: 14, PRE: 8, FOR: 18, SEQ: 7, NIVEL: 3, ATR: 15 }, modDe: v => Regras.formula(Regras.LOTM.modificador, CTX.atr, { vars: { ATR: v } }) };
+    const val = CASOS.valores.filter(([f, c, e]) => { try { return Regras.formula(f, CTX[c], op) !== e; } catch (x) { return true; } });
+    ok(`fórmulas: os ${CASOS.valores.length} valores batem`, val.length === 0, val.map(v => v[0]).join(' | '));
+    const err = CASOS.erros.filter(([f, c, p, m]) => { const r = Regras.checar(f, CTX[c]); return !r || r.pos !== p || r.erro !== `Fórmula inválida na posição ${p}: ${m}`; });
+    ok(`fórmulas inválidas: as ${CASOS.erros.length} são recusadas com a posição certa`, err.length === 0, err.map(v => v[0].slice(0, 30)).join(' | '));
+    { let rolou = new Set(); for (let k = 0; k < 400; k++) rolou.add(Regras.formula('2d6', CTX.dados, { ...op, rolar: l => 1 + Math.floor(Math.random() * l) })); ok('2d6 rola de 2 a 12', Math.min(...rolou) === 2 && Math.max(...rolou) === 12 && rolou.size === 11); }
+    ok('o texto nunca vira código (sem eval nem Function no motor)', !/\beval\s*\(|new Function|\bFunction\s*\(/.test(fs.readFileSync(path.join(RAIZ, 'js/regras.js'), 'utf8')));
+    const mig = fs.readFileSync(path.join(RAIZ, 'supabase/migrations/20261115_regras_da_mesa.sql'), 'utf8'), lit = (/regras_lotm\(\) returns jsonb\s+language sql immutable set search_path = '' as \$\$ select '([^']+)'::jsonb/.exec(mig) || [])[1];
+    ok('a predefinição lotm do banco é o MESMO JSON do js/regras.js', !!lit && JSON.stringify(JSON.parse(lit)) === JSON.stringify(Regras.LOTM));
+    const ver = fs.readFileSync(path.join(RAIZ, 'supabase/verificacoes/20261115_regras_da_mesa.sql'), 'utf8'), q = s => "'" + s.split("'").join("''") + "'";
+    ok('a verificação do banco roda os mesmos casos de fórmula', [...CASOS.valores, ...CASOS.erros].every(c => ver.includes(`privado.formula(${q(c[0])}, ctx_${c[1]})`)));
+    const ruim = o => { const e = Regras.validar(o)[0]; return e ? `Regras inválidas (${e.campo}): ${e.erro}` : ''; };
+    ok('regra ruim: a mesma mensagem que o banco dá (modificador)', ruim({ ...Regras.LOTM, modificador: 'floor((ATR - 10) / 2' }) === 'Regras inválidas (modificador): Fórmula inválida na posição 21: esperava , ou )');
+    { const r = JSON.parse(JSON.stringify(Regras.LOTM)); r.recursos[1].max = '10 + mod(XYZ)'; ok('regra ruim: a mesma mensagem que o banco dá (recurso)', ruim(r) === 'Regras inválidas (recursos[1].max): Fórmula inválida na posição 10: nome desconhecido: XYZ'); }
+    { const r = JSON.parse(JSON.stringify(Regras.LOTM)); r.atributos[2].abrev = 'SEQ'; ok('abreviação reservada é recusada', /^Regras inválidas \(atributos\[2\]\.abrev\)/.test(ruim(r))); }
+    ok('dado no máximo de um recurso é recusado (mudaria a cada gravação)', /dados não são permitidos/.test(ruim({ ...Regras.LOTM, recursos: [{ id: 'pv', max: '2d6' }] })));
+    ok('a predefinição lotm passa na própria validação', Regras.validar(Regras.LOTM).length === 0);
+    ok('base fora de 3 a 18, texto ou fração não vale', JSON.stringify(Regras.calcular(null, { base: { forca: 19, agil: 2, vigor: '14', intel: 10.5 }, caminhoId: 'louco', seq: '0' }).mods) === '{}');
+    // identidade com o site: todo Caminho × Raça × Sequência, com atributos sorteados, contra total()/mod()/pvMax()/sanMax()/espMax() de verdade
+    const ctx = await contexto(browser, null), p = await pagina(ctx, URL_SITE);
+    await p.addScriptTag({ url: 'file://' + path.join(RAIZ, 'js/regras.js') });
+    const r = await p.evaluate(() => {
+      let n = 0; const dif = [], racas = [null, ...RACAS.map(x => x.id)], cams = [null, ...CAMINHOS.map(x => x.id)];
+      for (const cam of cams) for (const raca of racas) for (let s = 0; s <= 9; s++) {
+        P.caminho = cam; P.raca = raca; P.sequencia = s; P.attrs = {};
+        ATTRS.forEach(a => { if (Math.random() < 0.9) P.attrs[a.key] = { dados: [1, 1, 1, 1], descartado: 0, total: 3 + Math.floor(Math.random() * 16) }; });
+        const base = {}; ATTRS.forEach(a => { if (P.attrs[a.key]) base[a.key] = P.attrs[a.key].total; });
+        const c = Regras.calcular(null, { base, caminhoId: cam || '', racaId: raca || '', seq: s }), at = {}, md = {};
+        ATTRS.forEach(a => { const t = total(a.key); if (t != null) { at[a.key] = t; md[a.key] = mod(t); } });
+        const mx = { pv: total('vigor') == null ? null : pvMax(), san: total('pres') == null ? null : sanMax(), esp: total('espir') == null ? null : espMax() };
+        n++; const a1 = JSON.stringify([at, md, mx]), a2 = JSON.stringify([c.attrs, c.mods, c.maximos]);
+        if (a1 !== a2 && dif.length < 3) dif.push([cam, raca, s, a1, a2]);
+      }
+      return { n, dif };
+    });
+    ok(`lotm idêntica ao site em ${r.n} fichas (Caminho × Raça × Sequência)`, r.n === 23 * 14 * 10 && r.dif.length === 0, JSON.stringify(r.dif[0] || ''));
+    await ctx.close(); }
+
   console.log('\n2) Sem rede, o site continua funcionando');
   { const ctx = await contexto(browser, null); await ctx.route(/cdn\.jsdelivr\.net/, r => r.abort());
     const p = await jogadorPronto(ctx);
@@ -242,6 +283,30 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('anti-robô desligado (sem chave): nenhum token é enviado', cap.semToken === undefined);
     ok('anti-robô ligado: o token vai junto com o cadastro e a caixa some depois', cap.comToken === 'tok-123' && cap.sobrou === 0, JSON.stringify(cap));
     ok('anti-robô com erro na Cloudflare: o cadastro nem é tentado e a mensagem é em português', /robô/.test(cap.falha) && /robô/.test(cap.msgServidor), cap.falha);
+
+  console.log('\n7a) Modificador forjado no navegador não vale; regras da mesa com versões');
+  { const mesaId = srv.db.mesas[0].id, sn = v => (v >= 0 ? '+' : '−') + Math.abs(v), fichaJ = () => srv.db.jogadores.find(x => x.user_id === uidJ).ficha;
+    const atual = fichaJ(), forjada = { ...atual, mods: Object.fromEntries(Object.keys(atual.mods).map(k => [k, 30])), attrs: { forca: 60 }, pvMax: 999 };
+    const res = await j.evaluate(async ([mid, u, f]) => { const r = await (await Rede.tabela('jogador', 'jogadores')).update({ ficha: f }).eq('mesa_id', mid).eq('user_id', u).select('user_id'); return r.error ? r.error.message : 'ok'; }, [mesaId, uidJ, forjada]);
+    const g = fichaJ();
+    ok('o jogador manda +30 em tudo: o servidor regrava mods, attrs e PV máximo', res === 'ok' && JSON.stringify(g.mods) === JSON.stringify(esperado.mods) && g.pvMax === esperado.pvMax && g.attrs.forca !== 60 && g.regras_versao === 0, JSON.stringify(g.mods));
+    ok('o mestre vê os modificadores verdadeiros na carta', await ate(async () => (await m.$$eval('.m-carta-j .m-mods b', b => b.map(x => x.textContent))).slice(0, 6).join(' ') === Object.values(esperado.mods).map(sn).join(' ')));
+    srv.proximosDados(5);
+    await m.selectOption('#t-attr', 'intel'); await m.fill('#t-rotulo', 'Decifrar o selo'); await m.fill('#t-dif', '12'); await m.click('#t-secreto');
+    ok('o teste secreto usa o modificador calculado, não o +30 mandado', await ate(async () => (await m.textContent('.m-sec')).includes(`5 ${sn(esperado.mods.intel)} = ${5 + esperado.mods.intel}`)), (await m.textContent('.m-sec')).replace(/\s+/g, ' '));
+    // regras da mesa: só o mestre cria, versão dada pelo servidor, regra ruim recusada com a posição
+    const inserir = (pg, papel, regras) => pg.evaluate(async ([pp, mid, rg]) => { const r = await (await Rede.tabela(pp, 'mesa_regras')).insert({ mesa_id: mid, regras: rg }).select('versao'); return r.error ? 'erro: ' + r.error.message : r.data[0].versao; }, [papel, mesaId, regras]);
+    const Regras = require('../js/regras.js');
+    ok('regra ruim é recusada com o campo e a posição', /^erro: Regras inválidas \(modificador\): Fórmula inválida na posição 21/.test(await inserir(m, 'mestre', { ...Regras.LOTM, modificador: 'floor((ATR - 10) / 2' })));
+    ok('o jogador não cria regras', /^erro: .*row-level security/.test(await inserir(j, 'jogador', Regras.LOTM)));
+    ok('o mestre cria a versão 1', (await inserir(m, 'mestre', { ...Regras.LOTM, modificador: 'ATR - 10' })) === 1);
+    ok('o jogador da mesa lê as regras dela', (await j.evaluate(async () => (await (await Rede.tabela('jogador', 'mesa_regras')).select('versao')).data.length)) === 1);
+    srv.proximosDados(5);
+    await m.fill('#t-rotulo', 'Decifrar de novo'); await m.click('#t-secreto');
+    const novo = esperado.mods.intel, total10 = fichaJ().attrs.intel - 10;
+    ok('a rolagem já usa as regras novas (ATR - 10)', await ate(async () => (await m.textContent('.m-sec')).includes(`5 ${sn(total10)} = ${5 + total10}`)), `antes ${novo}, agora ${total10}`);
+    ok('o mestre volta ao lotm com a versão 2 (nada é sobrescrito)', (await inserir(m, 'mestre', Regras.LOTM)) === 2 && srv.db.mesa_regras.length === 2);
+  }
 
   console.log('\n7b) Sussurros e pistas');
   { const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');

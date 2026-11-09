@@ -3,6 +3,8 @@
 // O "servidor" roda no Node e é compartilhado por todas as páginas (mestre e jogadores), como o banco real.
 // Ele também registra TUDO que entregou a cada usuário, para provar o que o jogador nunca recebe.
 
+const Regras = require('../js/regras.js');   // o mesmo motor que o banco roda em plpgsql (migração 20261115)
+
 const CLIENTE = `(() => {
   const chamar = (op, dados) => window.__sb(op, dados);
   window.__subs = {};
@@ -73,7 +75,7 @@ const CLIENTE = `(() => {
 })();`;
 
 function criarServidor() {
-  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [], figuras: [], efeitos: [], encontros: [], disputas: [], cronica: [], bestiario: [], habilidades: [], arquivos: [] };
+  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [], figuras: [], efeitos: [], encontros: [], disputas: [], cronica: [], bestiario: [], habilidades: [], arquivos: [], mesa_regras: [] };
   const naMesa = (u, mesa) => db.jogadores.some(j => j.mesa_id === mesa && j.user_id === u);
   const assinaturas = [];          // { id, uid, tabela, filtro, page }
   const entregue = {};             // uid -> [cada resposta entregue a esse usuário]
@@ -98,6 +100,7 @@ function criarServidor() {
     notas_mestre: (u, r) => mestreDe(r.mesa_id) === u,
     figuras: (u, r) => mestreDe(r.mesa_id) === u,
     cronica: (u, r) => mestreDe(r.mesa_id) === u,
+    mesa_regras: (u, r) => mestreDe(r.mesa_id) === u || naMesa(u, r.mesa_id),
     encontros: (u, r) => mestreDe(r.mesa_id) === u || (naMesa(u, r.mesa_id) && [...(r.jogadores || []), ...(r.sairam || [])].includes(u)),
     efeitos: (u, r) => mestreDe(r.mesa_id) === u || (r.user_id === u && !r.secreto && naMesa(u, r.mesa_id)),
     disputas: (u, r) => mestreDe(r.mesa_id) === u || (r.visivel && (r.a.id === u || r.b.id === u)),
@@ -122,10 +125,20 @@ function criarServidor() {
   }
   const registrar = (u, r) => { if (u) (entregue[u] = entregue[u] || []).push(JSON.parse(JSON.stringify(r))); return r; };
 
-  // igual a privado.mod_da_ficha: valor ilegível vira 0, limite ±30
+  // igual a privado.mod_da_ficha: valor ilegível vira 0, limite ±30 (agora só para as figuras do mestre)
   const modDaFicha = (f, attr) => { if (!attr) return 0; const v = ((f || {}).mods || {})[attr]; return /^-?[0-9]{1,3}$/.test(String(v)) ? Math.max(-30, Math.min(30, parseInt(v, 10))) : 0; };
   const d20 = () => rolar(20);
-  const modJog = (mesa, u, f, attr, soVisivel) => { if (!attr) return 0; const extra = db.efeitos.filter(e => e.mesa_id === mesa && e.user_id === u && ['bencao', 'maldicao'].includes(e.tipo) && e.atributo === attr && !(soVisivel && e.secreto)).reduce((t, e) => t + e.valor, 0); return Math.max(-30, Math.min(30, modDaFicha(f, attr) + extra)); };
+  // igual a privado.regras_da_mesa / mod_calculado / ficha_do_servidor: o modificador sai da base + regras, nunca de ficha.mods
+  const regrasDaMesa = mesa => { const r = db.mesa_regras.filter(x => x.mesa_id === mesa).sort((a, b) => b.versao - a.versao)[0]; return r ? { regras: r.regras, versao: r.versao } : { regras: Regras.LOTM, versao: 0 }; };
+  const modCalculado = (mesa, f, attr) => { try { return Regras.modificador(regrasDaMesa(mesa).regras, f, attr); } catch (e) { return 0; } };
+  const fichaDoServidor = (mesa, f) => {
+    if (!f || typeof f !== 'object' || Array.isArray(f)) return f;
+    try { const rg = regrasDaMesa(mesa), c = Regras.calcular(rg.regras, f), x = { ...f, attrs: c.attrs, mods: c.mods, maximos: c.maximos, regras_versao: rg.versao };
+      for (const [id, k] of [['pv', 'pvMax'], ['san', 'sanMax'], ['esp', 'espMax']]) if (Object.hasOwn(c.maximos, id)) x[k] = c.maximos[id];
+      return x;
+    } catch (e) { return { ...f, attrs: {}, mods: {} }; }
+  };
+  const modJog = (mesa, u, f, attr, soVisivel) => { if (!attr) return 0; const extra = db.efeitos.filter(e => e.mesa_id === mesa && e.user_id === u && ['bencao', 'maldicao'].includes(e.tipo) && e.atributo === attr && !(soVisivel && e.secreto)).reduce((t, e) => t + e.valor, 0); return Math.max(-30, Math.min(30, modCalculado(mesa, f, attr) + extra)); };
   const entradaRoda = (mesa, tipo, idL) => {
     if (tipo === 'jogador') { const j = db.jogadores.find(x => x.mesa_id === mesa && x.user_id === idL); if (!j) throw new Error('Jogador não encontrado.'); const d = d20(), b = modJog(mesa, j.user_id, j.ficha, 'agil'); return { tipo, id: idL, nome: j.nome, caminhoId: (j.ficha || {}).caminhoId || null, cor: (j.ficha || {}).cor || null, dado: d, bonus: b, total: d + b }; }
     if (tipo === 'figura') { const f = db.figuras.find(x => x.mesa_id === mesa && x.id === idL); if (!f) throw new Error('Figura não encontrada.'); const d = d20(); return { tipo, id: idL, nome: f.nome, caminhoId: null, cor: null, dado: d, bonus: f.bonus, total: d + f.bonus }; }
@@ -264,8 +277,8 @@ function criarServidor() {
       if (db.tentativas.filter(t => t.u === u && agora - t.t < 3600e3).length >= 15) return erro('Muitas tentativas com código errado. Espere um pouco e tente de novo.');
       const m = db.mesas.find(x => x.codigo === String(a.p_codigo).trim().toUpperCase()); if (!m) { db.tentativas.push({ u, t: agora }); return { data: null, error: null }; }
       let j = db.jogadores.find(x => x.mesa_id === m.id && x.user_id === u);
-      if (j) Object.assign(j, { nome: a.p_nome, ficha: a.p_ficha || {} });
-      else db.jogadores.push(j = { mesa_id: m.id, user_id: u, nome: String(a.p_nome).trim().slice(0, 40), ficha: a.p_ficha || {}, atualizado_em: new Date().toISOString() });
+      if (j) Object.assign(j, { nome: a.p_nome, ficha: fichaDoServidor(m.id, a.p_ficha || {}) });
+      else db.jogadores.push(j = { mesa_id: m.id, user_id: u, nome: String(a.p_nome).trim().slice(0, 40), ficha: fichaDoServidor(m.id, a.p_ficha || {}), atualizado_em: new Date().toISOString() });
       avisar('jogadores', j); return { data: m.id, error: null };
     },
     pedir_teste(u, a) {
@@ -403,6 +416,15 @@ function criarServidor() {
       const agora = new Date().toISOString(), linha = { id: id('efe'), mesa_id: v.mesa_id, user_id: v.user_id, tipo: v.tipo, atributo: v.atributo || null, valor: v.valor ?? null, habilidade: v.habilidade || null, rotulo: rot, descricao: v.descricao || null, secreto: !!v.secreto, criado_em: agora, atualizado_em: agora };
       db.efeitos.push(linha); avisar('efeitos', linha); return { data: q.devolver ? [{ ...linha }] : null, error: null };
     }
+    if (q.op === 'insert' && q.tabela === 'mesa_regras') {   // só o mestre; versão dada pelo servidor; regras validadas como no banco
+      const v = q.valores; if (mestreDe(v.mesa_id) !== u) return erro('new row violates row-level security policy for table "mesa_regras"');
+      if ('versao' in v) return erro('permission denied for table mesa_regras');
+      const versao = db.mesa_regras.filter(x => x.mesa_id === v.mesa_id).reduce((m, x) => Math.max(m, x.versao), 0) + 1;
+      if (versao > 100) return erro('No máximo 100 versões de regras por mesa.');
+      const e = Regras.validar(v.regras)[0]; if (e) return erro(`Regras inválidas (${e.campo}): ${e.erro}`);
+      const linha = { mesa_id: v.mesa_id, versao, regras: JSON.parse(JSON.stringify(v.regras)), criado_em: new Date().toISOString() };
+      db.mesa_regras.push(linha); return { data: q.devolver ? [{ ...linha }] : null, error: null };
+    }
     if (q.op === 'insert' && (q.tabela === 'figuras' || q.tabela === 'cronica')) {   // escritas diretas só do mestre
       const v = q.valores; if (mestreDe(v.mesa_id) !== u) return erro(`new row violates row-level security policy for table "${q.tabela}"`);
       let linha;
@@ -432,7 +454,7 @@ function criarServidor() {
       if (q.tabela === 'bestiario') { const ch = validarBestiario(q.valores, true, u); if (ch) return erro('new row violates check constraint "bestiario_' + ch + '_check"'); }
       if (q.tabela === 'habilidades' && 'estado' in q.valores && !['pendente', 'aprovada', 'rejeitada'].includes(q.valores.estado)) return erro('new row violates check constraint "habilidades_estado_check"');
       const pode = linhas.filter(r => q.tabela === 'jogadores' ? r.user_id === u : q.tabela === 'bestiario' ? r.dono === u : mestreDe(r.mesa_id) === u);
-      pode.forEach(r => { for (const k of COLS) if (k in q.valores) r[k] = q.valores[k]; r.atualizado_em = new Date().toISOString(); avisar(q.tabela, r); });
+      pode.forEach(r => { for (const k of COLS) if (k in q.valores) r[k] = q.valores[k]; if (q.tabela === 'jogadores' && 'ficha' in q.valores) r.ficha = fichaDoServidor(r.mesa_id, r.ficha); r.atualizado_em = new Date().toISOString(); avisar(q.tabela, r); });
       return { data: q.devolver ? pode.map(r => ({ ...r })) : null, error: null };
     }
     if (q.op === 'delete') {
