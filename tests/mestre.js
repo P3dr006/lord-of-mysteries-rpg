@@ -308,6 +308,52 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('o mestre volta ao lotm com a versão 2 (nada é sobrescrito)', (await inserir(m, 'mestre', Regras.LOTM)) === 2 && srv.db.mesa_regras.length === 2);
   }
 
+  console.log('\n7a2) Editor de regras no Grimório');
+  { const Regras = require('../js/regras.js'), mesaId = srv.db.mesas[0].id, sn = v => (v >= 0 ? '+' : '−') + Math.abs(v), klein = () => srv.db.jogadores.find(x => x.user_id === uidJ).ficha;
+    const print = async nome => { if (process.env.PRINTS) await m.locator('#p-regras .er').screenshot({ path: path.join(process.env.PRINTS, nome + '.png') }); };
+    const texto = async s => ((await m.textContent(s)) || '').replace(/\s+/g, ' ');
+    await m.click('#aba-regras');
+    ok('a aba Regras abre na versão em vigor (2) com o histórico', await ate(async () => /versão 2/.test(await texto('#er-vigor')) && (await m.$$('#er-hist li')).length === 3 && (await m.inputValue('#er-origem')) === 'v:2'));
+    ok('sem mudança, salvar fica desligado', await m.evaluate(() => document.querySelector('#er-salvar').disabled) && /Igual à versão 2/.test(await texto('#er-estado')));
+    await print('1-em-vigor');
+    await m.fill('#er-mod', 'floor((ATR - 10) / 2');
+    ok('fórmula ruim: erro com a posição (21, a mesma do banco) e o caractere marcado', await ate(async () => /Modificador: posição 21: esperava , ou \)/.test(await texto('#er-erros')) && (await m.textContent('#er-erros mark')) !== null));
+    ok('o campo fica inválido e salvar desligado', (await m.getAttribute('#er-mod', 'aria-invalid')) === 'true' && await m.evaluate(() => document.querySelector('#er-salvar').disabled));
+    await print('2-erro-com-posicao');
+    await m.fill('#er-mod', 'ATR - 10'); await m.selectOption('#er-ficha', uidJ);
+    const intel = klein().attrs.intel, velhoInt = Math.floor((intel - 10) / 2);
+    ok('prévia ao vivo na ficha do Klein, com a diferença para a versão em vigor', await ate(async () => { const c = await texto('#er-resultado .er-p-at:nth-child(4)'); return c.includes(`INT`) && c.includes(sn(intel - 10)) && (intel - 10 === velhoInt || /[▲▼]/.test(c)); }), await texto('#er-resultado .er-p-at:nth-child(4)'));
+    ok('a prévia é o motor de verdade (Regras.calcular)', (await texto('#er-resultado')).includes(String(Regras.calcular({ ...Regras.LOTM, modificador: 'ATR - 10' }, klein()).maximos.pv)));
+    await m.click('#er-mais-at'); await m.keyboard.type('Sorte');
+    ok('atributo novo: id e abreviação saem do nome', (await m.inputValue('.er-at:nth-child(7) .er-id')) === 'sorte' && (await m.inputValue('.er-at:nth-child(7) .er-abrev')) === 'SOR');
+    ok('avisa que teste pedido ainda não mira Sorte e que a ficha do Klein fica sem valor', await ate(async () => { const a = await texto('#er-avisos'); return /não mira Sorte/.test(a) && /Klein ficaria com atributo sem valor/.test(a); }) && /sem valor/.test(await texto('#er-resultado .er-p-at:nth-child(7)')));
+    await m.fill('.er-at:nth-child(7) .er-abrev', 'FOR');
+    ok('abreviação repetida é barrada no campo certo', await ate(async () => /Atributo 7 \(Sorte\), abreviação/.test(await texto('#er-erros'))) && (await m.getAttribute('.er-at:nth-child(7) .er-abrev', 'aria-invalid')) === 'true');
+    await m.click('[data-tirar-at="6"]');
+    ok('tirar a linha volta ao normal sem perder o que foi digitado', await ate(async () => (await m.$$('.er-at')).length === 6 && await m.evaluate(() => document.querySelector('#er-erros').hidden)) && (await m.inputValue('#er-mod')) === 'ATR - 10');
+    await m.click('#er-mais-rc'); await m.keyboard.type('Mana'); await m.fill('.er-rc:nth-child(4) .er-formula', 'INT * 2'); await m.click('.er-rc:nth-child(4) .er-cor[data-cor="#5ad0a0"]');
+    ok('recurso novo aparece na prévia com o valor da fórmula', await ate(async () => (await texto('#er-resultado .er-p-rc:nth-child(4)')).replace(/ /g, '').includes('Mana' + intel * 2)), await texto('#er-resultado .er-p-rcs'));
+    ok('a cor escolhida é um botão de rádio marcado (não o seletor nativo de cor)', (await m.getAttribute('.er-rc:nth-child(4) .er-cor[data-cor="#5ad0a0"]', 'aria-checked')) === 'true' && (await m.$$('#p-regras input[type=color], #p-regras select:not(.esc-nativo)')).length === 0);
+    await print('3-previa-com-mana');
+    const v = await axe(m); ok('aba Regras sem problemas de acessibilidade (axe)', v.length === 0, v.join(' | '));
+    await m.click('#er-salvar'); await m.waitForSelector('#cf-ok'); await print('4-confirmar'); await m.click('#cf-ok');
+    const linha = () => srv.db.mesa_regras.filter(x => x.mesa_id === mesaId).sort((a, b) => b.versao - a.versao)[0];
+    ok('salvar cria a versão 3 no banco (a 2 continua lá)', await ate(() => linha().versao === 3) && srv.db.mesa_regras.length === 3 && linha().regras.modificador === 'ATR - 10' && linha().regras.recursos[3].id === 'mana' && linha().regras.recursos[3].cor === '#5ad0a0');
+    ok('o que o editor não mexe vai igual (bônus, progressão)', JSON.stringify(linha().regras.bonus) === JSON.stringify(Regras.LOTM.bonus) && JSON.stringify(linha().regras.progressao) === JSON.stringify(Regras.LOTM.progressao));
+    ok('o histórico mostra a versão 3 em vigor', await ate(async () => /versão 3/.test(await texto('#er-vigor')) && /Em vigor/.test(await texto('#er-hist li.vigor')) && (await m.$$('#er-hist li')).length === 4));
+    await print('5-salvo');
+    await m.click('[data-carregar="lotm"]');
+    ok('abrir a predefinição com mudanças salvas não pergunta nada e volta ao LotM', await ate(async () => (await m.inputValue('#er-mod')) === Regras.LOTM.modificador && (await m.$$('.er-rc')).length === 3));
+    await m.fill('#er-mod', 'ATR'); await m.click('[data-carregar="3"]');
+    ok('trocar com mudança não salva pede confirmação', await ate(() => m.isVisible('#cf-nao'))); await m.click('#cf-nao');
+    ok('cancelar mantém o que foi digitado', (await m.inputValue('#er-mod')) === 'ATR');
+    await m.click('#er-desfazer');
+    ok('desfazer volta ao LotM', (await m.inputValue('#er-mod')) === Regras.LOTM.modificador);
+    await m.click('#er-salvar'); await m.waitForSelector('#cf-ok'); await m.click('#cf-ok');
+    ok('voltar ao LotM é a versão 4, idêntica à predefinição', await ate(() => linha().versao === 4) && JSON.stringify(linha().regras) === JSON.stringify(Regras.LOTM));
+    ok('sem erros na página do mestre', m.erros.length === 0, m.erros.join(' | '));
+  }
+
   console.log('\n7b) Sussurros e pistas');
   { const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
     const uidM = srv.db.mesas[0].mestre_id;
@@ -459,7 +505,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     await ate(async () => (await m.textContent('#m-jogadores')).includes('Audrey'));
     const uidA = srv.db.jogadores.find(x => x.nome === 'Audrey').user_id, uidM = srv.db.mesas[0].mestre_id;
     // abas
-    { const n = await m.evaluate(() => document.querySelectorAll('[role=tab].m-aba').length); ok('o Grimório tem 6 abas', n === 6, String(n)); }
+    { const n = await m.evaluate(() => document.querySelectorAll('[role=tab].m-aba').length); ok('o Grimório tem 7 abas (Regras é a 7ª)', n === 7, String(n)); }
     await m.focus('#aba-acoes'); await m.keyboard.press('ArrowRight');
     ok('setas do teclado trocam de aba', await m.evaluate(() => document.activeElement.id === 'aba-cena' && !document.querySelector('#p-cena').hidden && document.querySelector('#p-acoes').hidden));
     ok('a aba escolhida é lembrada', await m.evaluate(() => localStorage.getItem('lotm-grimorio-aba') === 'cena'));

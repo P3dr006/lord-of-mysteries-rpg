@@ -165,7 +165,7 @@
       <section class="m-roda" id="m-roda" aria-label="Roda do Destino" hidden></section>
       <section class="m-cartao m-jog" aria-labelledby="t-jog"><h2 id="t-jog">Jogadores <small id="m-ao-vivo" class="m-vivo">ao vivo</small></h2><div id="m-jogadores" class="m-jogadores"></div><div id="m-propostas" class="hp-fila" aria-label="Pedidos de poder dos jogadores" hidden></div></section>
       <div class="m-lado">
-        <nav class="m-abas" role="tablist" aria-label="Seções do grimório"><button type="button" role="tab" class="m-aba on" id="aba-acoes" data-aba="acoes" aria-controls="p-acoes" aria-selected="true" tabindex="0">Ações</button><button type="button" role="tab" class="m-aba" id="aba-cena" data-aba="cena" aria-controls="p-cena" aria-selected="false" tabindex="-1">Cena</button><button type="button" role="tab" class="m-aba" id="aba-bestiario" data-aba="bestiario" aria-controls="p-bestiario" aria-selected="false" tabindex="-1">Bestiário</button><button type="button" role="tab" class="m-aba" id="aba-segredos" data-aba="segredos" aria-controls="p-segredos" aria-selected="false" tabindex="-1">Segredos</button><button type="button" role="tab" class="m-aba" id="aba-cronica" data-aba="cronica" aria-controls="p-cronica" aria-selected="false" tabindex="-1">Crônica</button><button type="button" role="tab" class="m-aba" id="aba-dados" data-aba="dados" aria-controls="p-dados" aria-selected="false" tabindex="-1">Dados</button></nav>
+        <nav class="m-abas" role="tablist" aria-label="Seções do grimório"><button type="button" role="tab" class="m-aba on" id="aba-acoes" data-aba="acoes" aria-controls="p-acoes" aria-selected="true" tabindex="0">Ações</button><button type="button" role="tab" class="m-aba" id="aba-cena" data-aba="cena" aria-controls="p-cena" aria-selected="false" tabindex="-1">Cena</button><button type="button" role="tab" class="m-aba" id="aba-bestiario" data-aba="bestiario" aria-controls="p-bestiario" aria-selected="false" tabindex="-1">Bestiário</button><button type="button" role="tab" class="m-aba" id="aba-segredos" data-aba="segredos" aria-controls="p-segredos" aria-selected="false" tabindex="-1">Segredos</button><button type="button" role="tab" class="m-aba" id="aba-cronica" data-aba="cronica" aria-controls="p-cronica" aria-selected="false" tabindex="-1">Crônica</button><button type="button" role="tab" class="m-aba" id="aba-dados" data-aba="dados" aria-controls="p-dados" aria-selected="false" tabindex="-1">Dados</button><button type="button" role="tab" class="m-aba" id="aba-regras" data-aba="regras" aria-controls="p-regras" aria-selected="false" tabindex="-1">Regras</button></nav>
         <div class="m-aba-p" role="tabpanel" id="p-acoes" aria-labelledby="aba-acoes" data-p="acoes">
       <section class="m-cartao m-teste" aria-labelledby="t-teste"><h2 id="t-teste">Teste</h2>
         <form id="m-form-teste" class="m-form" novalidate>
@@ -236,6 +236,9 @@ ${secaoCronica()}
         <div class="m-aba-p" role="tabpanel" id="p-dados" aria-labelledby="aba-dados" data-p="dados">
 ${secaoDados()}
         </div>
+        <div class="m-aba-p" role="tabpanel" id="p-regras" aria-labelledby="aba-regras" data-p="regras">
+${EditorRegras.secao()}
+        </div>
       </div>
     </div>`);
     $('#m-voltar').addEventListener('click', listaMesas);
@@ -245,6 +248,7 @@ ${secaoDados()}
     $('#m-form-teste').addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#t-aberto'), () => testar('aberto')); });
     $('#t-secreto').addEventListener('click', e => ocupado(e.currentTarget, () => testar('secreto')));
     ligarFormSussurro(); ligarControle(); ligarAbas(); ligarDuelo(); ligarFiguras(); ligarCronica(); ligarDadosMestre(); ligarBestiario();
+    EditorRegras.ligar({ raiz: $('#p-regras'), mesaId: m.id, confirmar, anunciar, jogadores: () => S.jogadores });
     await Promise.all([carregarJogadores(), carregarResultados(), carregarSussurros(), carregarOrdens(), carregarNotas(), carregarFiguras(), carregarEncontro(), carregarDisputas(), carregarCronica(), carregarBestiario(), carregarHabs(), carregarEfeitos()]);
     ouvirMesa();
   }
@@ -323,6 +327,7 @@ ${secaoDados()}
     const c = $('#m-jogadores'); if (!c) return;
     c.innerHTML = S.jogadores.length ? S.jogadores.map(cartaJogador).join('') : `<p class="hint">Ninguém entrou ainda. Passe o código <b>${esc(S.mesa.codigo)}</b> para os jogadores.</p>`;
     c.querySelectorAll('.m-cj-ver').forEach(b => b.addEventListener('click', () => abrirFicha(b.dataset.u, b)));
+    EditorRegras.jogadoresMudaram();
     if (S.fichaAberta) desenharFicha();
     const sel = $('#t-para'); if (sel) {
       const atual = sel.value;
@@ -578,6 +583,7 @@ ${secaoDados()}
     const ir = (b, foco) => {
       abas.forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-selected', String(on)); x.tabIndex = on ? 0 : -1; });
       document.querySelectorAll('.m-aba-p').forEach(p => { p.hidden = p.dataset.p !== b.dataset.aba; });
+      if (b.dataset.aba === 'regras') EditorRegras.aoAbrir();   // outra aba do mestre pode ter salvo uma versão
       try { localStorage.setItem('lotm-grimorio-aba', b.dataset.aba); } catch (e) { /* só nesta visita */ }
       if (foco) b.focus();
     };

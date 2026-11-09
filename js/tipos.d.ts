@@ -16,3 +16,6 @@ interface Window {
   turnstile: any; supabase: any; gsap: any; webkitAudioContext: any; __onRetrato: any; Painel: any;
   sincronizarPainelSom: any; onTick: any; aplicarVitalFicha: any;
 }
+
+// js/regras.js também é carregado pelo Node nos testes (module.exports); no navegador é um global
+declare const Regras: typeof import("./regras.js");
