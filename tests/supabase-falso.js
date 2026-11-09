@@ -36,8 +36,18 @@ const CLIENTE = `(() => {
       // como no supabase-js: from() NÃO é "aguardável"; só depois de select/update/delete
       return { select: c => b.select(c), update: v => b.update(v), delete: () => b.delete(), insert: v => { q.op = 'insert'; q.valores = v; q.devolver = false; return b; } };
     }
+    // Storage: o arquivo vai como base64 (o canal do Playwright não leva Blob); as regras ficam no servidor falso
+    const b64 = async blob => { const u8 = new Uint8Array(await blob.arrayBuffer()); let t = ''; for (let i = 0; i < u8.length; i += 8192) t += String.fromCharCode.apply(null, u8.subarray(i, i + 8192)); return btoa(t); };
+    const storage = { from: bucket => ({
+      upload: async (caminho, blob, o) => chamar('st_upload', { uid: uid(), bucket, caminho, tipo: (o && o.contentType) || blob.type, b64: await b64(blob), upsert: !!(o && o.upsert) }),
+      copy: (de, para) => chamar('st_copy', { uid: uid(), bucket, de, para }),
+      remove: caminhos => chamar('st_remove', { uid: uid(), bucket, caminhos }),
+      list: (pasta, o) => chamar('st_list', { uid: uid(), bucket, pasta, limite: o && o.limit }),
+      createSignedUrls: (caminhos, s) => chamar('st_sign', { uid: uid(), bucket, caminhos, segundos: s, url }),
+    }) };
     return {
       auth,
+      storage,
       from: consulta,
       rpc: (nome, args) => chamar('rpc', { uid: uid(), nome, args }),
       channel(nome, opcoes) {
@@ -63,7 +73,7 @@ const CLIENTE = `(() => {
 })();`;
 
 function criarServidor() {
-  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [], figuras: [], efeitos: [], encontros: [], disputas: [], cronica: [], bestiario: [], habilidades: [] };
+  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [], figuras: [], efeitos: [], encontros: [], disputas: [], cronica: [], bestiario: [], habilidades: [], arquivos: [] };
   const naMesa = (u, mesa) => db.jogadores.some(j => j.mesa_id === mesa && j.user_id === u);
   const assinaturas = [];          // { id, uid, tabela, filtro, page }
   const entregue = {};             // uid -> [cada resposta entregue a esse usuário]
@@ -225,10 +235,14 @@ function criarServidor() {
     sussurrar(u, a) {
       if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre sussurra.');
       const t = String(a.p_texto || '').trim().slice(0, 1000) || null, ti = String(a.p_titulo || '').trim().slice(0, 80) || null, img = a.p_imagem || null;
-      if (!t && !img) return erro('Escreva algo ou escolha uma imagem.');
       if (img && (img.length > 300000 || !/^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(img))) return erro('new row violates check constraint "sussurros_imagem_check"');
+      const cam = a.p_imagem_caminho || null;
+      if (!t && !img && !cam) return erro('Escreva algo ou escolha uma imagem.');
+      if (img && cam) return erro('Mande a imagem de um jeito só.');
+      if (cam && !db.arquivos.some(x => x.nome === cam)) return erro('A imagem não chegou ao servidor. Tente enviar de novo.');
+      if (cam && !(ARQ.test(cam) && cam.split('/')[0] === 'mesas' && cam.split('/')[1] === a.p_mesa)) return erro('new row violates check constraint "sussurros_imagem_caminho_check"');
       if (a.p_para && !naMesa(a.p_para, a.p_mesa)) return erro('Jogador não encontrado.');
-      const s = { id: id('sus'), mesa_id: a.p_mesa, para: a.p_para || null, titulo: ti, texto: t, imagem: img, tem_imagem: !!img, criado_em: new Date().toISOString() };
+      const s = { id: id('sus'), mesa_id: a.p_mesa, para: a.p_para || null, titulo: ti, texto: t, imagem: img, imagem_caminho: cam, tem_imagem: !!(img || cam), criado_em: new Date().toISOString() };
       db.sussurros.push(s); avisar('sussurros', s); return { data: s.id, error: null };
     },
     ler_sussurro(u, a) {
@@ -284,8 +298,58 @@ function criarServidor() {
   };
 
   const IMG = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/;
+  // ---- Storage (bucket privado "imagens"): as mesmas regras de privado.imagem_posso_gerir / imagem_posso_ver ----
+  const ARQ = /^(bestiario|mesas)\/([\w-]{1,64})\/[\w-]{1,64}\.(webp|jpg|png)$/;
+  const podeGerir = (u, nome) => { const m = ARQ.exec(String(nome || '')); if (!m || !u) return false; return m[1] === 'bestiario' ? m[2] === u && !anonimo(u) : mestreDe(m[2]) === u; };
+  const podeVer = (u, nome) => podeGerir(u, nome) || db.sussurros.some(x => x.imagem_caminho === nome && (x.para === u || (x.para === null && naMesa(u, x.mesa_id))));
+  const assinaturasUrl = new Map();   // token -> { nome, vence }
+  const erroSt = (m, status) => ({ data: null, error: { message: m, statusCode: String(status || 400) } });
+  function storage(op, d) {
+    const u = d.uid; if (!u) return erroSt('JWT ausente', 401);
+    if (d.bucket !== 'imagens') return erroSt('Bucket not found', 404);
+    if (op === 'st_upload') {
+      if (!podeGerir(u, d.caminho)) return erroSt('new row violates row-level security policy', 403);
+      if (!['image/webp', 'image/jpeg', 'image/png'].includes(d.tipo)) return erroSt('mime type ' + d.tipo + ' is not supported', 415);
+      const n = Buffer.from(d.b64, 'base64').length; if (n > 307200) return erroSt('The object exceeded the maximum allowed size', 413);
+      if (db.arquivos.some(a => a.nome === d.caminho)) return erroSt('The resource already exists', 409);   // sem upsert: nome novo a cada envio
+      db.arquivos.push({ nome: d.caminho, tipo: d.tipo, b64: d.b64, dono: u }); return { data: { path: d.caminho }, error: null };
+    }
+    if (op === 'st_copy') {
+      const a = db.arquivos.find(x => x.nome === d.de);
+      if (!a || !podeVer(u, d.de)) return erroSt('Object not found', 404);
+      if (!podeGerir(u, d.para)) return erroSt('new row violates row-level security policy', 403);
+      if (db.arquivos.some(x => x.nome === d.para)) return erroSt('The resource already exists', 409);
+      db.arquivos.push({ ...a, nome: d.para, dono: u }); return { data: { path: d.para }, error: null };
+    }
+    if (op === 'st_remove') {
+      const sai = db.arquivos.filter(a => (d.caminhos || []).includes(a.nome) && podeGerir(u, a.nome));   // sem permissão: some da lista, sem erro (como o real)
+      db.arquivos = db.arquivos.filter(a => !sai.includes(a)); return { data: sai.map(a => ({ name: a.nome })), error: null };
+    }
+    if (op === 'st_list') {
+      const pre = String(d.pasta || '').replace(/\/$/, '') + '/';
+      return { data: db.arquivos.filter(a => a.nome.startsWith(pre) && !a.nome.slice(pre.length).includes('/') && podeVer(u, a.nome)).slice(0, d.limite || 100).map(a => ({ name: a.nome.slice(pre.length) })), error: null };
+    }
+    if (op === 'st_sign') {
+      const base = String(d.url || '').replace(/\/$/, '');
+      return { data: (d.caminhos || []).map(c => {
+        if (!db.arquivos.some(a => a.nome === c) || !podeVer(u, c)) return { path: c, error: 'Either the object does not exist or you do not have access to it', signedUrl: null };
+        const tok = require('crypto').randomBytes(12).toString('hex'); assinaturasUrl.set(tok, { nome: c, vence: Date.now() + (d.segundos || 60) * 1000 });
+        return { path: c, error: null, signedUrl: base + '/storage/v1/object/sign/imagens/' + c + '?token=' + tok };
+      }), error: null };
+    }
+    return erroSt('op desconhecida');
+  }
+  // o navegador pede a URL assinada: só serve o arquivo com token válido (e o arquivo ainda existindo)
+  function servirAssinada(rota) {
+    const q = new URL(rota.request().url()), t = assinaturasUrl.get(q.searchParams.get('token') || ''), nome = decodeURIComponent(q.pathname.replace(/^.*\/object\/sign\/imagens\//, ''));
+    const a = t && t.nome === nome && t.vence > Date.now() && db.arquivos.find(x => x.nome === nome);
+    servidas.push({ nome, ok: !!a });
+    if (!a) return rota.fulfill({ status: 400, contentType: 'application/json', body: '{"error":"InvalidJWT"}' });
+    return rota.fulfill({ status: 200, contentType: a.tipo, body: Buffer.from(a.b64, 'base64'), headers: { 'cache-control': 'max-age=3600' } });
+  }
+  const servidas = [];
   // os mesmos checks da tabela bestiario (devolve o nome do check que falhou)
-  function validarBestiario(v, parcial) {
+  function validarBestiario(v, parcial, dono) {
     const tem = k => !parcial || k in v;
     if (tem('nome') && (!String(v.nome || '').length || String(v.nome).length > 60)) return 'nome';
     if (tem('perigo') && v.perigo != null && !(v.perigo >= 1 && v.perigo <= 5)) return 'perigo';
@@ -294,6 +358,8 @@ function criarServidor() {
     if (tem('habilidades') && v.habilidades != null && (!Array.isArray(v.habilidades) || v.habilidades.length > 12)) return 'habilidades';
     if (tem('mods') && v.mods != null && (typeof v.mods !== 'object' || Array.isArray(v.mods))) return 'mods';
     if (tem('imagem') && v.imagem != null && (v.imagem.length > 300000 || !IMG.test(v.imagem))) return 'imagem';
+    if (tem('imagem_caminho') && v.imagem_caminho != null && !(ARQ.test(v.imagem_caminho) && v.imagem_caminho.split('/')[0] === 'bestiario' && v.imagem_caminho.split('/')[1] === dono)) return 'imagem_caminho';
+    if (v.imagem != null && v.imagem_caminho != null) return 'uma_imagem';
     if (tem('descricao') && v.descricao != null && v.descricao.length > 1000) return 'descricao';
     if (tem('notas') && v.notas != null && v.notas.length > 1500) return 'notas';
     // NPC (migração 20261113)
@@ -308,7 +374,7 @@ function criarServidor() {
     if (tem('segredos') && (!Array.isArray(v.segredos ?? []) || (v.segredos || []).length > 8)) return 'segredos';
     return null;
   }
-  const limparBestiario = v => ({ nome: v.nome, tipo: v.tipo || null, perigo: v.perigo || 1, pv_max: v.pv_max ?? null, defesa: v.defesa ?? null, horror: v.horror || null, mods: v.mods || {}, habilidades: v.habilidades || [], descricao: v.descricao || null, notas: v.notas || null, imagem: v.imagem || null,
+  const limparBestiario = v => ({ nome: v.nome, tipo: v.tipo || null, perigo: v.perigo || 1, pv_max: v.pv_max ?? null, defesa: v.defesa ?? null, horror: v.horror || null, mods: v.mods || {}, habilidades: v.habilidades || [], descricao: v.descricao || null, notas: v.notas || null, imagem: v.imagem || null, imagem_caminho: v.imagem_caminho || null,
     categoria: v.categoria || 'criatura', caminho: v.caminho || null, sequencia: v.sequencia ?? null, faccao: v.faccao || null, relacao: v.relacao || null, local: v.local || null, personalidade: v.personalidade || null, falas: v.falas || [], segredos: v.segredos || [] });
   function consulta(q) {
     const u = q.uid; if (!u) return erro('JWT ausente');
@@ -316,7 +382,7 @@ function criarServidor() {
     linhas = linhas.filter(r => q.filtros.every(([c, v]) => String(r[c]) === String(v)));
     if (q.op === 'insert' && q.tabela === 'bestiario') {   // o bestiário é do mestre (dono), não da mesa
       const v = q.valores; if (!u || anonimo(u)) return erro('new row violates row-level security policy for table "bestiario"');
-      const ch = validarBestiario(v); if (ch) return erro('new row violates check constraint "bestiario_' + ch + '_check"');
+      const ch = validarBestiario(v, false, u); if (ch) return erro('new row violates check constraint "bestiario_' + ch + '_check"');
       if (db.bestiario.filter(x => x.dono === u).length >= 100) return erro('Limite de 100 criaturas no bestiário. Apague algumas antigas.');   // gatilho do banco
       const agora = new Date().toISOString(), linha = { id: id('bes'), dono: u, ...limparBestiario(v), criado_em: agora, atualizado_em: agora };
       db.bestiario.push(linha); return { data: q.devolver ? [{ ...linha }] : null, error: null };
@@ -360,10 +426,10 @@ function criarServidor() {
       return { data: null, error: null };
     }
     if (q.op === 'update') {
-      const COLS = { jogadores: ['nome', 'ficha'], notas_mestre: ['texto'], figuras: ['nome', 'bonus', 'pv', 'pv_max'], bestiario: ['nome', 'tipo', 'perigo', 'pv_max', 'defesa', 'horror', 'mods', 'habilidades', 'descricao', 'notas', 'imagem', 'categoria', 'caminho', 'sequencia', 'faccao', 'relacao', 'local', 'personalidade', 'falas', 'segredos'], habilidades: ['nome', 'descricao', 'custo', 'efeito', 'estado', 'resposta', 'alterada'], efeitos: ['rotulo', 'descricao', 'secreto', 'valor'] }[q.tabela];
+      const COLS = { jogadores: ['nome', 'ficha'], notas_mestre: ['texto'], figuras: ['nome', 'bonus', 'pv', 'pv_max'], bestiario: ['nome', 'tipo', 'perigo', 'pv_max', 'defesa', 'horror', 'mods', 'habilidades', 'descricao', 'notas', 'imagem', 'imagem_caminho', 'categoria', 'caminho', 'sequencia', 'faccao', 'relacao', 'local', 'personalidade', 'falas', 'segredos'], habilidades: ['nome', 'descricao', 'custo', 'efeito', 'estado', 'resposta', 'alterada'], efeitos: ['rotulo', 'descricao', 'secreto', 'valor'] }[q.tabela];
       if (!COLS) return erro('permission denied for table ' + q.tabela);
       if (['bestiario', 'habilidades', 'efeitos'].includes(q.tabela) && Object.keys(q.valores).some(k => !COLS.includes(k))) return erro('permission denied for table ' + q.tabela);   // grant de update só nas colunas permitidas
-      if (q.tabela === 'bestiario') { const ch = validarBestiario(q.valores, true); if (ch) return erro('new row violates check constraint "bestiario_' + ch + '_check"'); }
+      if (q.tabela === 'bestiario') { const ch = validarBestiario(q.valores, true, u); if (ch) return erro('new row violates check constraint "bestiario_' + ch + '_check"'); }
       if (q.tabela === 'habilidades' && 'estado' in q.valores && !['pendente', 'aprovada', 'rejeitada'].includes(q.valores.estado)) return erro('new row violates check constraint "habilidades_estado_check"');
       const pode = linhas.filter(r => q.tabela === 'jogadores' ? r.user_id === u : q.tabela === 'bestiario' ? r.dono === u : mestreDe(r.mesa_id) === u);
       pode.forEach(r => { for (const k of COLS) if (k in q.valores) r[k] = q.valores[k]; r.atualizado_em = new Date().toISOString(); avisar(q.tabela, r); });
@@ -414,16 +480,18 @@ function criarServidor() {
     if (op === 'unsub') { const i = assinaturas.findIndex(a => a.id === d.id); if (i >= 0) assinaturas.splice(i, 1); return { data: null, error: null }; }
     if (op === 'rpc') return registrar(d.uid, RPC[d.nome] ? RPC[d.nome](d.uid, d.args || {}) : erro('função desconhecida'));
     if (op === 'query') return registrar(d.uid, consulta(d));
+    if (op.startsWith('st_')) return registrar(d.uid, storage(op, d));
     return erro('op desconhecida');
   }
 
   return {
-    db, entregue, assinaturas,
+    db, entregue, assinaturas, servidas,
     proximosDados: (...v) => dados.push(...v),
     criarMestre: (email, senha) => { const u = { id: id('user'), email, senha, confirmado: true }; db.usuarios.push(u); return u; },
     async ligar(contexto) {
       await contexto.exposeBinding('__sb', ({ page }, op, d) => tratar(page, op, d));
       await contexto.addInitScript(CLIENTE);
+      await contexto.route('**/storage/v1/object/sign/**', servirAssinada);
     },
   };
 }

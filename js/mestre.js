@@ -63,6 +63,8 @@ const Rede = Object.freeze((() => {
     if (/session missing|not authenticated/i.test(m)) return 'O link de recuperação venceu. Peça um novo em “Esqueci minha senha”.';
     if (/captcha/i.test(m)) return 'A verificação anti-robô falhou. Recarregue a página e tente de novo.';
     if (/rate limit|too many/i.test(m)) return 'Muitas tentativas seguidas. Espere um pouco e tente de novo.';
+    if (/exceeded the maximum allowed size|Payload too large/i.test(m)) return 'A imagem ficou grande demais para o servidor. Tente outra.';
+    if (/mime type .*not supported|invalid_mime_type/i.test(m)) return 'Esse formato de imagem não é aceito (use JPG, PNG ou WebP).';
     if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Sem conexão com a mesa online. Tente de novo em instantes.';
     if (/[áéíóúâêôãõç]/i.test(m) || /^(Entre|Limite|Mesa|A mesa|Pedido|Este|Jogador|Só|Escreva|Sussurro)\b/.test(m)) return m;   // frases das nossas funções
     return 'Não deu certo: ' + m.slice(0, 120);
@@ -163,5 +165,61 @@ const Rede = Object.freeze((() => {
     return () => { try { c.removeChannel(canal); } catch (e) { /* já fechado */ } };
   }
 
-  return { cliente, configurada, mensagem, usuario, entrarAnonimo, entrarEmail, criarConta, pedirRecuperacao, novaSenha, linkDeRecuperacao, limparLink, sair, rpc, tabela, ouvir, presenca, SDK, ErroRede, senhaForte, REGRA_SENHA };
+  // ---------- imagens no Storage (bucket privado "imagens"; regras de quem vê no banco: migração 20261114) ----------
+  // A linha guarda só o caminho. Para mostrar, o site pede uma URL assinada (1 h) e a reaproveita enquanto vale:
+  // a mesma URL = o navegador usa o cache em vez de baixar de novo.
+  const BUCKET = 'imagens', VALIDADE_S = 3600;
+  const EXT_IMG = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' };
+  const caminhoOk = c => typeof c === 'string' && /^(bestiario|mesas)\/[\w-]{1,64}\/[\w-]{1,64}\.(webp|jpg|png)$/.test(c);
+  const assinadas = new Map();   // caminho -> { url, vence }
+  const urlDoStorage = u => typeof u === 'string' && /^[^"'<>\s`]+$/.test(u) && typeof CONFIG === 'object' && u.startsWith(CONFIG.supabase.url.replace(/\/$/, '') + '/storage/v1/object/sign/' + BUCKET + '/');
+  const novoNome = ext => (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})/, '$1-$2-$3-$4-')) + '.' + ext;
+  // data:image/webp;base64,... → Blob (sem fetch: a CSP não deixa buscar data:)
+  function blobDe(dataUrl) {
+    const m = /^data:(image\/(?:webp|jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
+    if (!m) throw new ErroRede('Imagem inválida.');
+    const bin = atob(m[2]), b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+    return new Blob([b], { type: m[1] });
+  }
+  const pastaOk = p => typeof p === 'string' && /^(bestiario|mesas)\/[\w-]{1,64}$/.test(p);
+  // Envia a imagem já reduzida (comprimirImagem) para a pasta e devolve o caminho novo.
+  async function enviarImagem(papel, pasta, dataUrl) {
+    if (!pastaOk(pasta)) throw new ErroRede('Pasta de imagem inválida.');
+    const blob = blobDe(dataUrl), caminho = pasta + '/' + novoNome(EXT_IMG[blob.type]);
+    const c = await cliente(papel);
+    resposta(await c.storage.from(BUCKET).upload(caminho, blob, { contentType: blob.type, cacheControl: '31536000', upsert: false }));
+    return caminho;
+  }
+  // Copia um arquivo (ex.: retrato do bestiário → pasta da mesa, ao revelar) e devolve o caminho da cópia.
+  async function copiarImagem(papel, de, pasta) {
+    if (!caminhoOk(de) || !pastaOk(pasta)) throw new ErroRede('Imagem inválida.');
+    const para = pasta + '/' + novoNome(de.split('.').pop());
+    const c = await cliente(papel);
+    resposta(await c.storage.from(BUCKET).copy(de, para));
+    return para;
+  }
+  // Apagar é "melhor esforço": se falhar, o arquivo fica órfão, mas nada quebra para quem joga.
+  async function apagarImagens(papel, caminhos) {
+    const l = (caminhos || []).filter(caminhoOk); if (!l.length) return;
+    try { const c = await cliente(papel); await c.storage.from(BUCKET).remove(l); l.forEach(x => assinadas.delete(x)); } catch (e) { /* fica órfão */ }
+  }
+  async function apagarPasta(papel, pasta) {
+    if (!pastaOk(pasta)) return;
+    try { const c = await cliente(papel), r = await c.storage.from(BUCKET).list(pasta, { limit: 1000 }); await apagarImagens(papel, (r.data || []).map(o => pasta + '/' + o.name)); } catch (e) { /* fica órfão */ }
+  }
+  // caminhos → Map(caminho → URL assinada). Pede de uma vez só as que faltam; o que o banco negar fica de fora.
+  async function urlsDasImagens(papel, caminhos) {
+    const agora = Date.now(), fora = new Map(), faltam = [];
+    for (const x of new Set((caminhos || []).filter(caminhoOk))) { const a = assinadas.get(x); if (a && a.vence - agora > 300e3) fora.set(x, a.url); else faltam.push(x); }
+    if (faltam.length) {
+      try {
+        const c = await cliente(papel), r = await c.storage.from(BUCKET).createSignedUrls(faltam, VALIDADE_S);
+        for (const s of (r.data || [])) if (s && !s.error && urlDoStorage(s.signedUrl) && faltam.includes(s.path)) { assinadas.set(s.path, { url: s.signedUrl, vence: agora + VALIDADE_S * 1000 }); fora.set(s.path, s.signedUrl); }
+      } catch (e) { /* sem rede: a imagem só não aparece */ }
+    }
+    return fora;
+  }
+
+  return { cliente, configurada, mensagem, usuario, entrarAnonimo, entrarEmail, criarConta, pedirRecuperacao, novaSenha, linkDeRecuperacao, limparLink, sair, rpc, tabela, ouvir, presenca, SDK, ErroRede, senhaForte, REGRA_SENHA,
+    enviarImagem, copiarImagem, apagarImagens, apagarPasta, urlsDasImagens, caminhoOk };
 })());

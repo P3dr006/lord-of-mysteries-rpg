@@ -15,6 +15,9 @@ const EMAIL = 'mestre@exemplo.test', SENHA = 'teste-' + crypto.randomBytes(6).to
 let falhas = 0, total = 0;
 const ok = (nome, passou, detalhe = '') => { total++; if (!passou) falhas++; console.log(`${passou ? '  ok  ' : ' FALHA'}  ${nome}${detalhe ? '  → ' + detalhe : ''}`); };
 const espera = ms => new Promise(r => setTimeout(r, ms));
+// a <img> carregou de verdade (a CSP deixou e o token da URL assinada valeu)? Devolve o src ou o motivo
+const carregou = (p, sel) => p.evaluate(async s => { const im = document.querySelector(s); if (!im) return 'sem img'; if (!im.complete) await new Promise(r => { im.onload = r; im.onerror = r; }); return im.naturalWidth > 0 ? im.getAttribute('src') : 'não carregou: ' + im.getAttribute('src'); }, sel);
+const doStorage = v => typeof v === 'string' && /^https:\/\/[a-z0-9]+\.supabase\.co\/storage\/v1\/object\/sign\/imagens\/[^?]+\?token=/.test(v);
 async function ate(fn, ms = 5000) { const t = Date.now(); while (Date.now() - t < ms) { try { if (await fn()) return true; } catch (e) { /* ainda não */ } await espera(100); } return false; }
 
 async function contexto(browser, srv, extra = {}) {
@@ -266,7 +269,11 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     await m.click('#s-enviar');
     ok('o jogador recebe a pista na hora, com a cena do sussurro', await ate(() => j.isVisible('.sussurro')));
     ok('a cena do sussurro é conduzida pelo GSAP (classe gs) e o conteúdo continua à vista', await j.evaluate(() => { const s = document.querySelector('.sussurro'); return s.classList.contains('gs') && /O mapa rasgado/.test(s.textContent); }));
-    ok('a cena mostra título, texto e a imagem', await j.evaluate(() => { const s = document.querySelector('.sussurro'); return /O mapa rasgado/.test(s.textContent) && /sob a porta/.test(s.textContent) && /^data:image\/(webp|jpeg);base64,/.test(s.querySelector('.sus-pista img').getAttribute('src')); }));
+    ok('a cena mostra título e texto', await j.evaluate(() => { const s = document.querySelector('.sussurro'); return /O mapa rasgado/.test(s.textContent) && /sob a porta/.test(s.textContent); }));
+    { const src = await carregou(j, '.sussurro .sus-pista img'); ok('a imagem da pista chega por URL assinada do Storage e carrega (CSP ok)', doStorage(src), src); }
+    { const sus0 = srv.db.sussurros[0] || {}, arq = srv.db.arquivos.find(x => x.nome === sus0.imagem_caminho);
+      ok('a pista foi para o Storage: a linha guarda só o caminho (nada de base64)', sus0.imagem === null && new RegExp('^mesas/' + srv.db.mesas[0].id + '/[\\w-]+\\.webp$').test(sus0.imagem_caminho || '') && !!arq && arq.tipo === 'image/webp', sus0.imagem_caminho);
+      ok('nenhuma resposta do banco ao jogador leva base64 de imagem', !JSON.stringify(srv.entregue[srv.db.jogadores[0].user_id] || []).includes('data:image')); }
     ok('o foco vai para o botão da cena', await ate(() => j.evaluate(() => document.activeElement.id === 'sus-ok')));
     { const v = await axe(j); ok('cena do sussurro sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
     await j.click('#sus-ok');
@@ -280,6 +287,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     await a.evaluate(f => { novoSlot(); P = sanear(f); salvar(); iniciarPasso(); }, FICHA({ nome: 'Audrey', caminho: 'visionario' })); await a.waitForTimeout(300);
     await a.evaluate(c => Jogador.entrar(c), codigo);
     ok('quem entra depois recebe a pista que estava esperando', await ate(() => a.isVisible('.sussurro'), 6000));
+    { const src = await carregou(a, '.sussurro .sus-pista img'); ok('e a imagem "para todos" também carrega para ela', doStorage(src), src); }
     await a.click('#sus-ok'); await ate(async () => !(await a.$('.sussurro')));
     const uidA = srv.db.jogadores.find(x => x.nome === 'Audrey').user_id;
     // sussurro PRIVADO para o Klein
@@ -736,6 +744,79 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('bestiário e habilidades: nenhum erro de script', m.erros.length === 0 && j.erros.length === 0, [m.erros[0], j.erros[0]].filter(Boolean).join(' | '));
   }
 
+  console.log('\n7f) Imagens no Storage: retratos, revelar, quem vê o quê');
+  { const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+    const mesaId = srv.db.mesas[0].id, uidM = srv.db.mesas[0].mestre_id, uidK = srv.db.jogadores.find(x => x.nome === 'Klein').user_id;
+    const lobo = () => srv.db.bestiario.find(b => b.nome === 'Lobo de Tingen');
+    const fecharSus = async p => { for (let i = 0; i < 6 && await p.isVisible('#sus-ok').catch(() => false); i++) { await p.click('#sus-ok'); await espera(320); } };
+    await fecharSus(j);
+    // um terceiro jogador, para provar o que NÃO chega a quem não recebeu
+    const cL = await contexto(browser, srv), L = await pagina(cL, URL_SITE);
+    await L.evaluate(f => { novoSlot(); P = sanear(f); salvar(); iniciarPasso(); }, FICHA({ nome: 'Leonard', caminho: 'leitor' })); await L.waitForTimeout(300);
+    await L.evaluate(c => Jogador.entrar(c), codigo);
+    await ate(() => srv.db.jogadores.some(x => x.nome === 'Leonard'), 5000); const uidL = srv.db.jogadores.find(x => x.nome === 'Leonard').user_id;
+    await espera(800); await fecharSus(L);
+    const editarLobo = async () => { await m.click('#aba-bestiario'); await m.click(`.bs-carta[data-b="${lobo().id}"] .bs-ver`); await m.click('#bf-editar'); await m.waitForSelector('#be-arq'); };
+    // ---- retrato no bestiário
+    await editarLobo();
+    await m.setInputFiles('#be-arq', { name: 'lobo.png', mimeType: 'image/png', buffer: PNG });
+    await ate(() => m.evaluate(() => !!document.querySelector('#be-img img')));
+    await m.click('#be-salvar');
+    ok('o retrato vai para bestiario/<mestre>/ no Storage e a ficha guarda só o caminho', await ate(() => { const b = lobo(); return b.imagem === null && (b.imagem_caminho || '').startsWith('bestiario/' + uidM + '/') && srv.db.arquivos.some(x => x.nome === b.imagem_caminho); }), lobo().imagem_caminho);
+    const retrato1 = lobo().imagem_caminho;
+    await ate(async () => (await carregou(m, `.bs-carta[data-b="${lobo().id}"] .bs-retrato img`)) !== 'sem img');
+    { const src = await carregou(m, `.bs-carta[data-b="${lobo().id}"] .bs-retrato img`); ok('a carta do bestiário mostra o retrato pela URL assinada', doStorage(src), src); }
+    // ---- revelar só para o Klein: o retrato é COPIADO para a pasta da mesa
+    const antes = srv.db.sussurros.length;
+    await m.click(`.bs-carta[data-b="${lobo().id}"] .bs-revelar`); await m.waitForSelector('#rv-ok');
+    await m.click('[data-rv="nenhum"]'); await m.evaluate(u => document.querySelector(`.rv-quem input[value="${u}"]`).click(), uidK); await m.click('#rv-ok');
+    ok('revelar manda o sussurro só para o Klein, com uma cópia do retrato na pasta da mesa', await ate(() => srv.db.sussurros.length === antes + 1));
+    const susL = srv.db.sussurros[srv.db.sussurros.length - 1] || {}, copia = susL.imagem_caminho || '';
+    ok('a cópia é outro arquivo (apagar a pista não apaga o retrato)', susL.para === uidK && copia.startsWith('mesas/' + mesaId + '/') && copia !== retrato1 && srv.db.arquivos.some(x => x.nome === copia) && srv.db.arquivos.some(x => x.nome === retrato1), copia);
+    await ate(() => j.isVisible('.sussurro .sus-pista img'), 5000);
+    { const src = await carregou(j, '.sussurro .sus-pista img'); ok('o Klein vê o retrato revelado', doStorage(src), src); }
+    await fecharSus(j); await espera(600);
+    ok('o Leonard não recebe a revelação nem o caminho do arquivo', !(await L.$('.sussurro')) && !JSON.stringify(srv.entregue[uidL] || []).includes(copia) && !JSON.stringify(srv.entregue[uidL] || []).includes(retrato1));
+    ok('o Leonard não consegue assinar a pista do Klein', (await L.evaluate(c => Rede.urlsDasImagens('jogador', [c]).then(x => x.size), copia)) === 0);
+    ok('nenhum jogador consegue assinar o retrato original do bestiário', (await j.evaluate(c => Rede.urlsDasImagens('jogador', [c]).then(x => x.size), retrato1)) === 0 && (await L.evaluate(c => Rede.urlsDasImagens('jogador', [c]).then(x => x.size), retrato1)) === 0);
+    ok('URL com token falso não abre a imagem', (await L.evaluate(async c => { const u = CONFIG.supabase.url + '/storage/v1/object/sign/imagens/' + c + '?token=falso'; try { return (await fetch(u)).status; } catch (e) { return 'bloqueado'; } }, copia)) !== 200 && srv.servidas.some(x => x.nome === copia && !x.ok));
+    ok('jogador não consegue enviar imagem para a pasta da mesa', /Não deu certo|permiss|security|negad/i.test(await j.evaluate(async ([mesa, png]) => { try { await Rede.enviarImagem('jogador', 'mesas/' + mesa, 'data:image/png;base64,' + png); return 'aceitou'; } catch (e) { return Rede.mensagem(e); } }, [mesaId, PNG.toString('base64')])));
+    await j.evaluate(c => Rede.apagarImagens('jogador', [c]), copia);
+    ok('jogador não consegue apagar a pista', srv.db.arquivos.some(x => x.nome === copia));
+    // ---- apagar o sussurro leva a cópia junto, e o Klein deixa de conseguir assinar
+    await m.click('#aba-acoes').catch(() => {});
+    await m.click(`#m-sussurros [data-apagar="${susL.id}"]`);
+    ok('apagar o sussurro apaga a cópia do Storage (o retrato do bestiário fica)', await ate(() => !srv.db.arquivos.some(x => x.nome === copia) && srv.db.arquivos.some(x => x.nome === retrato1)));
+    ok('depois de apagado, o Klein não assina mais a pista', (await j.evaluate(c => Rede.urlsDasImagens('jogador', [c + '']).then(x => x.size), copia)) === 0);
+    // ---- trocar e tirar o retrato: o arquivo antigo sai
+    await editarLobo();
+    await m.setInputFiles('#be-arq', { name: 'lobo2.png', mimeType: 'image/png', buffer: PNG });
+    await ate(() => m.evaluate(() => /^data:/.test((document.querySelector('#be-img img') || {}).getAttribute?.('src') || '')));
+    await m.click('#be-salvar');
+    ok('trocar o retrato envia um arquivo novo e apaga o antigo', await ate(() => { const b = lobo(); return b.imagem_caminho && b.imagem_caminho !== retrato1 && !srv.db.arquivos.some(x => x.nome === retrato1) && srv.db.arquivos.some(x => x.nome === b.imagem_caminho); }));
+    const retrato2 = lobo().imagem_caminho;
+    await editarLobo(); await m.click('#be-tirar'); await m.click('#be-salvar');
+    ok('tirar o retrato limpa a ficha e apaga o arquivo', await ate(() => lobo().imagem_caminho === null && lobo().imagem === null && !srv.db.arquivos.some(x => x.nome === retrato2)));
+    // ---- linha antiga (base64, de antes da migração) continua aparecendo para o jogador
+    srv.db.sussurros.push({ id: 'sus-antigo-0001', mesa_id: mesaId, para: uidK, titulo: 'Carta antiga', texto: null, imagem: 'data:image/png;base64,' + PNG.toString('base64'), imagem_caminho: null, tem_imagem: true, criado_em: new Date().toISOString() });
+    await m.click('#aba-acoes').catch(() => {}); await m.selectOption('#s-para', { label: 'Klein' }); await m.fill('#s-titulo', 'Recado'); await m.fill('#s-texto', 'Releia a carta antiga.'); await m.click('#s-enviar');
+    // o "Recado" faz o jogador reler a lista; a carta antiga (base64) aparece nas pistas da aba Testes
+    await ate(() => j.isVisible('#sus-ok'), 5000); await fecharSus(j); await j.evaluate(() => Mesa.irParaTestes());
+    ok('pista antiga em base64 ainda aparece para o jogador (transição)', await ate(() => j.evaluate(() => [...document.querySelectorAll('.pista-b img')].some(i => /^data:image\/png;base64,/.test(i.getAttribute('src') || '') && i.naturalWidth > 0)), 6000));
+    { const src = await j.evaluate(() => [...document.querySelectorAll('.pista-b img')].map(i => i.getAttribute('src')).find(x => /\/storage\//.test(x || '')) || ''); ok('e na mesma lista a pista nova vem do Storage', doStorage(src), src.slice(0, 90)); }
+    await fecharSus(j);
+    // ---- CSP e script de migração
+    for (const pg of ['index.html', 'mestre.html']) { const csp = (/Content-Security-Policy" content="([^"]+)"/.exec(fs.readFileSync(path.join(RAIZ, pg), 'utf8')) || [])[1] || '', img = (/img-src ([^;]+)/.exec(csp) || [])[1] || '';
+      ok(pg + ': a CSP libera imagens só do próprio site, data:/blob: e do Supabase do projeto', img.split(/\s+/).sort().join(' ') === "'self' blob: data: https://adkecwrxjmmzqxnmwips.supabase.co", img); }
+    { const mi = require(path.join(RAIZ, 'tools/migrar-imagens.js')), u1 = '0f8fad5b-d9cb-469f-a165-70867728950e', u2 = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+      const pb = mi.planejar('bestiario', { id: u1, dono: u2, imagem: 'data:image/webp;base64,' + PNG.toString('base64') }), ps = mi.planejar('sussurros', { id: u1, mesa_id: u2, imagem: 'data:image/jpeg;base64,' + PNG.toString('base64') });
+      ok('script de migração: caminho igual ao que o banco exige (bestiario/<dono>/<id>, mesas/<mesa>/<id>)', pb.caminho === `bestiario/${u2}/${u1}.webp` && ps.caminho === `mesas/${u2}/${u1}.jpg` && pb.bytes.equals(PNG), JSON.stringify([pb.caminho, ps.caminho]));
+      ok('script de migração: recusa imagem ilegível, grande demais ou id fora do formato', !!mi.planejar('sussurros', { id: u1, mesa_id: u2, imagem: 'data:image/svg+xml;base64,AAAA' }).erro && !!mi.planejar('sussurros', { id: u1, mesa_id: u2, imagem: 'data:image/png;base64,' + Buffer.alloc(mi.LIMITE + 1).toString('base64') }).erro && !!mi.planejar('sussurros', { id: '../x', mesa_id: u2, imagem: 'data:image/png;base64,' + PNG.toString('base64') }).erro); }
+    ok('nenhum erro de página nos navegadores (Storage)', !j.erros.length && !L.erros.length && !m.erros.length, [...j.erros, ...L.erros, ...m.erros].join(' | '));
+    await L.evaluate(() => Jogador.sairDaMesa());
+    await ate(() => !srv.db.jogadores.some(x => x.nome === 'Leonard')); await cL.close();
+  }
+
   console.log('\n8) Ficha ao vivo');
   if (await j.isVisible('#mesa')) await j.click('#mesa-x'); await j.click('.adj[data-c="pv"][data-d="-5"]');
   const pvNovo = await j.evaluate(() => P.pv);
@@ -777,6 +858,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
   await m.fill('#cf-in', codigo.toLowerCase());
   ok('com o código digitado, libera', await m.evaluate(() => !document.querySelector('#cf-ok').disabled));
   await m.click('#cf-ok');
+  ok('os arquivos da mesa saem do Storage junto', await ate(() => !srv.db.arquivos.some(x => x.nome.startsWith('mesas/'))));
   ok('a mesa e tudo dela somem', await ate(() => srv.db.mesas.length === 0 && ['jogadores', 'pedidos', 'resultados', 'sussurros', 'ordens', 'figuras', 'disputas', 'cronica', 'encontros', 'notas_mestre', 'habilidades'].every(t => srv.db[t].length === 0)) && await ate(async () => !(await m.$('[data-apagar-mesa]'))));
   ok('o bestiário é do mestre: continua depois de apagar a mesa', srv.db.bestiario.length === 1);
   await m.click('#m-sair');

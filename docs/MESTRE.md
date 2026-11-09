@@ -26,7 +26,7 @@ o jogador volta sozinho para a mesa. "Sair da mesa" remove o jogador.
 
 **Sussurros e pistas:** no Grimório, "Sussurros e pistas" manda texto e/ou imagem (carta, mapa, retrato) para
 um jogador ou para todos (também pelo botão "Sussurrar" na ficha do jogador). A imagem é reduzida no navegador do
-mestre (até 1280 px, WebP, ~330 KB no máximo). No jogador, a cena aparece na hora (névoa, palavras surgindo, a pista
+mestre (até 1280 px, WebP, ~185 KB) e vai para o Storage (veja "Imagens no Storage"). No jogador, a cena aparece na hora (névoa, palavras surgindo, a pista
 em papel envelhecido); o que chegou enquanto ele estava fora aparece quando ele volta. "Guardar na memória" marca
 como lido, e o mestre vê quem leu. As pistas ficam na aba Testes para reler. "Para todos" é guardado uma vez só.
 
@@ -222,6 +222,30 @@ Verificação de código (fase 3 do roteiro; só ferramentas de desenvolvimento,
   acusa nome de propriedade errado em objeto fechado, e ninguém altera módulo depois de criado.
 
 Testes enxutos: `npm run test:quieto` (só falhas + placar) e `node tests/mestre.js --quieto --ate=7d` (para depois da seção).
+
+## Imagens no Storage (fase 5 do roteiro, migração `20261114_imagens_no_storage`)
+
+As imagens saíram das linhas do banco: a linha guarda só o **caminho** do arquivo no bucket privado `imagens`
+(até 300 KB, só WebP/JPEG/PNG). Para mostrar, o site pede uma **URL assinada** (vale 1 h, reaproveitada enquanto vale,
+então o navegador usa o cache). As regras ficam no banco (RLS em `storage.objects`), nunca no navegador:
+
+- `bestiario/<mestre>/<uuid>.webp`: retrato de criatura/NPC. Só o dono (com e-mail) envia, vê e apaga.
+- `mesas/<mesa>/<uuid>.webp`: imagem de pista. Só o mestre da mesa envia e apaga. O jogador **só consegue assinar** o
+  arquivo se existir um sussurro visível a ele apontando para ele (para ele ou "para todos"). Sussurro apagado = acabou.
+- **Revelar criatura copia** o retrato para a pasta da mesa (uma cópia por sussurro): apagar a pista não apaga o retrato
+  nem a pista dos outros. Trocar/tirar retrato, apagar sussurro, criatura ou mesa apaga o arquivo pela API
+  (o SQL não apaga arquivos: gatilho `storage.protect_objects_delete`). Se a API falhar, o arquivo fica órfão, sem quebrar nada.
+- Ajudantes no módulo `Rede` (`js/mestre.js`): `enviarImagem`, `copiarImagem`, `apagarImagens`, `apagarPasta`, `urlsDasImagens`.
+- CSP de `index.html` e `mestre.html`: `img-src` inclui `https://adkecwrxjmmzqxnmwips.supabase.co`.
+- **Transição:** a coluna base64 antiga (`imagem`) continua lida e aceita (a função `sussurrar` de 5 argumentos também,
+  para abas com o site antigo). Uma linha nunca tem as duas. Depois de migrar tudo, uma migração futura pode apagar as colunas.
+
+Ordem para publicar: (1) `node tools/migracao.js aplicar supabase/migrations/20261114_imagens_no_storage.sql --sim`
+(o site novo chama `sussurrar` com 6 argumentos: sem a migração, sussurrar falha); (2) push do site;
+(3) `node tools/migrar-imagens.js` (ensaio, só lê) e depois `node tools/migrar-imagens.js --sim`, que envia as imagens antigas
+e troca o base64 pelo caminho. O `--sim` precisa de `SUPABASE_SECRET_KEY` (`sb_secret_…`, painel > Project Settings >
+API Keys) **só** em variável do Windows (`setx`); ela passa por cima da RLS, por isso só esse script a usa. Idempotente:
+rodar de novo só pega o que faltou.
 
 ## Configuração que falta no painel do Supabase
 

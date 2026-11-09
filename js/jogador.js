@@ -402,11 +402,14 @@ const Jogador = Object.freeze((() => {
   const IMG_OK = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/;
   async function carregarSussurros() {
     const [s, l] = await Promise.all([
-      (await Rede.tabela('jogador', 'sussurros')).select('id,para,titulo,texto,imagem,criado_em').eq('mesa_id', con.mesa).order('criado_em', { ascending: false }).limit(30),
+      (await Rede.tabela('jogador', 'sussurros')).select('id,para,titulo,texto,imagem,imagem_caminho,criado_em').eq('mesa_id', con.mesa).order('criado_em', { ascending: false }).limit(30),
       (await Rede.tabela('jogador', 'sussurros_leituras')).select('sussurro_id').eq('user_id', uid),
     ]);
     if (s.error || l.error) throw s.error || l.error;
-    sussurros = (s.data || []).map(x => ({ ...x, imagem: typeof x.imagem === 'string' && IMG_OK.test(x.imagem) ? x.imagem : null }));
+    // pista nova: arquivo no Storage, lido por URL assinada (o banco só assina o que foi mandado a este jogador);
+    // pista antiga: base64 na própria linha
+    const urls = await Rede.urlsDasImagens('jogador', (s.data || []).map(x => x.imagem_caminho));
+    sussurros = (s.data || []).map(x => ({ ...x, imagem: typeof x.imagem === 'string' && IMG_OK.test(x.imagem) ? x.imagem : urls.get(x.imagem_caminho) || null }));
     lidos = new Set((l.data || []).map(x => x.sussurro_id));
   }
   async function aoMudarSussurros() {

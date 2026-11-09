@@ -134,7 +134,7 @@
       const m = mesas.find(x => x.id === b.dataset.apagarMesa); if (!m) return;
       const ok2 = await confirmar({ titulo: 'Apagar a mesa “' + m.nome + '”?', texto: 'Some tudo: jogadores, testes, sussurros, duelos, figuras, notas e a crônica. Não tem volta.', botao: 'Apagar para sempre', exigir: m.codigo, perigo: true });
       if (!ok2) return;
-      try { const r = await (await Rede.tabela('mestre', 'mesas')).delete().eq('id', m.id); if (r.error) throw r.error; anunciar('Mesa apagada'); listaMesas(); }
+      try { await Rede.apagarPasta('mestre', 'mesas/' + m.id); const r = await (await Rede.tabela('mestre', 'mesas')).delete().eq('id', m.id); if (r.error) throw r.error; anunciar('Mesa apagada'); listaMesas(); }
       catch (e) { erroEm('#m-erro-mesa', e); }
     }));
     $('#m-form-mesa').addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#m-nova'), async () => {
@@ -375,7 +375,7 @@ ${secaoDados()}
     if (!S.mesa) return;
     try {
       const [s, l] = await Promise.all([
-        (await Rede.tabela('mestre', 'sussurros')).select('id,para,titulo,texto,tem_imagem,criado_em').eq('mesa_id', S.mesa.id).order('criado_em', { ascending: false }).limit(30),
+        (await Rede.tabela('mestre', 'sussurros')).select('id,para,titulo,texto,tem_imagem,imagem_caminho,criado_em').eq('mesa_id', S.mesa.id).order('criado_em', { ascending: false }).limit(30),
         (await Rede.tabela('mestre', 'sussurros_leituras')).select('sussurro_id,user_id,lido_em').eq('mesa_id', S.mesa.id),
       ]);
       if (s.error || l.error) throw s.error || l.error;
@@ -400,7 +400,8 @@ ${secaoDados()}
     }).join('') : '<li class="hint m-vazio">Nada sussurrado ainda. Uma carta, um mapa, uma visão: só quem recebe vê.</li>';
     l.querySelectorAll('[data-apagar]').forEach(b => b.addEventListener('click', async () => {
       b.disabled = true;
-      try { const r = await (await Rede.tabela('mestre', 'sussurros')).delete().eq('id', b.dataset.apagar); if (r.error) throw r.error; carregarSussurros(); }
+      const s = lista.find(x => x.id === b.dataset.apagar);
+      try { const r = await (await Rede.tabela('mestre', 'sussurros')).delete().eq('id', b.dataset.apagar); if (r.error) throw r.error; if (s && s.imagem_caminho) Rede.apagarImagens('mestre', [s.imagem_caminho]); carregarSussurros(); }
       catch (e) { b.disabled = false; erroEm('#m-erro-sus', e); }
     }));
   }
@@ -423,12 +424,16 @@ ${secaoDados()}
       const para = $('#s-para').value || null, titulo = $('#s-titulo').value.trim(), texto = $('#s-texto').value.trim();
       if (!S.jogadores.length) return erroEm('#m-erro-sus', new Rede.ErroRede('Espere um jogador entrar na mesa.'));
       if (!texto && !imagem) return erroEm('#m-erro-sus', new Rede.ErroRede('Escreva algo ou escolha uma imagem.'));
+      // a imagem vai para o Storage (pasta da mesa) e o sussurro guarda só o caminho; se o sussurro falhar, o arquivo sai
+      let caminho = null;
       try {
-        await Rede.rpc('mestre', 'sussurrar', { p_mesa: S.mesa.id, p_para: para, p_titulo: titulo, p_texto: texto, p_imagem: imagem });
+        if (imagem) caminho = await Rede.enviarImagem('mestre', 'mesas/' + S.mesa.id, imagem);
+        await Rede.rpc('mestre', 'sussurrar', { p_mesa: S.mesa.id, p_para: para, p_titulo: titulo, p_texto: texto, p_imagem: null, p_imagem_caminho: caminho });
+        caminho = null;
         $('#s-titulo').value = ''; $('#s-texto').value = ''; tirar();
         anunciar('Sussurro enviado para ' + (para ? nomeDe(para) : 'todos'));
         carregarSussurros();
-      } catch (e) { erroEm('#m-erro-sus', e); }
+      } catch (e) { if (caminho) Rede.apagarImagens('mestre', [caminho]); erroEm('#m-erro-sus', e); }
     }); });
   }
 
@@ -740,7 +745,7 @@ ${secaoDados()}
     const l = $('#m-figuras'); if (!l) return;
     l.innerHTML = (S.figuras || []).map(f => {
       const temPV = f.pv_max != null, pv = num(f.pv, 0, 9999), mx = num(f.pv_max, 1, 9999), e = temPV ? estado(pv, mx, EST_PV) : null;
-      const fb = f.ficha_id && (S.bestiario || []).find(x => x.id === f.ficha_id), im = fb && imgOk(fb.imagem);
+      const fb = f.ficha_id && (S.bestiario || []).find(x => x.id === f.ficha_id), im = fb && retratoDe(fb);
       return `<li class="m-fig ${e && e.cls === 'zero' ? 'caida' : ''} ${fb ? 'com-ficha' : ''}" data-f="${esc(f.id)}">${fb ? `<span class="fg-ret">${im ? `<img src="${im}" alt="">` : sombra(fb.nome)}</span>` : ''}<div class="fg-id"><b>${esc(f.nome)}</b><small>${fb ? `${esc(txt(rotulo(fb), 40))} · ` : ''}inic. ${sinal(f.bonus)}${f.defesa != null ? ` · def ${num(f.defesa, 0, 99)}` : ''}${e ? ` · <span class="m-est pv ${e.cls}">${e.txt}</span>` : ''}</small></div>
         ${temPV ? `<div class="fg-pv">${barra('PV', pv, mx, '#e05a6a')}<div class="fg-bts" role="group" aria-label="PV de ${esc(f.nome)}">${[-5, -1, 1, 5].map(d => `<button type="button" class="c-chip fg-d" data-d="${d}" aria-label="${d < 0 ? 'Tirar' : 'Dar'} ${Math.abs(d)} PV de ${esc(f.nome)}">${d < 0 ? '−' : '+'}${Math.abs(d)}</button>`).join('')}</div></div>` : ''}
         ${fb ? `<button type="button" class="ghost fg-ficha" data-ic="livro">Ficha<span class="sr-only"> de ${esc(f.nome)}</span></button>` : ''}<button type="button" class="link-remover fg-x">Dispensar<span class="sr-only"> ${esc(f.nome)}</span></button></li>`;
@@ -862,6 +867,8 @@ ${secaoDados()}
   const PERIGO = ['Incômodo', 'Ameaça', 'Perigoso', 'Mortal', 'Calamidade'];
   const IMG_OK = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/;
   const imgOk = v => typeof v === 'string' && IMG_OK.test(v) ? v : '';
+  // retrato da ficha: o base64 antigo (linhas de antes da migração 20261114) ou a URL assinada do arquivo no Storage
+  const retratoDe = b => (b && (imgOk(b.imagem) || (S.besUrl && S.besUrl.get(b.imagem_caminho)))) || '';
   const lista = v => Array.isArray(v) ? v : [];
   const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const modDe = (mods, k) => num(obj(mods)[k], -10, 20) || 0;
@@ -922,6 +929,7 @@ ${secaoDados()}
   }
   async function carregarBestiario() {
     try { const r = await (await Rede.tabela('mestre', 'bestiario')).select('*').order('nome'); if (r.error) throw r.error; S.bestiario = r.data || []; } catch (e) { return; }
+    S.besUrl = await Rede.urlsDasImagens('mestre', S.bestiario.map(b => b.imagem_caminho));   // uma ida só para todos os retratos
     desenharBestiario(); desenharFiguras();
   }
   function desenharBestiario() {
@@ -931,7 +939,7 @@ ${secaoDados()}
     const conta = { todos: todos.length, npc: todos.filter(ehNpc).length }; conta.criatura = conta.todos - conta.npc;
     Object.entries(conta).forEach(([k, n]) => { const s = $('#bs-n-' + k); if (s) s.textContent = String(n); });
     const vis = todos.filter(b => (f === 'todos' || (f === 'npc') === ehNpc(b)) && (!q || norm([b.nome, b.tipo, b.faccao, seqTxt(b)].join(' ')).includes(q)));
-    l.innerHTML = vis.map(b => { const p = num(b.perigo, 1, 5) || 1, im = imgOk(b.imagem), npc = ehNpc(b), c = caminhoDe(b), sg = segredosDe(b);
+    l.innerHTML = vis.map(b => { const p = num(b.perigo, 1, 5) || 1, im = retratoDe(b), npc = ehNpc(b), c = caminhoDe(b), sg = segredosDe(b);
       return `<li class="bs-carta p${p}${npc ? ' npc' : ''}" data-b="${esc(b.id)}"${c ? ` style="--cc:${c.cor}"` : ''}>
         <div class="bs-retrato">${im ? `<img src="${im}" alt="">` : sombra(b.nome)}${c ? `<span class="bs-sigilo" aria-hidden="true">${svgGlifo(c, 18)}</span>` : ''}</div>
         <div class="bs-corpo"><small class="bs-tipo">${npc ? '<span class="bs-npc">NPC</span> ' : ''}${esc(rotulo(b))}</small><b class="bs-nome">${esc(b.nome)}</b>${npc && (b.faccao || b.relacao) ? `<p class="bs-fac">${b.faccao ? `<span>${esc(txt(b.faccao, 60))}</span>` : ''}${relSelo(b)}</p>` : ''}${olhos(p)}
@@ -985,10 +993,12 @@ ${secaoDados()}
     if (!S.jogadores.length) { erroEm(erroSel, new Rede.ErroRede('Ninguém na mesa para ouvir.')); return null; }
     const esc2 = await escolherQuem(b, gatilho || document.activeElement, tit, dica, botao);
     if (!esc2) return null;
-    const base = { p_mesa: S.mesa.id, p_titulo: txt(b.nome, 80), p_texto: txt(texto, 1000), p_imagem: imgOk(b.imagem) || null };
+    const base = { p_mesa: S.mesa.id, p_titulo: txt(b.nome, 80), p_texto: txt(texto, 1000), p_imagem: imgOk(b.imagem) || null, p_imagem_caminho: null };
     try {
-      if (esc2.todos) await Rede.rpc('mestre', 'sussurrar', { ...base, p_para: null });
-      else for (const u of esc2.quem) await Rede.rpc('mestre', 'sussurrar', { ...base, p_para: u });
+      // uma cópia por sussurro: apagar um deles não pode levar a imagem dos outros
+      const comCopia = async () => (!base.p_imagem && Rede.caminhoOk(b.imagem_caminho) ? Rede.copiarImagem('mestre', b.imagem_caminho, 'mesas/' + S.mesa.id) : null);
+      if (esc2.todos) await Rede.rpc('mestre', 'sussurrar', { ...base, p_para: null, p_imagem_caminho: await comCopia() });
+      else for (const u of esc2.quem) await Rede.rpc('mestre', 'sussurrar', { ...base, p_para: u, p_imagem_caminho: await comCopia() });
       carregarSussurros();
       return esc2.todos ? 'todos' : S.jogadores.filter(j => esc2.quem.includes(j.user_id)).map(j => j.nome).join(', ');
     } catch (e) { erroEm(erroSel, e); return null; }
@@ -1001,7 +1011,7 @@ ${secaoDados()}
   // ---------- ficha da criatura (leitura, rolar poderes, dano direto nos jogadores) ----------
   function abrirCriatura(id, gatilho, figNome) {
     const b = (S.bestiario || []).find(x => x.id === id); if (!b) return;
-    const p = num(b.perigo, 1, 5) || 1, im = imgOk(b.imagem), hs = lista(b.habilidades).map(obj).filter(h => txt(h.nome)), quem = figNome || b.nome;
+    const p = num(b.perigo, 1, 5) || 1, im = retratoDe(b), hs = lista(b.habilidades).map(obj).filter(h => txt(h.nome)), quem = figNome || b.nome;
     const npc = ehNpc(b), c = caminhoDe(b), falas = falasDe(b), sg = segredosDe(b);
     // NPC: quem é (facção, relação, onde achar), jeito de ser, falas prontas e segredos em camadas
     const blocoNpc = !npc ? '' : `${txt(b.personalidade) ? `<section class="bf-bloco"><h3>Personalidade</h3><p class="bf-desc">${esc(txt(b.personalidade, 600))}</p></section>` : ''}
@@ -1069,7 +1079,7 @@ ${secaoDados()}
     fundo.querySelector('#bf-apagar').addEventListener('click', async () => {
       const ok2 = await confirmar({ titulo: `Apagar ${b.nome} do bestiário?`, texto: 'A ficha some de todas as suas mesas. As figuras que já estão em cena continuam, só sem a ficha.', botao: 'Apagar', perigo: true });
       if (!ok2) return;
-      try { const r = await (await Rede.tabela('mestre', 'bestiario')).delete().eq('id', b.id); if (r.error) throw r.error; fechar(false); anunciar(b.nome + ' saiu do bestiário'); await carregarBestiario(); carregarFiguras(); const nv = $('#bs-nova'); if (nv) nv.focus(); }
+      try { const r = await (await Rede.tabela('mestre', 'bestiario')).delete().eq('id', b.id); if (r.error) throw r.error; if (b.imagem_caminho) Rede.apagarImagens('mestre', [b.imagem_caminho]); fechar(false); anunciar(b.nome + ' saiu do bestiário'); await carregarBestiario(); carregarFiguras(); const nv = $('#bs-nova'); if (nv) nv.focus(); }
       catch (e) { erroEm('#bf-erro', e); }
     });
     fundo.querySelector('.bf-x').focus();
@@ -1078,7 +1088,7 @@ ${secaoDados()}
   // ---------- criar / editar uma criatura ----------
   function editarCriatura(b0, gatilho, cat) {
     const novo = !b0, b = b0 || { categoria: cat === 'npc' ? 'npc' : 'criatura', nome: '', tipo: '', perigo: cat === 'npc' ? 1 : 2, pv_max: null, defesa: null, horror: '', mods: {}, habilidades: [], descricao: '', notas: '', imagem: null, caminho: null, sequencia: null, faccao: '', relacao: null, local: '', personalidade: '', falas: [], segredos: [] };
-    let imagem = imgOk(b.imagem) || null;
+    let imagem = retratoDe(b) || null, nova = null, tirou = false;
     const habs = lista(b.habilidades).map(obj).map(h => ({ nome: txt(h.nome, 60), efeito: txt(h.efeito, 60), desc: txt(h.desc, 400) }));
     const falas = falasDe(b), segs = segredosDe(b);
     const v = x => esc(x == null ? '' : x);
@@ -1172,9 +1182,9 @@ ${secaoDados()}
     fundo.querySelector('#be-hab-mais').addEventListener('click', () => { if (habs.length < 12) { habs.push({ nome: '', efeito: '', desc: '' }); desenharHabs(habs.length - 1); } });
     fundo.querySelector('#be-arq').addEventListener('change', async e => {
       const arq = e.target.files && e.target.files[0]; if (!arq) return; fundo.querySelector('#be-erro').hidden = true;
-      try { imagem = await comprimirImagem(arq); desenharImg(); } catch (er) { erroEm('#be-erro', er); } e.target.value = '';
+      try { imagem = nova = await comprimirImagem(arq); tirou = false; desenharImg(); } catch (er) { erroEm('#be-erro', er); } e.target.value = '';
     });
-    fundo.querySelector('#be-tirar').addEventListener('click', () => { imagem = null; desenharImg(); fundo.querySelector('#be-arq').focus(); });
+    fundo.querySelector('#be-tirar').addEventListener('click', () => { imagem = nova = null; tirou = true; desenharImg(); fundo.querySelector('#be-arq').focus(); });
     fundo.querySelector('.bf-x').addEventListener('click', () => fechar());
     fundo.querySelector('#be-cancelar').addEventListener('click', () => fechar());
     forma.addEventListener('submit', ev => { ev.preventDefault(); ocupado(fundo.querySelector('#be-salvar'), async () => {
@@ -1189,22 +1199,28 @@ ${secaoDados()}
       const mods = Object.fromEntries(ATTRS.map(a => [a.key, num(fundo.querySelector('#be-m-' + a.key).value, -10, 20) || 0]));
       const dados = { nome, tipo: val('#be-tipo') || null, perigo: +((fundo.querySelector('input[name=be-perigo]:checked') || {}).value || 2), pv_max: pv, defesa: def,
         horror: val('#be-horror') || null, mods, habilidades: habs.map(h => ({ nome: h.nome.trim().slice(0, 60), efeito: h.efeito.trim().slice(0, 60), desc: h.desc.trim().slice(0, 400) })).filter(h => h.nome),
-        descricao: val('#be-desc') || null, notas: val('#be-notas') || null, imagem, categoria: npc ? 'npc' : 'criatura' };
+        descricao: val('#be-desc') || null, notas: val('#be-notas') || null, categoria: npc ? 'npc' : 'criatura' };
       // os campos de pessoa só valem para NPC; virar criatura limpa (o banco não guarda meio-NPC)
       const seqV = val('#be-seq');
       Object.assign(dados, npc ? { caminho: val('#be-caminho') || null, sequencia: seqV === '' ? null : num(seqV, 0, 9), faccao: val('#be-fac') || null, relacao: val('#be-rel') || null,
         local: val('#be-local') || null, personalidade: val('#be-pers') || null, falas: falas.map(t => t.trim().slice(0, 200)).filter(Boolean),
         segredos: segs.map(s => ({ texto: s.texto.trim().slice(0, 400), revelado: !!s.revelado })).filter(s => s.texto) }
         : { caminho: null, sequencia: null, faccao: null, relacao: null, local: null, personalidade: null, falas: [], segredos: [] });
+      // retrato novo: envia para bestiario/<mestre>/ antes de salvar; trocou ou tirou: o arquivo antigo sai depois de salvar
+      let enviado = null;
       try {
+        if (nova) { enviado = await Rede.enviarImagem('mestre', 'bestiario/' + S.user.id, nova); Object.assign(dados, { imagem: null, imagem_caminho: enviado }); }
+        else if (tirou) Object.assign(dados, { imagem: null, imagem_caminho: null });
         const t = await Rede.tabela('mestre', 'bestiario');
         const r = novo ? await t.insert(dados).select('id') : await t.update(dados).eq('id', b.id);
         if (r.error) throw r.error;
+        if (!novo && (nova || tirou) && b.imagem_caminho) Rede.apagarImagens('mestre', [b.imagem_caminho]);
+        enviado = null;
         if (S.besFiltro !== 'todos' && S.besFiltro !== dados.categoria) { S.besFiltro = 'todos'; document.querySelectorAll('.bs-f').forEach(x => x.setAttribute('aria-pressed', String(/** @type {HTMLElement} */ (x).dataset.f === 'todos'))); }
         fechar(false); anunciar(nome + (novo ? ' entrou no bestiário' : ': ficha atualizada')); await carregarBestiario();
         const id = novo ? (r.data && r.data[0] && r.data[0].id) : b.id, alvo = id && document.querySelector(`.bs-carta[data-b="${CSS.escape(id)}"] .bs-ver`);
         (alvo || $('#bs-nova') || document.body).focus();
-      } catch (e) { erroEm('#be-erro', e); }
+      } catch (e) { if (enviado) Rede.apagarImagens('mestre', [enviado]); erroEm('#be-erro', e); }
     }); });
     fundo.querySelector('#be-nome').focus();
   }
