@@ -16,6 +16,7 @@ docs/privado/
 *.key
 *.p12
 *.pfx
+*.crt
 id_rsa*
 id_ed25519*
 secrets*
@@ -23,14 +24,43 @@ credentials*
 service-account*.json
 .npmrc
 .netrc
+.pgpass
+
+# cópias do banco: podem ter e-mails dos mestres, fichas e notas secretas dos jogadores
+*.dump
+*.backup
+*.sql.gz
+*.sqlite
+*.db
+backup*/
+dumps/
+
+# capturas de rede e de navegador: guardam tokens de login e cookies
+*.har
+storageState*.json
+
+# saídas de testes e capturas de tela (podem mostrar dados reais de uma mesa)
+test-results/
+playwright-report/
+prints/
+prints-*/
+coverage/
+
+# configurações locais de ferramentas de IA (caminhos e permissões da máquina)
+.claude/settings.local.json
+CLAUDE.local.md
 
 # Supabase local
 supabase/.temp/
 supabase/.branches/
+supabase/.env
 
 # lixo do sistema e de editores
 .DS_Store
 Thumbs.db
+desktop.ini
 *.log
+*.tmp
+*.swp
 .vscode/
 .idea/

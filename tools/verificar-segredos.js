@@ -19,6 +19,8 @@ const NOMES_PROIBIDOS = [
   [/\.local\.(js|json|env)$/i, 'configuração local'],
   [/(^|\/)\.(npmrc|netrc|pgpass)$/i, 'credenciais de ferramenta'],
   [/(^|\/)supabase\/\.(temp|branches)\//i, 'arquivos internos do Supabase'],
+  [/\.(dump|backup|sqlite|db)$|\.sql\.gz$/i, 'cópia do banco (pode ter dados de jogadores)'],
+  [/\.har$|(^|\/)storageState[^/]*\.json$/i, 'captura do navegador (guarda tokens de login)'],
 ];
 const BINARIOS = /\.(png|jpe?g|gif|webp|ico|pdf|woff2?|ttf|otf|mp3|ogg|wav|zip|gz)$/i;
 const MAX_BYTES = 2 * 1024 * 1024;

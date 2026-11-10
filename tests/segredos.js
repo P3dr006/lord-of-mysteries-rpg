@@ -28,9 +28,9 @@ ok('marcador segredo-ok libera a linha', !tem('const token = "' + 'abcdefgh12345
 ok('o achado nunca mostra o valor', !JSON.stringify(acharNoTexto('a.js', 'const password = "' + 'abcdefgh1234567' + '"')).includes('abcdefgh'));
 
 console.log('\n2) Nomes de arquivo');
-for (const n of ['.env', '.env.local', '.env.example.bak', 'config/.env.production', 'chave.pem', 'id_rsa', 'js/config.local.js', 'service-account-x.json', 'secrets.json', '.npmrc'])
+for (const n of ['.env', '.env.local', '.env.example.bak', 'config/.env.production', 'chave.pem', 'id_rsa', 'js/config.local.js', 'service-account-x.json', 'secrets.json', '.npmrc', 'banco.dump', 'backup/mesa.sql.gz', 'rede.har', 'tests/storageState-mestre.json'])
   ok(`bloqueia ${n}`, !!acharNoNome(n));
-for (const n of ['js/config.js', 'index.html', 'js/state.js', 'img/sigilos/louco.webp', 'README.md', '.env.example'])
+for (const n of ['js/config.js', 'index.html', 'js/state.js', 'img/sigilos/louco.webp', 'README.md', '.env.example', 'supabase/migrations/20261116_ficha_na_mesa.sql', 'tests/formulas-casos.json'])
   ok(`permite ${n}`, !acharNoNome(n));
 
 console.log('\n3) Hook de commit (repositório temporário)');
