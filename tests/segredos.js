@@ -28,9 +28,9 @@ ok('marcador segredo-ok libera a linha', !tem('const token = "' + 'abcdefgh12345
 ok('o achado nunca mostra o valor', !JSON.stringify(acharNoTexto('a.js', 'const password = "' + 'abcdefgh1234567' + '"')).includes('abcdefgh'));
 
 console.log('\n2) Nomes de arquivo');
-for (const n of ['.env', '.env.local', 'config/.env.production', 'chave.pem', 'id_rsa', 'js/config.local.js', 'service-account-x.json', 'secrets.json', '.npmrc'])
+for (const n of ['.env', '.env.local', '.env.example.bak', 'config/.env.production', 'chave.pem', 'id_rsa', 'js/config.local.js', 'service-account-x.json', 'secrets.json', '.npmrc'])
   ok(`bloqueia ${n}`, !!acharNoNome(n));
-for (const n of ['js/config.js', 'index.html', 'js/state.js', 'img/sigilos/louco.webp', 'README.md'])
+for (const n of ['js/config.js', 'index.html', 'js/state.js', 'img/sigilos/louco.webp', 'README.md', '.env.example'])
   ok(`permite ${n}`, !acharNoNome(n));
 
 console.log('\n3) Hook de commit (repositório temporário)');

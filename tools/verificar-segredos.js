@@ -11,7 +11,7 @@ const git = (...a) => execFileSync('git', a, { encoding: 'utf8', maxBuffer: 256 
 
 // Nomes de arquivo que nunca devem ser versionados.
 const NOMES_PROIBIDOS = [
-  [/(^|\/)\.env(\..*)?$/i, 'arquivo .env'],
+  [/(^|\/)\.env(?!\.example$)(\..*)?$/i, 'arquivo .env'],   // .env.example é o modelo sem valores (o conteúdo continua verificado)
   [/\.(pem|key|p12|pfx|jks|keystore)$/i, 'chave privada ou certificado'],
   [/(^|\/)id_(rsa|dsa|ecdsa|ed25519)(\.pub)?$/i, 'chave SSH'],
   [/(^|\/)\.?(secrets?|credentials?)(\..*)?$/i, 'arquivo de segredos'],

@@ -8,6 +8,7 @@ HANDOFF.md
 # segredos e configurações locais (nunca vão ao GitHub)
 .env
 .env.*
+!.env.example
 *.local.js
 *.local.json
 *.pem

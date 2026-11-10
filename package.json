@@ -8,6 +8,8 @@
     "test:ficha": "node tests/ficha.js",
     "test:a11y": "node tests/acessibilidade.js",
     "test:audio": "node tests/audio.js",
+    "migracao": "node --env-file-if-exists=.env tools/migracao.js",
+    "migrar-imagens": "node --env-file-if-exists=.env tools/migrar-imagens.js",
     "medir-som": "node tools/medir-som.js",
     "calibrar-som": "node tools/medir-som.js --calibrar",
     "proteger": "git config core.hooksPath .githooks && node tools/verificar-segredos.js --tudo",

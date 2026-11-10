@@ -74,7 +74,8 @@ node tools/migracao.js verificar supabase/migrations/X.sql supabase/verificacoes
 node tools/migracao.js aplicar supabase/migrations/X.sql --sim
 ```
 
-A conexão vem só da variável de ambiente `SUPABASE_DB_URL` (nunca de arquivo do projeto). Detalhes em [docs/MESTRE.md](docs/MESTRE.md).
+A conexão vem só da variável de ambiente `SUPABASE_DB_URL`. Para não digitar em todo terminal, copie o `.env.example` para `.env`
+(ignorado pelo git) e use `npm run migracao -- verificar ...`. Detalhes em [docs/MESTRE.md](docs/MESTRE.md).
 
 ## Documentação
 
@@ -97,7 +98,7 @@ npm run calibrar-som   # recalcula os ganhos (grava em js/som.js)
 
 1. **Uma vez por clone**, rode `npm run proteger`: ativa os hooks de `.githooks`, que conferem o que vai em cada commit
    e todos os arquivos versionados antes de cada push.
-2. O `.gitignore` já ignora `.env*`, `*.local.js`, chaves e credenciais.
+2. O `.gitignore` já ignora `.env*` (só o modelo `.env.example`, sem valores, vai ao GitHub), `*.local.js`, chaves e credenciais.
 3. `npm run segredos` confere tudo agora; `npm run segredos:historico` audita os commits antigos.
 
 Pode ficar no código: a URL do projeto e a chave **pública** (`sb_publishable_…`) em `js/config.js`.
