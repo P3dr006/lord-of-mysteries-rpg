@@ -254,7 +254,7 @@ function renderCaminho(body) {
   if (P.caminho) {
     const i = CAMINHOS.findIndex(c => c.id === P.caminho);
     mostrarInfo(P.caminho); marcarNo(i);
-    constel.svg.querySelector('#hub-num').textContent = i + 1;
+    noHub(i);
     aplicarRot(-constel.nodes[i].a);
   }
   $('#btn-d22').addEventListener('click', () => {
@@ -372,7 +372,9 @@ function radarSVG(cor) {
   ATTRS.forEach((_, i) => { grade += `<line x1="${C}" y1="${C}" x2="${pt(i, R)[0]}" y2="${pt(i, R)[1]}" stroke="#3b3566"/>`; });
   const pts = ATTRS.map((a, i) => pt(i, R * Math.min(1, total(a.key) / MAX)));
   const rotulos = ATTRS.map((a, i) => { const [x, y] = pt(i, R + 20); return `<text x="${x}" y="${y - 2}" class="rl">${a.nome.slice(0, 3).toUpperCase()}</text><text x="${x}" y="${y + 11}" class="rv">${total(a.key)}</text>`; }).join('');
-  return `<svg class="radar" viewBox="0 0 260 260" role="img" aria-label="Atributos">${grade}
+  let aro = `<circle cx="${C}" cy="${C}" r="${R + 6}" class="r-aro"/><circle cx="${C}" cy="${C}" r="${R - 2}" class="r-aro fino"/>`;
+  for (let t = 0; t < 48; t++) { const a2 = t * 7.5 * Math.PI / 180, r1 = R + (t % 8 === 0 ? 0 : 3); aro += `<line class="r-marca" x1="${(C + Math.cos(a2) * r1).toFixed(1)}" y1="${(C + Math.sin(a2) * r1).toFixed(1)}" x2="${(C + Math.cos(a2) * (R + 6)).toFixed(1)}" y2="${(C + Math.sin(a2) * (R + 6)).toFixed(1)}"/>`; }
+  return `<svg class="radar" viewBox="0 0 260 260" role="img" aria-label="Atributos">${aro}${grade}
     <polygon class="rpoly" points="${pts.map(p => p.join(',')).join(' ')}" fill="${cor}" fill-opacity=".28" stroke="${cor}" stroke-width="2.2" stroke-linejoin="round"/>
     ${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="3.6" fill="${cor}"/>`).join('')}${rotulos}</svg>`;
 }
@@ -410,7 +412,7 @@ function renderFicha(body) {
     <div class="ficha-grid">
       <section class="blk"><h3>Atributos</h3>
         <div class="attr-wrap">${radarSVG(c.cor)}
-          <ul class="attr-lista">${ATTRS.map(a => `<li style="--ac:${a.cor}"><span class="ai">${iconeAttr(a, 18)}</span><span>${a.nome}</span><b>${total(a.key)}</b><em>mod ${mod(total(a.key)) >= 0 ? '+' : ''}${mod(total(a.key))}</em>${partes(a)}</li>`).join('')}</ul></div></section>
+          <ul class="attr-lista">${ATTRS.map(a => `<li style="--ac:${a.cor}"><span class="ai">${iconeAttr(a, 18)}</span><span>${a.nome}</span><b>${total(a.key)}</b><em class="${mod(total(a.key)) < 0 ? 'neg' : ''}" title="Modificador"><span class="sr-only">modificador </span>${mod(total(a.key)) >= 0 ? '+' : '−'}${Math.abs(mod(total(a.key)))}</em>${partes(a)}</li>`).join('')}</ul></div></section>
       <section class="blk"><h3>Vitais</h3>
         ${medidor('pv', 'Pontos de Vida', P.pv, pvMax(), '#e05a6a')}
         ${medidor('san', 'Sanidade', P.san, sanMax(), '#6fb4ff')}
