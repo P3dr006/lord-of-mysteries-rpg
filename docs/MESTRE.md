@@ -111,6 +111,15 @@ jogador vê o número sem o segredo e o mestre vê o total real (coluna `oculto`
 **Teste aberto à prova de trapaça:** o modificador do teste aberto agora vem da ficha guardada no servidor (a mesma que o
 mestre vê), não do que o navegador manda. Modificador ilegível na ficha vale 0 em vez de dar erro.
 
+**Ficha montada na mesa** (opcional, Fase B2 de [SISTEMAS-DA-MESA.md](SISTEMAS-DA-MESA.md)): no cabeçalho da mesa, ligue a pena
+"Ficha montada na mesa". O jogador entra só com o código e monta a ficha num assistente (Atributos, Origem, Selar) guiado pelas
+regras em vigor; os atributos são **rolados pelo servidor** (`rolar_ficha`) e só rolam de novo se você **Liberar nova ficha** ou
+recusar. Ele também pode trazer a ficha do site, se os atributos batem com as regras; ficha trazida sempre espera a sua aprovação.
+Com o selo "Aprovar cada ficha" aceso, toda ficha nova cai na fila **Fichas para aprovar** (com recado), e até lá o jogador
+joga sem modificador. Cada ficha fica na versão das regras em que foi feita; o botão **Migrar** na carta do jogador passa para
+a versão em vigor quando os atributos continuam valendo. Desligar a pena devolve a ficha do site. O Teste lista os atributos
+da regra em vigor, e o servidor recusa atributo que não existe nela.
+
 ## Arquivos
 
 | Arquivo | O que faz |
@@ -120,7 +129,7 @@ mestre vê), não do que o navegador manda. Modificador ilegível na ficha vale 
 | `js/painel.js` + `mestre.html` | Grimório do Mestre |
 | `js/jogador.js` | Lado do jogador na aba Testes; envia a ficha quando ela é salva |
 | `js/mesa.js` | `Mesa.rolar({ fixo: [n] })` anima até um número já decidido |
-| `tests/mestre.js` | 70 testes com um Supabase falso (`tests/supabase-falso.js`) que imita a RLS e as funções |
+| `tests/mestre.js` | Cerca de 490 testes com um Supabase falso (`tests/supabase-falso.js`) que imita a RLS e as funções |
 
 Para trocar a versão do supabase-js: mude a URL em `js/mestre.js` e recalcule o hash
 (`curl -s URL | openssl dgst -sha384 -binary | openssl base64 -A`). O teste confere o hash com a CDN.
@@ -186,9 +195,9 @@ tabela `efeitos` (só o mestre escreve; o jogador lê só os próprios não secr
 `privado.mod_do_jogador` / `mod_visivel` somam os efeitos em `rolar_secreto`, `responder_pedido` e no Duelo;
 `segredos_pedido.oculto` e `resultados_mestre` com o total real. Verificada em 35 cenários com papéis reais, desfeita no fim.
 
-## Migrações sem o chat (economiza contexto)
+## Migrações pela linha de comando
 
-`tools/migracao.js` roda a migração direto no banco, sem o SQL passar pela conversa:
+`tools/migracao.js` roda a migração direto no banco, pela conexão de `SUPABASE_DB_URL`:
 
 - `node tools/migracao.js verificar supabase/migrations/X.sql verificacao.sql`: migração + cenários numa transação que é
   **sempre desfeita**; mostra só a linha `RESULTADO`.

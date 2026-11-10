@@ -2,6 +2,9 @@
 node_modules
 tools/.ultima-medicao.json
 
+# notas de passagem entre sessões de trabalho (locais)
+HANDOFF.md
+
 # segredos e configurações locais (nunca vão ao GitHub)
 .env
 .env.*
