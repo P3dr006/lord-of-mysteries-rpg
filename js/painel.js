@@ -1321,8 +1321,8 @@ ${EditorRegras.secao()}
   const opcoesTeste = () => '<option value="">Nenhum (só o dado)</option>' + vigorTeste().atributos.map(a => `<option value="${esc(a.id)}">${esc(a.nome)}</option>`).join('');
   const fichaMesaDe = u => (S.fichas || []).find(f => f.user_id === u);
   function cfgHTML(m) {
-    const chave = (id, on, rot, dis) => `<button type="button" class="fm-b m-chave ${on ? 'on' : ''}" id="${id}" aria-pressed="${on}" ${dis ? 'disabled' : ''}><span class="m-chave-tr" aria-hidden="true"><i></i></span><span class="m-chave-txt"><small>${rot}</small><b>${on ? 'Ligada' : 'Desligada'}</b></span></button>`;
-    return `<div class="m-cfg" id="m-cfg" role="group" aria-label="Fichas desta mesa">${chave('m-cfg-ficha', !!m.ficha_na_mesa, 'Ficha montada na mesa')}${chave('m-cfg-aprovar', !!m.aprovar_fichas, 'Aprovar cada ficha', !m.ficha_na_mesa)}
+    const chave = (id, on, rot, dis, ic) => `<button type="button" class="fm-b m-chave m-chave-${ic} ${on ? 'on' : ''}" id="${id}" aria-pressed="${on}" ${dis ? 'disabled' : ''}><span class="m-chave-ic" aria-hidden="true">${ic === 'pena' ? '✎' : '✦'}</span><span class="m-chave-txt"><small>${rot}</small><b>${on ? 'Ligada' : 'Desligada'}</b></span></button>`;
+    return `<div class="m-cfg" id="m-cfg" role="group" aria-label="Fichas desta mesa"><span class="m-cfg-tit" aria-hidden="true">Fichas</span>${chave('m-cfg-ficha', !!m.ficha_na_mesa, 'Ficha montada na mesa', false, 'pena')}${chave('m-cfg-aprovar', !!m.aprovar_fichas, 'Aprovar cada ficha', !m.ficha_na_mesa, 'selo')}
       <small class="m-cfg-dica">${m.ficha_na_mesa ? `Os jogadores montam a ficha aqui, com dados rolados pelo servidor${m.aprovar_fichas ? ', e você aprova cada uma' : ''}.` : 'Desligada: cada jogador usa a ficha do site, como sempre.'}</small></div>`;
   }
   function ligarCfg() {

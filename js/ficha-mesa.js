@@ -88,7 +88,7 @@ const FichaMesa = Object.freeze((() => {
   function telaRolar(R) {
     const met = (R.geracao || {}).metodo, { mn, mx } = faixa(R);
     if (!st.base) return `<p class="fm-intro">Cada atributo é rolado com <b>${esc(METODO[met] || met || '4d6')}</b> e fica entre ${mn} e ${mx}. O servidor rola: ninguém rola de novo até tirar 18. Para refazer, só com o mestre.</p>
-      <ul class="fm-ats vazio">${R.atributos.map(a => `<li><span>${esc(a.nome)}</span><b aria-hidden="true">?</b></li>`).join('')}</ul>
+      <ul class="fm-ats vazio">${R.atributos.map(a => `<li><span>${esc(a.nome)}</span><span class="fm-dados" aria-hidden="true">${'<i></i>'.repeat(met === '3d6' ? 3 : 4)}</span><b class="fm-total" aria-hidden="true">·</b></li>`).join('')}</ul>
       <div class="fm-acoes"><button type="button" class="ghost" data-ir="inicio">Voltar</button><button type="button" class="primary" id="fm-rolar" data-ic="dado" data-foco ${st.ocupado ? 'disabled' : ''}>${st.ocupado ? 'Rolando…' : 'Rolar os atributos'}</button></div>`;
     return `<p class="fm-intro">O servidor rolou. ${met === '3d6' ? '' : 'O dado apagado é o menor, descartado.'}</p>
       <ul class="fm-ats ${st.revelar ? 'revela' : ''}" aria-label="Atributos rolados">${R.atributos.map((a, i) => `<li style="--i:${i}"><span>${esc(a.nome)}</span>${dadosHtml((st.rolagens || {})[a.id], st.base[a.id], met)}<span class="sr-only">${esc(a.nome)}: ${st.base[a.id]}</span></li>`).join('')}</ul>
@@ -115,7 +115,7 @@ const FichaMesa = Object.freeze((() => {
     return `<p class="fm-intro">${cam ? `<b>${esc(cam.nome)}</b>` : 'Sem Caminho'} · ${rc ? `${esc(rc.icone)} <b>${esc(rc.nome)}</b>` : 'sem raça'}${st.modo === 'converter' ? ' · <i>ficha trazida do site</i>' : ''}</p>
       <table class="fm-tab"><caption class="sr-only">Prévia da ficha</caption><thead><tr><th scope="col">Atributo</th><th scope="col">Dado</th><th scope="col">Total</th><th scope="col">Mod.</th></tr></thead>
       <tbody>${R.atributos.map(a => { const b = st.base[a.id], t = c.attrs[a.id], md = c.mods[a.id];
-        return `<tr><th scope="row">${esc(a.nome)}</th><td>${b ?? '—'}</td><td>${t ?? '—'}${t != null && b != null && t !== b ? ` <small class="${t < b ? 'neg' : ''}">(${sinal(t - b)})</small>` : ''}</td><td class="fm-mod">${md == null ? '—' : sinal(md)}</td></tr>`; }).join('')}</tbody></table>
+        return `<tr><th scope="row">${esc(a.nome)}</th><td>${b ?? '—'}</td><td>${t ?? '—'}${t != null && b != null && t !== b ? ` <small class="${t < b ? 'neg' : ''}">(${sinal(t - b)})</small>` : ''}</td><td class="fm-mod"><span class="${md != null && md < 0 ? 'neg' : ''}">${md == null ? '—' : sinal(md)}</span></td></tr>`; }).join('')}</tbody></table>
       ${(R.recursos || []).length ? `<ul class="fm-rec" aria-label="Recursos">${R.recursos.map(r => `<li style="--rc:${/^#[0-9a-f]{6}$/i.test(r.cor || '') ? r.cor : '#d9b86a'}"><span>${esc(r.nome)}</span><b>${c.maximos[r.id] ?? '—'}</b></li>`).join('')}</ul>` : ''}
       <p class="fm-nota">${pend ? (st.modo === 'converter' ? 'Ficha trazida do site: o mestre confere antes de valer.' : 'O mestre aprova antes de a ficha valer.') + ' Até lá, seus testes vão sem modificador.' : 'Ao selar, a ficha vale na hora. O servidor refaz a conta com as regras da mesa.'}</p>
       <div class="fm-acoes"><button type="button" class="ghost" data-ir="origem">Voltar</button><button type="button" class="primary" id="fm-selar" data-foco ${st.ocupado ? 'disabled' : ''}>${st.ocupado ? 'Enviando…' : pend ? 'Enviar ao mestre' : 'Selar a ficha'}</button></div>`;

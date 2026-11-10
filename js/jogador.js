@@ -390,7 +390,8 @@ const Jogador = Object.freeze((() => {
         <ul class="fm-chipsat">${R.atributos.map(a => `<li><span>${esc2(a.abrev)}</span><b>${Number.isInteger(mods[a.id]) ? sinal(mods[a.id]) : '—'}</b></li>`).join('')}</ul>
         ${mesmo ? '' : `<span class="fm-versao">Regras da versão ${fm.regras_versao} (em vigor: ${regrasM.versao}). O mestre decide quando migrar.</span>`}`;
     }
-    return `<section class="fm-carta fm-${classe}" aria-label="Ficha da mesa"><span class="fm-selo" aria-hidden="true"></span><div>${corpo}</div>${botao ? `<button type="button" class="primary" id="fm-abrir">${botao}</button>` : ''}</section>`;
+    const sinalSelo = { livre: '✎', recusada: '✕', rolada: '⚄', pendente: '⧗', aprovada: '✦' }[classe];
+    return `<section class="fm-carta fm-${classe}" aria-label="Ficha da mesa"><span class="fm-selo" aria-hidden="true"><i>${sinalSelo}</i></span><div><small class="fm-carta-olho">Ficha da mesa</small>${corpo}</div>${botao ? `<button type="button" class="primary" id="fm-abrir">${botao}</button>` : ''}</section>`;
   }
   function abrirAssistente() {
     if (!naMesaAtiva() || typeof FichaMesa !== 'object') return;

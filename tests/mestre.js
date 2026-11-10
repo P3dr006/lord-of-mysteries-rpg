@@ -416,6 +416,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('Klein vê a carta "Esta mesa monta a ficha aqui"', await ate(async () => /monta a ficha aqui/.test(await j.textContent('.fm-carta.fm-livre'))));
     ok('a carta do mestre mostra "Sem ficha da mesa"', await ate(async () => /Sem ficha da mesa/.test(await m.textContent(carta(uidJ)))));
     await print(j, '1-carta-jogador', '#online');
+    await print(m, '0-cabecalho', '.m-cab');
     // 2) Audrey entra só com o código e rola no servidor
     const ctxA = await contexto(browser, srv), a = await entrar(ctxA, 'Audrey', { caminho: 'louco', raca: 'humano' }), uidA = await uidDe(a);
     await ate(() => a.isVisible('#fm-abrir')); await a.click('#fm-abrir');
@@ -463,6 +464,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('a fila mostra os atributos e os modificadores pela regra', (await m.$$eval(`#m-fichas .fmp[data-u="${uidB}"] .fmp-ats li`, l => l.length)) === 6);
     { const v = await axe(m); ok('Grimório com a fila sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
     await print(m, '6-fila-mestre', '.m-jog');
+    await print(b, '6b-pendente-jogador', '.fm-carta');
     await m.fill(`#fmp-${uidB}-r`, 'Bem-vinda à mesa.'); await m.click(`#fmp-${uidB}-ok`);
     ok('aprovada: os modificadores passam a valer', await ate(() => fm(uidB).estado === 'aprovada' && fichaDe(uidB).mods.espir === Regras.calcular(Regras.LOTM, { base: fm(uidB).base, caminhoId: 'louco', racaId: 'humano', seq: 7 }).mods.espir));
     ok('Bernadette recebe o selo de cera com o recado', await ate(async () => /O mestre aprova sua ficha/.test(await b.textContent('.decreto')) && /Bem-vinda à mesa/.test(await b.textContent('.decreto'))));
@@ -500,6 +502,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     await a.setViewportSize({ width: 375, height: 812 }); await a.click('#fm-abrir'); await a.click('.fm-op[data-ir=nova]');
     ok('no celular o assistente ocupa a tela sem rolagem lateral', await a.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.querySelector('.fm-livro').getBoundingClientRect().width <= innerWidth));
     await print(a, '8-celular', '.fm-livro');
+    await a.setViewportSize({ width: 1180, height: 900 });
     await a.click('#fm-fechar');
     ok('fechar o assistente devolve o foco', await ate(async () => !(await a.$('.fm-assist')) && await a.evaluate(() => document.activeElement && document.activeElement.id === 'fm-abrir')));
     ok('o mestre volta ao LotM (versão 7)', (await inserir(Regras.LOTM)) === 7);
