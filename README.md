@@ -75,11 +75,12 @@ node tools/migracao.js aplicar supabase/migrations/X.sql --sim
 ```
 
 A conexão vem só da variável de ambiente `SUPABASE_DB_URL`. Para não digitar em todo terminal, copie o `.env.example` para `.env`
-(ignorado pelo git) e use `npm run migracao -- verificar ...`. Detalhes em [docs/MESTRE.md](docs/MESTRE.md).
+(ignorado pelo git) e use `npm run migracao -- verificar ...`. Detalhes em [docs/DESENVOLVIMENTO.md](docs/DESENVOLVIMENTO.md).
 
 ## Documentação
 
-- [docs/MESTRE.md](docs/MESTRE.md): como usar o Grimório, tabelas e funções do banco, migrações e Storage.
+- [docs/MESTRE.md](docs/MESTRE.md): guia do Grimório e quem lê e escreve cada tabela do banco.
+- [docs/DESENVOLVIMENTO.md](docs/DESENVOLVIMENTO.md): migrações, animações, verificação de código e o Storage de imagens.
 - [docs/SISTEMAS-DA-MESA.md](docs/SISTEMAS-DA-MESA.md): o motor de regras por mesa, fases e decisões de design.
 - [docs/PESQUISA-TECNOLOGIAS.md](docs/PESQUISA-TECNOLOGIAS.md): roteiro técnico (tipos, lint, animações, imagens, PWA).
 - [docs/IDEIAS.md](docs/IDEIAS.md): registro de design de efeitos, selos e batalhas simultâneas.

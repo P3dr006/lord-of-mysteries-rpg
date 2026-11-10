@@ -134,9 +134,9 @@ da regra em vigor, e o servidor recusa atributo que não existe nela.
 Para trocar a versão do supabase-js: mude a URL em `js/mestre.js` e recalcule o hash
 (`curl -s URL | openssl dgst -sha384 -binary | openssl base64 -A`). O teste confere o hash com a CDN.
 
-## Banco (Supabase, projeto `lotm-rpg`) — já aplicado
+## Banco (Supabase)
 
-Arquivo: `supabase/migrations/20261106_mesa_do_mestre.sql`. Tudo com RLS.
+Tudo com RLS: o navegador só lê o que a política permite e só escreve pelas funções do servidor.
 
 | Tabela | Quem lê | Quem escreve |
 |---|---|---|
@@ -151,31 +151,15 @@ Arquivo: `supabase/migrations/20261106_mesa_do_mestre.sql`. Tudo com RLS.
 | `ordens` (dano, cura, Terror) | o mestre; o jogador só as dele | `ordenar` (só o mestre); `aplicar_ordem` (uma vez) |
 | `notas_mestre` | **só o mestre** | só o mestre (direto na tabela) |
 | `mesas.terror` | lido por `estado_da_mesa` (mestre e jogadores da mesa) | `ordenar(..., 'terror', 1/0)` |
-
 | `figuras` (NPCs) | **só o mestre** | só o mestre (direto na tabela) |
 | `encontros` (Roda) | o mestre e os jogadores da mesa | `iniciar_encontro`, `proximo_turno`, `encerrar_encontro` (só o mestre) |
 | `disputas` (Duelos) | o mestre; o jogador só os visíveis em que está | `disputar` (só o mestre; o servidor rola) |
 | `cronica` | **só o mestre** | só o mestre (direto na tabela) |
 | `bestiario` | **só o dono** (mestre com e-mail) | só o dono; anônimo nunca |
 | `habilidades` | o mestre; o jogador só as suas (enquanto está na mesa) | mestre concede/edita/apaga; jogador só por `propor_habilidade` e `retirar_habilidade` |
-
-NPCs: `20261113_npcs_no_bestiario.sql`, verificado em 22 cenários com papéis reais **sem aplicar**
-(`supabase/verificacoes/20261113_npcs_no_bestiario.sql`: criatura antiga continua, todos os checks, dono fora do grant,
-outro mestre não lê nem altera, jogador anônimo não lê nem insere, camada revelada fica salva).
-
-Bestiário e habilidades: `20261110_bestiario_e_habilidades.sql`, verificado em 39 cenários com papéis reais **sem aplicar**
-(mestre, outro mestre, 2 jogadores, intruso, visitante; inclui: jogador não se autoaprova, limite de 5, outro mestre não vê,
-apagar a ficha mantém a figura, apagar a mesa mantém o bestiário).
-
-Cena: `20261109_cena.sql`, verificado em 28 cenários com papéis reais **sem aplicar** (inclui: +30 mandado pelo navegador
-vira +3 da ficha; ficha com `"agil":"abc"` não quebra a rolagem; apagar a mesa leva tudo junto; outro mestre não mexe).
-
-Controle do mestre: `20261108_controle_do_mestre.sql`, verificado em 31 cenários com papéis reais **sem aplicar**
-(a migração e os testes rodaram numa transação desfeita no fim). Aplicar no banco junto com a publicação do site.
-
-Sussurros: `20261107_sussurros.sql`, `…b_sussurros_corrige_leitura.sql` (achado na verificação: um `null`
-deixava quem estava fora da mesa marcar como lido) e `…c_sussurros_tem_imagem.sql`. Verificados em 19 cenários com
-papéis reais (mestre, 2 jogadores, intruso, visitante), dentro de uma transação desfeita no fim.
+| `efeitos` (bênçãos, maldições, selos) | o mestre; o jogador só os próprios avisados | só o mestre |
+| `mesa_regras` (versões das regras) | o mestre e os jogadores da mesa | só o mestre (versão nova; nada é sobrescrito) |
+| `fichas_mesa` (ficha montada na mesa) | o mestre; o jogador só a sua | só por função: `rolar_ficha`, `enviar_ficha`, `converter_ficha`, `julgar_ficha`, `liberar_ficha`, `migrar_ficha` |
 
 O dado é rolado **no servidor** (`responder_pedido`, `rolar_secreto`); o site só anima até o número.
 Desde `20261115_regras_da_mesa.sql`, o modificador **não** vem mais de `ficha.mods` (que o navegador manda): o servidor calcula
@@ -183,109 +167,9 @@ a partir de `ficha.base` (os dados rolados, 3 a 18), Caminho, Raça e Sequência
 nova; sem regras = predefinição `lotm`, idêntica ao site). Vale para o teste secreto, o aberto, a Roda e o Duelo. Ao gravar a ficha,
 um gatilho regrava `mods`, `attrs`, `pvMax`, `sanMax`, `espMax`, `maximos` e `regras_versao`: o mestre vê o número verdadeiro.
 Fórmulas das regras: mini-linguagem sem `eval` (números, `+ - * /`, parênteses, `NdM`, abreviações, `SEQ`, `NIVEL`, `mod/min/max/floor`),
-com o mesmo intérprete em `js/regras.js` e em plpgsql; fórmula inválida é recusada com a posição. Verificada em 83 cenários com
-papéis reais, desfeita (`supabase/verificacoes/20261115_regras_da_mesa.sql`). Resta: a Sequência ainda é declarada pelo jogador.
+com o mesmo intérprete em `js/regras.js` e em plpgsql; fórmula inválida é recusada com a posição. A Sequência ainda é
+declarada pelo jogador. Na mesa com ficha montada, a base vem de `fichas_mesa` (dados rolados pelo servidor), na versão das
+regras em que a ficha foi feita.
 
-Verificado em 24 cenários com papéis reais (mestre, 2 jogadores anônimos, visitante sem login).
-
-Migração `20261111_batalhas_e_efeitos.sql` (**ainda não aplicada**): `encontros` com várias batalhas por mesa
-(`id`, `nome`, `jogadores`, `sairam`; o jogador lê só a sua), funções `iniciar_batalha`, `regirar_batalha`,
-`passar_turno`, `encerrar_batalha`, `entrar_na_batalha`, `sair_da_batalha` (as antigas de encontro foram removidas);
-tabela `efeitos` (só o mestre escreve; o jogador lê só os próprios não secretos; limite de 30 por gatilho);
-`privado.mod_do_jogador` / `mod_visivel` somam os efeitos em `rolar_secreto`, `responder_pedido` e no Duelo;
-`segredos_pedido.oculto` e `resultados_mestre` com o total real. Verificada em 35 cenários com papéis reais, desfeita no fim.
-
-## Migrações pela linha de comando
-
-`tools/migracao.js` roda a migração direto no banco, pela conexão de `SUPABASE_DB_URL`:
-
-- `node tools/migracao.js verificar supabase/migrations/X.sql verificacao.sql`: migração + cenários numa transação que é
-  **sempre desfeita**; mostra só a linha `RESULTADO`.
-- `node tools/migracao.js aplicar supabase/migrations/X.sql --sim`: aplica e registra em `supabase_migrations`.
-
-Configuração (uma vez, feita pelo Pedro no terminal dele, **nunca** no projeto nem no chat):
-1. Supabase > Project Settings > Database > Connection string (URI, "Session pooler"), com a senha do banco.
-2. `setx SUPABASE_DB_URL "postgresql://..."` e abrir um terminal novo.
-3. Se o Node reclamar do certificado: baixar em Database > SSL Configuration e `setx SUPABASE_DB_CA "C:\caminho\prod-ca.crt"`.
-
-Travas: só aceita o projeto lotm-rpg, só lê `.sql`, verifica o TLS (não há modo inseguro), nunca imprime a URL nem a senha
-(nem em erros), `aplicar` exige `--sim`. Sem a variável, as migrações continuam pelo conector do Supabase.
-
-Dados 3D e cenas com GSAP (fase 4 do roteiro; **tudo é enfeite opcional**, o conteúdo já está na página e as animações CSS continuam):
-
-- `js/animar.js`: baixa o **GSAP 3.15.0** da CDN com hash de integridade (sha384), só quando a mesa liga. Sem rede ou com
-  "reduzir movimento" ligado, `Animar.pode()` é falso e tudo cai nas animações CSS de sempre. Nenhuma mudança na CSP
-  (`cdn.jsdelivr.net` já estava liberada). Para trocar a versão: baixe o arquivo, calcule o sha384 e atualize `src` e `sri`.
-- `js/dado3d.js`: d4, d6, d8, d12 e d20 em CSS 3D (sólidos de verdade, faces numeradas com opostos somando lados+1). O dado
-  **nunca decide o número**: `Mesa.rolar` já tem o valor (do servidor, nos testes pedidos pelo mestre) e o dado gira, quica
-  e pousa nessa face. d10, d22 e d100 usam a animação 2D de antes. O elemento termina com `data-valor` e `aria-label`.
-  (O dice-box foi descartado: a física dele decide o número e não dá para forçá-lo, o que quebraria o teste do servidor.)
-- `js/cenas.js`: linhas do tempo do GSAP para o sussurro (palavras saem do desfoque, pista se desdobra), o decreto (o selo
-  carimba com impacto e um anel) e a virada de turno da Roda (mola, chama e rolagem até o token). A classe `gs` desliga as
-  animações CSS dos elementos conduzidos pelo GSAP.
-
-Verificação de código (fase 3 do roteiro; só ferramentas de desenvolvimento, o site continua sem build):
-
-- `npm run verificar` = `npm run tipos` + `npm run lint`. **O normal é terminar sem nenhuma linha de erro.**
-- `npm run tipos`: TypeScript lê os `.js` (`checkJs`, `tsconfig.json`) e acha nome de função trocado, chamada com argumentos
-  demais e valor de tipo errado. `js/tipos.d.ts` só afrouxa as propriedades de DOM mais usadas (o site não carrega esse arquivo).
-  Falsos alarmes conhecidos ficam com `// @ts-expect-error` e o motivo ao lado.
-- `npm run lint`: Biome (só verifica, não reformata). `biome.jsonc` explica cada regra desligada. Se aparecer um aviso
-  novo, é sinal real: corrija ou comente com `biome-ignore` e o motivo.
-- Os 6 módulos globais (`Rede`, `Mesa`, `Jogador`, `Efeitos`, `Poster`, `Som`) são `Object.freeze(...)`: o verificador só
-  acusa nome de propriedade errado em objeto fechado, e ninguém altera módulo depois de criado.
-
-Testes enxutos: `npm run test:quieto` (só falhas + placar) e `node tests/mestre.js --quieto --ate=7d` (para depois da seção).
-
-## Imagens no Storage (fase 5 do roteiro, migração `20261114_imagens_no_storage`)
-
-As imagens saíram das linhas do banco: a linha guarda só o **caminho** do arquivo no bucket privado `imagens`
-(até 300 KB, só WebP/JPEG/PNG). Para mostrar, o site pede uma **URL assinada** (vale 1 h, reaproveitada enquanto vale,
-então o navegador usa o cache). As regras ficam no banco (RLS em `storage.objects`), nunca no navegador:
-
-- `bestiario/<mestre>/<uuid>.webp`: retrato de criatura/NPC. Só o dono (com e-mail) envia, vê e apaga.
-- `mesas/<mesa>/<uuid>.webp`: imagem de pista. Só o mestre da mesa envia e apaga. O jogador **só consegue assinar** o
-  arquivo se existir um sussurro visível a ele apontando para ele (para ele ou "para todos"). Sussurro apagado = acabou.
-- **Revelar criatura copia** o retrato para a pasta da mesa (uma cópia por sussurro): apagar a pista não apaga o retrato
-  nem a pista dos outros. Trocar/tirar retrato, apagar sussurro, criatura ou mesa apaga o arquivo pela API
-  (o SQL não apaga arquivos: gatilho `storage.protect_objects_delete`). Se a API falhar, o arquivo fica órfão, sem quebrar nada.
-- Ajudantes no módulo `Rede` (`js/mestre.js`): `enviarImagem`, `copiarImagem`, `apagarImagens`, `apagarPasta`, `urlsDasImagens`.
-- CSP de `index.html` e `mestre.html`: `img-src` inclui `https://adkecwrxjmmzqxnmwips.supabase.co`.
-- **Transição:** a coluna base64 antiga (`imagem`) continua lida e aceita (a função `sussurrar` de 5 argumentos também,
-  para abas com o site antigo). Uma linha nunca tem as duas. Depois de migrar tudo, uma migração futura pode apagar as colunas.
-
-Ordem para publicar: (1) `node tools/migracao.js aplicar supabase/migrations/20261114_imagens_no_storage.sql --sim`
-(o site novo chama `sussurrar` com 6 argumentos: sem a migração, sussurrar falha); (2) push do site;
-(3) `node tools/migrar-imagens.js` (ensaio, só lê) e depois `node tools/migrar-imagens.js --sim`, que envia as imagens antigas
-e troca o base64 pelo caminho. O `--sim` precisa de `SUPABASE_SECRET_KEY` (`sb_secret_…`, painel > Project Settings >
-API Keys) **só** em variável do Windows (`setx`); ela passa por cima da RLS, por isso só esse script a usa. Idempotente:
-rodar de novo só pega o que faltou.
-
-## Configuração que falta no painel do Supabase
-
-Em **Authentication → URL Configuration**: Site URL e Redirect URLs =
-`https://p3dr006.github.io/lord-of-mysteries-rpg/` (e `.../mestre.html`). Sem isso, o link de confirmação
-do e-mail leva para o endereço errado. Confira também se "Confirm email" está ligado.
-
-### Limites contra abuso (migração `20261112`)
-
-- **Código de mesa errado:** 15 erros por hora por usuário; depois disso a entrada é bloqueada até passar uma hora.
-  O banco devolve *vazio* (e não erro) para código inexistente, porque um erro desfaria o registro da tentativa;
-  o site traduz o vazio em "Mesa não encontrada".
-- **Código sorteado** com `gen_random_uuid()` (criptográfico), 6 caracteres de um alfabeto de 32.
-- **Imagens:** o navegador do mestre reduz para WebP (até 1280 px; alvo de ~185 KB, descendo a qualidade só se precisar) e
-  o banco recusa acima de 300 mil caracteres. Redesenhar no canvas apaga os metadados (EXIF, GPS).
-- **Bestiário:** no máximo 100 criaturas por mestre (gatilho `bestiario_limite`).
-- Verificação com papéis reais: `supabase/verificacoes/20261112_endurece_codigo_e_imagens.sql`.
-
-### Anti-robô (Cloudflare Turnstile) — opcional, desligado por padrão
-
-O código já está pronto: com `CONFIG.captcha.chave` vazia (`js/config.js`) nada é pedido. Para ligar, **nesta ordem**
-(se o Supabase for ligado antes de o site enviar o token, o login para de funcionar, até o dos jogadores):
-1. Cloudflare (conta grátis) → **Turnstile → Add widget**: hostname `p3dr006.github.io`, modo **Managed**.
-2. Copie a **Site Key** (pública) para `captcha.chave` em `js/config.js` e publique o site.
-3. Só então, no Supabase: **Authentication → Attack Protection → Enable CAPTCHA**, provedor **Turnstile**, e cole a
-   **Secret Key** ali. A Secret Key **nunca** vai no código nem no chat.
-Para desligar: Supabase primeiro (desliga o CAPTCHA), depois esvazie `captcha.chave` e publique.
-
-Lembretes: o plano grátis não tem backup e **pausa após 1 semana sem uso** (reative no painel).
+As migrações ficam em `supabase/migrations/` (em ordem) e os cenários de verificação de cada uma em `supabase/verificacoes/`.
+Ferramentas, testes e o Storage de imagens: [DESENVOLVIMENTO.md](DESENVOLVIMENTO.md).
