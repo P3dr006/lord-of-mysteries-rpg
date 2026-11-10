@@ -75,7 +75,7 @@ const CLIENTE = `(() => {
 })();`;
 
 function criarServidor() {
-  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [], figuras: [], efeitos: [], encontros: [], disputas: [], cronica: [], bestiario: [], habilidades: [], arquivos: [], mesa_regras: [] };
+  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [], figuras: [], efeitos: [], encontros: [], disputas: [], cronica: [], bestiario: [], habilidades: [], arquivos: [], mesa_regras: [], fichas_mesa: [] };
   const naMesa = (u, mesa) => db.jogadores.some(j => j.mesa_id === mesa && j.user_id === u);
   const assinaturas = [];          // { id, uid, tabela, filtro, page }
   const entregue = {};             // uid -> [cada resposta entregue a esse usuário]
@@ -106,6 +106,7 @@ function criarServidor() {
     disputas: (u, r) => mestreDe(r.mesa_id) === u || (r.visivel && (r.a.id === u || r.b.id === u)),
     bestiario: (u, r) => r.dono === u && !anonimo(u),
     habilidades: (u, r) => mestreDe(r.mesa_id) === u || (r.user_id === u && naMesa(u, r.mesa_id)),
+    fichas_mesa: (u, r) => mestreDe(r.mesa_id) === u || (r.user_id === u && naMesa(u, r.mesa_id)),
   };
   function visao(u) {     // resultados_mestre (security_invoker: vale a RLS de quem consulta)
     return db.resultados.filter(r => VE.resultados(u, r)).map(r => {
@@ -130,10 +131,29 @@ function criarServidor() {
   const d20 = () => rolar(20);
   // igual a privado.regras_da_mesa / mod_calculado / ficha_do_servidor: o modificador sai da base + regras, nunca de ficha.mods
   const regrasDaMesa = mesa => { const r = db.mesa_regras.filter(x => x.mesa_id === mesa).sort((a, b) => b.versao - a.versao)[0]; return r ? { regras: r.regras, versao: r.versao } : { regras: Regras.LOTM, versao: 0 }; };
-  const modCalculado = (mesa, f, attr) => { try { return Regras.modificador(regrasDaMesa(mesa).regras, f, attr); } catch (e) { return 0; } };
-  const fichaDoServidor = (mesa, f) => {
-    if (!f || typeof f !== 'object' || Array.isArray(f)) return f;
-    try { const rg = regrasDaMesa(mesa), c = Regras.calcular(rg.regras, f), x = { ...f, attrs: c.attrs, mods: c.mods, maximos: c.maximos, regras_versao: rg.versao };
+  // igual a privado.regras_na_versao: 0 = lotm; versão sumida = a em vigor
+  const regrasNaVersao = (mesa, v) => { if (v === 0) return { regras: Regras.LOTM, versao: 0 }; const r = db.mesa_regras.find(x => x.mesa_id === mesa && x.versao === v); return r ? { regras: r.regras, versao: r.versao } : regrasDaMesa(mesa); };
+  const mesaDe = mesa => db.mesas.find(m => m.id === mesa) || {};
+  const fichaMesa = (mesa, u) => db.fichas_mesa.find(x => x.mesa_id === mesa && x.user_id === u);
+  // cada ficha na sua versão (só na mesa com ficha montada)
+  const modCalculado = (mesa, f, attr) => { try { const R = mesaDe(mesa).ficha_na_mesa && f && typeof f.regras_versao === 'number' ? regrasNaVersao(mesa, f.regras_versao).regras : regrasDaMesa(mesa).regras; return Regras.modificador(R, f, attr); } catch (e) { return 0; } };
+  // igual ao gatilho ficha_do_servidor (20261116): na mesa com ficha montada, base/Caminho/raça vêm da ficha aprovada
+  const fichaDoServidor = (mesa, f0, u) => {
+    if (!f0 || typeof f0 !== 'object' || Array.isArray(f0)) return f0;
+    let f = { ...f0 }, rg;
+    try {
+      if (mesaDe(mesa).ficha_na_mesa) {
+        if (!('do_site' in f)) f.do_site = { base: f.base || {}, caminhoId: f.caminhoId || '', racaId: f.racaId || '' };
+        const fm = fichaMesa(mesa, u);
+        if (fm && fm.estado === 'aprovada') { rg = regrasNaVersao(mesa, fm.regras_versao); Object.assign(f, { base: fm.base, caminhoId: fm.caminho_id || '', racaId: fm.raca_id || '' }); }
+        else { rg = regrasDaMesa(mesa); f.base = {}; }
+        f.ficha_estado = fm ? fm.estado : 'sem';
+      } else {
+        rg = regrasDaMesa(mesa);
+        if (f.do_site && typeof f.do_site === 'object') Object.assign(f, f.do_site);
+        delete f.do_site; delete f.ficha_estado;
+      }
+      const c = Regras.calcular(rg.regras, f), x = { ...f, attrs: c.attrs, mods: c.mods, maximos: c.maximos, regras_versao: rg.versao };
       for (const [id, k] of [['pv', 'pvMax'], ['san', 'sanMax'], ['esp', 'espMax']]) if (Object.hasOwn(c.maximos, id)) x[k] = c.maximos[id];
       return x;
     } catch (e) { return { ...f, attrs: {}, mods: {} }; }
@@ -152,6 +172,12 @@ function criarServidor() {
     if (tipo === 'figura') { const f = db.figuras.find(x => x.mesa_id === mesa && x.id === idL); if (!f) throw new Error('Figura não encontrada.'); const d = d20(), tem = !!attr && Object.hasOwn(f.mods || {}, attr), m = tem ? modDaFicha({ mods: f.mods }, attr) : f.bonus; return { tipo, id: idL, nome: f.nome, atributo: tem ? attr : null, dado: d, mod: m, total: d + m }; }
     throw new Error('Lado inválido.');
   }
+  const recalcular = (mesa, u) => db.jogadores.filter(j => j.mesa_id === mesa && (!u || j.user_id === u)).forEach(j => { j.ficha = fichaDoServidor(mesa, j.ficha, j.user_id); j.atualizado_em = new Date().toISOString(); avisar('jogadores', j); });
+  const fichaLivre = (mesa, u) => { const fm = fichaMesa(mesa, u); return !fm || fm.liberada || fm.estado === 'recusada'; };
+  const conferirFicha = (u, mesa) => !naMesa(u, mesa) ? erro('Entre na mesa primeiro.') : !mesaDe(mesa).ficha_na_mesa ? erro('Nesta mesa a ficha é feita no site.') : null;
+  const idOk = v => !v || /^[a-z]{2,20}$/.test(v);
+  // igual a privado.atributo_da_mesa: o atributo do teste tem de existir nas regras em vigor
+  const atributoOk = (mesa, at) => !at || regrasDaMesa(mesa).regras.atributos.some(x => x.id === at);
   const RPC = {
     propor_habilidade(u, a) {
       if (!naMesa(u, a.p_mesa)) return erro('Entre na mesa para propor uma habilidade.');
@@ -243,7 +269,64 @@ function criarServidor() {
     },
     estado_da_mesa(u, a) {
       if (!(naMesa(u, a.p_mesa) || mestreDe(a.p_mesa) === u)) return erro('Mesa inválida.');
-      return { data: { terror: !!db.mesas.find(m => m.id === a.p_mesa).terror }, error: null };
+      const m = mesaDe(a.p_mesa); return { data: { terror: !!m.terror, ficha_na_mesa: !!m.ficha_na_mesa, aprovar_fichas: !!m.aprovar_fichas }, error: null };
+    },
+    // ---- ficha montada na mesa (20261116) ----
+    rolar_ficha(u, a) {
+      const e = conferirFicha(u, a.p_mesa); if (e) return e;
+      if (!fichaLivre(a.p_mesa, u)) return erro('Seus atributos já foram rolados. Para rolar de novo, peça ao mestre.');
+      const rg = regrasDaMesa(a.p_mesa), g = rg.regras.geracao || {}, met = g.metodo || '4d6-menor', mn = g.min ?? 3, mx = g.max ?? 18, base = {}, rolagens = {};
+      for (const at of rg.regras.atributos) {
+        const d = Array.from({ length: met === '3d6' ? 3 : 4 }, () => rolar(6)), s = d.reduce((t, v) => t + v, 0) - (d.length === 4 ? Math.min(...d) : 0);
+        base[at.id] = Math.max(mn, Math.min(mx, s)); rolagens[at.id] = d;
+      }
+      const antes = fichaMesa(a.p_mesa, u), agora = new Date().toISOString();
+      const fm = Object.assign(antes || { mesa_id: a.p_mesa, user_id: u, rolagens_feitas: 0, criado_em: agora }, { base, rolagens, caminho_id: null, raca_id: null, origem: 'servidor', estado: 'rolada', regras_versao: rg.versao, liberada: false, resposta: null, atualizado_em: agora });
+      fm.rolagens_feitas++; if (!antes) db.fichas_mesa.push(fm);
+      avisar('fichas_mesa', fm); recalcular(a.p_mesa, u);
+      return { data: { base, rolagens, metodo: met, regras_versao: rg.versao }, error: null };
+    },
+    enviar_ficha(u, a) {
+      const e = conferirFicha(u, a.p_mesa); if (e) return e;
+      if (!idOk(a.p_caminho) || !idOk(a.p_raca)) return erro('Caminho ou raça inválidos.');
+      const fm = fichaMesa(a.p_mesa, u); if (!fm || fm.estado !== 'rolada' || fm.origem !== 'servidor') return erro('Role os atributos antes de enviar a ficha.');
+      Object.assign(fm, { caminho_id: a.p_caminho || null, raca_id: a.p_raca || null, estado: mesaDe(a.p_mesa).aprovar_fichas ? 'pendente' : 'aprovada', atualizado_em: new Date().toISOString() });
+      avisar('fichas_mesa', fm); recalcular(a.p_mesa, u); return { data: fm.estado, error: null };
+    },
+    converter_ficha(u, a) {
+      const e = conferirFicha(u, a.p_mesa); if (e) return e;
+      if (!fichaLivre(a.p_mesa, u)) return erro('Sua ficha desta mesa já existe. Para trocar, peça ao mestre.');
+      if (!idOk(a.p_caminho) || !idOk(a.p_raca)) return erro('Caminho ou raça inválidos.');
+      const rg = regrasDaMesa(a.p_mesa), g = rg.regras.geracao || {}, mn = g.min ?? 3, mx = g.max ?? 18, base = {}, b = a.p_base && typeof a.p_base === 'object' ? a.p_base : {};
+      for (const at of rg.regras.atributos) { const v = b[at.id]; if (!Number.isInteger(v) || v < mn || v > mx) return erro(`Os atributos da sua ficha não batem com as regras desta mesa (${at.nome}). Monte uma ficha nova.`); base[at.id] = v; }
+      const antes = fichaMesa(a.p_mesa, u), agora = new Date().toISOString();
+      const fm = Object.assign(antes || { mesa_id: a.p_mesa, user_id: u, rolagens_feitas: 0, criado_em: agora }, { base, rolagens: {}, caminho_id: a.p_caminho || null, raca_id: a.p_raca || null, origem: 'convertida', estado: 'pendente', regras_versao: rg.versao, liberada: false, resposta: null, atualizado_em: agora });
+      if (!antes) db.fichas_mesa.push(fm);
+      avisar('fichas_mesa', fm); recalcular(a.p_mesa, u); return { data: 'pendente', error: null };
+    },
+    configurar_mesa(u, a) {
+      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre configura a mesa.');
+      const m = mesaDe(a.p_mesa); if (a.p_ficha_na_mesa != null) m.ficha_na_mesa = !!a.p_ficha_na_mesa; if (a.p_aprovar_fichas != null) m.aprovar_fichas = !!a.p_aprovar_fichas;
+      recalcular(a.p_mesa, null); return { data: null, error: null };
+    },
+    julgar_ficha(u, a) {
+      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre aprova fichas.');
+      const fm = fichaMesa(a.p_mesa, a.p_user); if (!fm || fm.estado !== 'pendente') return erro('Esta ficha não está esperando aprovação.');
+      Object.assign(fm, { estado: a.p_aprovar ? 'aprovada' : 'recusada', resposta: String(a.p_resposta || '').trim().slice(0, 300) || null, atualizado_em: new Date().toISOString() });
+      avisar('fichas_mesa', fm); recalcular(a.p_mesa, a.p_user); return { data: null, error: null };
+    },
+    liberar_ficha(u, a) {
+      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre libera uma nova ficha.');
+      const fm = fichaMesa(a.p_mesa, a.p_user); if (!fm) return erro('Este jogador ainda não tem ficha nesta mesa.');
+      fm.liberada = true; fm.atualizado_em = new Date().toISOString(); avisar('fichas_mesa', fm); return { data: null, error: null };
+    },
+    migrar_ficha(u, a) {
+      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre migra fichas.');
+      const fm = fichaMesa(a.p_mesa, a.p_user); if (!fm) return erro('Este jogador ainda não tem ficha nesta mesa.');
+      const rg = regrasDaMesa(a.p_mesa), g = rg.regras.geracao || {}, mn = g.min ?? 3, mx = g.max ?? 18;
+      for (const at of rg.regras.atributos) { const v = fm.base[at.id]; if (!Number.isInteger(v) || v < mn || v > mx) return erro(`A versão ${rg.versao} tem atributos que esta ficha não tem (${at.nome}): libere o jogador para refazer a ficha.`); }
+      fm.regras_versao = rg.versao; fm.atualizado_em = new Date().toISOString(); avisar('fichas_mesa', fm); recalcular(a.p_mesa, a.p_user);
+      return { data: rg.versao, error: null };
     },
     sussurrar(u, a) {
       if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre sussurra.');
@@ -267,7 +350,7 @@ function criarServidor() {
     criar_mesa(u, a) {
       if (!u || anonimo(u)) return erro('Entre com e-mail para criar uma mesa.');
       const AL = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c; do { c = Array.from({ length: 6 }, () => AL[Math.floor(Math.random() * AL.length)]).join(''); } while (db.mesas.some(m => m.codigo === c));
-      db.mesas.push({ id: id('mesa'), codigo: c, nome: String(a.p_nome).trim().slice(0, 60), mestre_id: u, criada_em: new Date().toISOString(), terror: false });
+      db.mesas.push({ id: id('mesa'), codigo: c, nome: String(a.p_nome).trim().slice(0, 60), mestre_id: u, criada_em: new Date().toISOString(), terror: false, ficha_na_mesa: false, aprovar_fichas: false });
       return { data: c, error: null };
     },
     entrar_na_mesa(u, a) {
@@ -277,12 +360,13 @@ function criarServidor() {
       if (db.tentativas.filter(t => t.u === u && agora - t.t < 3600e3).length >= 15) return erro('Muitas tentativas com código errado. Espere um pouco e tente de novo.');
       const m = db.mesas.find(x => x.codigo === String(a.p_codigo).trim().toUpperCase()); if (!m) { db.tentativas.push({ u, t: agora }); return { data: null, error: null }; }
       let j = db.jogadores.find(x => x.mesa_id === m.id && x.user_id === u);
-      if (j) Object.assign(j, { nome: a.p_nome, ficha: fichaDoServidor(m.id, a.p_ficha || {}) });
-      else db.jogadores.push(j = { mesa_id: m.id, user_id: u, nome: String(a.p_nome).trim().slice(0, 40), ficha: fichaDoServidor(m.id, a.p_ficha || {}), atualizado_em: new Date().toISOString() });
+      if (j) Object.assign(j, { nome: a.p_nome, ficha: fichaDoServidor(m.id, a.p_ficha || {}, u) });
+      else db.jogadores.push(j = { mesa_id: m.id, user_id: u, nome: String(a.p_nome).trim().slice(0, 40), ficha: fichaDoServidor(m.id, a.p_ficha || {}, u), atualizado_em: new Date().toISOString() });
       avisar('jogadores', j); return { data: m.id, error: null };
     },
     pedir_teste(u, a) {
       if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre pede testes.');
+      if (!atributoOk(a.p_mesa, a.p_atributo)) return erro('Este atributo não existe nas regras da mesa.');
       const p = { id: id('ped'), mesa_id: a.p_mesa, para: a.p_para, tipo: 'aberto', rotulo: a.p_rotulo, atributo: a.p_atributo || null, lados: a.p_lados || 20, estado: 'pendente', criado_em: new Date().toISOString() };
       db.pedidos.push(p); db.segredos_pedido.push({ pedido_id: p.id, mesa_id: a.p_mesa, dificuldade: a.p_dificuldade });
       avisar('pedidos', p); return { data: p.id, error: null };
@@ -300,6 +384,7 @@ function criarServidor() {
     },
     rolar_secreto(u, a) {
       if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre rola testes secretos.');
+      if (!atributoOk(a.p_mesa, a.p_atributo)) return erro('Este atributo não existe nas regras da mesa.');
       const j = db.jogadores.find(x => x.mesa_id === a.p_mesa && x.user_id === a.p_para); if (!j) return erro('Jogador não encontrado.');
       const l = a.p_lados || 20, mo = modJog(a.p_mesa, a.p_para, j.ficha, a.p_atributo), mv = modJog(a.p_mesa, a.p_para, j.ficha, a.p_atributo, true), v = rolar(l);
       const p = { id: id('ped'), mesa_id: a.p_mesa, para: a.p_para, tipo: 'secreto', rotulo: a.p_rotulo, atributo: a.p_atributo || null, lados: l, estado: 'feito', criado_em: new Date().toISOString() };
@@ -423,7 +508,7 @@ function criarServidor() {
       if (versao > 100) return erro('No máximo 100 versões de regras por mesa.');
       const e = Regras.validar(v.regras)[0]; if (e) return erro(`Regras inválidas (${e.campo}): ${e.erro}`);
       const linha = { mesa_id: v.mesa_id, versao, regras: JSON.parse(JSON.stringify(v.regras)), criado_em: new Date().toISOString() };
-      db.mesa_regras.push(linha); return { data: q.devolver ? [{ ...linha }] : null, error: null };
+      db.mesa_regras.push(linha); avisar('mesa_regras', linha); return { data: q.devolver ? [{ ...linha }] : null, error: null };
     }
     if (q.op === 'insert' && (q.tabela === 'figuras' || q.tabela === 'cronica')) {   // escritas diretas só do mestre
       const v = q.valores; if (mestreDe(v.mesa_id) !== u) return erro(`new row violates row-level security policy for table "${q.tabela}"`);
@@ -454,7 +539,7 @@ function criarServidor() {
       if (q.tabela === 'bestiario') { const ch = validarBestiario(q.valores, true, u); if (ch) return erro('new row violates check constraint "bestiario_' + ch + '_check"'); }
       if (q.tabela === 'habilidades' && 'estado' in q.valores && !['pendente', 'aprovada', 'rejeitada'].includes(q.valores.estado)) return erro('new row violates check constraint "habilidades_estado_check"');
       const pode = linhas.filter(r => q.tabela === 'jogadores' ? r.user_id === u : q.tabela === 'bestiario' ? r.dono === u : mestreDe(r.mesa_id) === u);
-      pode.forEach(r => { for (const k of COLS) if (k in q.valores) r[k] = q.valores[k]; if (q.tabela === 'jogadores' && 'ficha' in q.valores) r.ficha = fichaDoServidor(r.mesa_id, r.ficha); r.atualizado_em = new Date().toISOString(); avisar(q.tabela, r); });
+      pode.forEach(r => { for (const k of COLS) if (k in q.valores) r[k] = q.valores[k]; if (q.tabela === 'jogadores' && 'ficha' in q.valores) r.ficha = fichaDoServidor(r.mesa_id, r.ficha, r.user_id); r.atualizado_em = new Date().toISOString(); avisar(q.tabela, r); });
       return { data: q.devolver ? pode.map(r => ({ ...r })) : null, error: null };
     }
     if (q.op === 'delete') {

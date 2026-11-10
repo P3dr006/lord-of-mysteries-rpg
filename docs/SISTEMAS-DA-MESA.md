@@ -115,3 +115,11 @@ novos no Supabase falso, migração verificada com papéis reais numa transaçã
    mana/fúria/energia na primeira versão. Decidir antes da Fase C.
 5. **Ordem:** **Fase A primeiro.** Motor + predefinição LotM idêntica ao de hoje + servidor calculando os modificadores
    (fecha a brecha do `mods`). Uma sessão própria, partindo deste arquivo.
+
+## Fase B2 (2026-11-09): decisões do Pedro
+
+1. O assistente aparece só quando o mestre **liga "Ficha montada na mesa"** no Grimório; desligada, vale a ficha do site.
+2. Os atributos são rolados **pelo servidor** e só rolam de novo se o mestre **liberar** (ou **recusar** a ficha).
+3. Ficha **trazida do site** (convertida) **sempre** espera a aprovação, mesmo com a aprovação desligada.
+4. Ficha **pendente** joga sem modificador; o veredito chega com o selo de cera.
+5. **Cada ficha na sua versão** das regras (nas mesas com ficha na mesa) até o mestre migrar; migrar só se os atributos continuam valendo.

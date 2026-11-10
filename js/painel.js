@@ -120,7 +120,7 @@
     pararTempoReal(); S.mesa = null;
     tela('<p class="m-carregando">Lendo suas mesas…</p>');
     let mesas = [];
-    try { mesas = (await (await Rede.tabela('mestre', 'mesas')).select('id,codigo,nome,criada_em,terror').order('criada_em', { ascending: false })).data || []; }
+    try { mesas = (await (await Rede.tabela('mestre', 'mesas')).select('id,codigo,nome,criada_em,terror,ficha_na_mesa,aprovar_fichas').order('criada_em', { ascending: false })).data || []; }
     catch (e) { return semRede(e); }
     tela(`<section class="m-cartao">
       <h2>Suas mesas</h2>
@@ -141,7 +141,7 @@
       const nome = $('#m-nome-mesa').value.trim(); if (!nome) return erroEm('#m-erro-mesa', new Rede.ErroRede('Dê um nome para a mesa.'));
       try {
         const codigo = await Rede.rpc('mestre', 'criar_mesa', { p_nome: nome });
-        const r = await (await Rede.tabela('mestre', 'mesas')).select('id,codigo,nome,criada_em,terror').eq('codigo', codigo);
+        const r = await (await Rede.tabela('mestre', 'mesas')).select('id,codigo,nome,criada_em,terror,ficha_na_mesa,aprovar_fichas').eq('codigo', codigo);
         abrirMesa((r.data || [])[0] || { codigo, nome }, true);
       } catch (e) { erroEm('#m-erro-mesa', e); }
     }); });
@@ -150,20 +150,21 @@
   // ---------- painel da mesa ----------
   async function abrirMesa(m, nova = false) {
     if (!m || !m.id) return listaMesas();
-    S.mesa = m; S.ultimoSecreto = null; S.habs = []; S.habsCarregadas = false; S.habModo = {}; S.keep = {};
+    S.mesa = m; S.fichas = []; S.regrasV = null; S.fichasCarregadas = false; S.ultimoSecreto = null; S.habs = []; S.habsCarregadas = false; S.habModo = {}; S.keep = {};
     tela(`<div class="m-painel">
       <section class="m-cartao m-cab">
         <button type="button" class="link-remover m-voltar" id="m-voltar">← Suas mesas</button>
         <h2 class="m-nome">${esc(m.nome)}</h2>
         <button type="button" class="m-terror ${m.terror ? 'on' : ''}" id="m-terror" aria-pressed="${m.terror ? 'true' : 'false'}">
           <span class="m-terror-olho" aria-hidden="true"></span><span class="m-terror-txt"><small>Modo Terror da mesa</small><b>${m.terror ? 'Ligado' : 'Desligado'}</b></span></button>
+        ${cfgHTML(m)}
         <div class="m-codigo-wrap"><span class="lbl">Código para os jogadores</span>
           <div class="m-codigo" id="m-codigo"><span class="sr-only">Código da mesa: ${esc(m.codigo.split('').join(' '))}</span>${m.codigo.split('').map((c, i) => `<span style="--i:${i}" aria-hidden="true">${esc(c)}</span>`).join('')}</div>
           <button type="button" class="ghost m-copiar" id="m-copiar" data-ic="copia">Copiar código</button></div>
         ${nova ? '<p class="m-ok m-dica">Mesa criada. Os jogadores abrem a Mesa do Destino, aba Testes, e digitam este código.</p>' : ''}
       </section>
       <section class="m-roda" id="m-roda" aria-label="Roda do Destino" hidden></section>
-      <section class="m-cartao m-jog" aria-labelledby="t-jog"><h2 id="t-jog">Jogadores <small id="m-ao-vivo" class="m-vivo">ao vivo</small></h2><div id="m-jogadores" class="m-jogadores"></div><div id="m-propostas" class="hp-fila" aria-label="Pedidos de poder dos jogadores" hidden></div></section>
+      <section class="m-cartao m-jog" aria-labelledby="t-jog"><h2 id="t-jog">Jogadores <small id="m-ao-vivo" class="m-vivo">ao vivo</small></h2><div id="m-jogadores" class="m-jogadores"></div><div id="m-propostas" class="hp-fila" aria-label="Pedidos de poder dos jogadores" hidden></div><div id="m-fichas" class="hp-fila fmp-fila" aria-label="Fichas esperando aprovação" hidden></div><p class="m-erro" id="m-erro-fichas" role="alert" hidden></p></section>
       <div class="m-lado">
         <nav class="m-abas" role="tablist" aria-label="Seções do grimório"><button type="button" role="tab" class="m-aba on" id="aba-acoes" data-aba="acoes" aria-controls="p-acoes" aria-selected="true" tabindex="0">Ações</button><button type="button" role="tab" class="m-aba" id="aba-cena" data-aba="cena" aria-controls="p-cena" aria-selected="false" tabindex="-1">Cena</button><button type="button" role="tab" class="m-aba" id="aba-bestiario" data-aba="bestiario" aria-controls="p-bestiario" aria-selected="false" tabindex="-1">Bestiário</button><button type="button" role="tab" class="m-aba" id="aba-segredos" data-aba="segredos" aria-controls="p-segredos" aria-selected="false" tabindex="-1">Segredos</button><button type="button" role="tab" class="m-aba" id="aba-cronica" data-aba="cronica" aria-controls="p-cronica" aria-selected="false" tabindex="-1">Crônica</button><button type="button" role="tab" class="m-aba" id="aba-dados" data-aba="dados" aria-controls="p-dados" aria-selected="false" tabindex="-1">Dados</button><button type="button" role="tab" class="m-aba" id="aba-regras" data-aba="regras" aria-controls="p-regras" aria-selected="false" tabindex="-1">Regras</button></nav>
         <div class="m-aba-p" role="tabpanel" id="p-acoes" aria-labelledby="aba-acoes" data-p="acoes">
@@ -171,7 +172,7 @@
         <form id="m-form-teste" class="m-form" novalidate>
           <div class="m-grade">
             <div class="m-campo"><label for="t-para">Para</label><select id="t-para"></select></div>
-            <div class="m-campo"><label for="t-attr">Atributo</label><select id="t-attr"><option value="">Nenhum (só o dado)</option>${ATTRS.map(a => `<option value="${a.key}">${a.nome}</option>`).join('')}</select></div>
+            <div class="m-campo"><label for="t-attr">Atributo</label><select id="t-attr">${opcoesTeste()}</select></div>
             <div class="m-campo m-largo"><label for="t-rotulo">O que é testado</label><input type="text" id="t-rotulo" maxlength="80" placeholder="Ex.: Perceber o vulto na neblina" autocomplete="off"></div>
             <div class="m-campo"><label for="t-lados">Dado</label><select id="t-lados">${LADOS.map(l => `<option value="${l}" ${l === 20 ? 'selected' : ''}>${l === 100 ? 'd%' : 'd' + l}</option>`).join('')}</select></div>
             <div class="m-campo"><label for="t-dif">Dificuldade <i>(só você vê)</i></label><input type="number" id="t-dif" min="1" max="200" value="12" inputmode="numeric"></div>
@@ -243,13 +244,14 @@ ${EditorRegras.secao()}
     </div>`);
     $('#m-voltar').addEventListener('click', listaMesas);
     $('#m-copiar').addEventListener('click', e => { const b = e.currentTarget; (navigator.clipboard ? navigator.clipboard.writeText(m.codigo) : Promise.reject()).then(() => { b.lastChild.textContent = 'Copiado!'; anunciar('Código copiado'); }).catch(() => { b.lastChild.textContent = m.codigo; }); });
-    $('#t-attr').addEventListener('change', () => { const r = $('#t-rotulo'), a = $('#t-attr').value; if (!r.value.trim() || r.dataset.auto) { r.value = a ? 'Teste de ' + NOME_ATTR[a] : ''; r.dataset.auto = a ? '1' : ''; } });
+    $('#t-attr').addEventListener('change', () => { const r = $('#t-rotulo'), a = $('#t-attr').value; if (!r.value.trim() || r.dataset.auto) { r.value = a ? 'Teste de ' + nomeTeste(a) : ''; r.dataset.auto = a ? '1' : ''; } });
     $('#t-rotulo').addEventListener('input', e => { e.target.dataset.auto = ''; });
     $('#m-form-teste').addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#t-aberto'), () => testar('aberto')); });
     $('#t-secreto').addEventListener('click', e => ocupado(e.currentTarget, () => testar('secreto')));
     ligarFormSussurro(); ligarControle(); ligarAbas(); ligarDuelo(); ligarFiguras(); ligarCronica(); ligarDadosMestre(); ligarBestiario();
-    EditorRegras.ligar({ raiz: $('#p-regras'), mesaId: m.id, confirmar, anunciar, jogadores: () => S.jogadores });
-    await Promise.all([carregarJogadores(), carregarResultados(), carregarSussurros(), carregarOrdens(), carregarNotas(), carregarFiguras(), carregarEncontro(), carregarDisputas(), carregarCronica(), carregarBestiario(), carregarHabs(), carregarEfeitos()]);
+    EditorRegras.ligar({ raiz: $('#p-regras'), mesaId: m.id, confirmar, anunciar, jogadores: () => S.jogadores, fichaNaMesa: () => !!(S.mesa && S.mesa.ficha_na_mesa), aoSalvar: () => carregarFichasMesa() });
+    ligarCfg();
+    await Promise.all([carregarJogadores(), carregarResultados(), carregarSussurros(), carregarOrdens(), carregarNotas(), carregarFiguras(), carregarEncontro(), carregarDisputas(), carregarCronica(), carregarBestiario(), carregarHabs(), carregarEfeitos(), carregarFichasMesa()]);
     ouvirMesa();
   }
 
@@ -319,6 +321,7 @@ ${EditorRegras.secao()}
         <span class="m-cj-nota" title="Você tem uma nota secreta sobre este jogador" ${S.notas && S.notas[j.user_id] && S.notas[j.user_id].texto.trim() ? '' : 'hidden'}>✎ nota secreta</span>
         ${resumoEfeitos(j.user_id)}
         ${pendentesDe(j.user_id).length ? `<span class="m-cj-prop" title="Habilidades esperando a sua decisão">✦ ${pendentesDe(j.user_id).length} ${pendentesDe(j.user_id).length === 1 ? 'proposta' : 'propostas'}</span>` : ''}
+        ${fichaLinha(j.user_id)}
         <button type="button" class="ghost m-cj-ver" data-u="${esc(j.user_id)}">Ver ficha <span class="sr-only">de ${esc(j.nome)}</span></button></footer>
     </article>`;
   }
@@ -327,6 +330,9 @@ ${EditorRegras.secao()}
     const c = $('#m-jogadores'); if (!c) return;
     c.innerHTML = S.jogadores.length ? S.jogadores.map(cartaJogador).join('') : `<p class="hint">Ninguém entrou ainda. Passe o código <b>${esc(S.mesa.codigo)}</b> para os jogadores.</p>`;
     c.querySelectorAll('.m-cj-ver').forEach(b => b.addEventListener('click', () => abrirFicha(b.dataset.u, b)));
+    c.querySelectorAll('.m-fm-liberar').forEach(b => b.addEventListener('click', () => liberarFicha(b)));
+    c.querySelectorAll('.m-fm-migrar').forEach(b => b.addEventListener('click', () => migrarFicha(b)));
+    desenharFichasMesa();
     EditorRegras.jogadoresMudaram();
     if (S.fichaAberta) desenharFicha();
     const sel = $('#t-para'); if (sel) {
@@ -1307,6 +1313,114 @@ ${EditorRegras.secao()}
     if (idFoco) { const el = document.getElementById(idFoco); if (el) el.focus({ preventScroll: true }); }
   }
   function redesenharHabs() { desenharPropostas(); if (S.fichaAberta) desenharFicha(); }
+  // ---------- ficha montada na mesa (Fase B2): configurar, aprovar/recusar, liberar nova rolagem, migrar de versão ----------
+  const vigorTeste = () => (S.regrasV && S.regrasV[0] ? S.regrasV[0].regras : Regras.LOTM);
+  const versaoEmVigor = () => (S.regrasV && S.regrasV[0] ? S.regrasV[0].versao : 0);
+  const regrasDaVersao = v => (v === 0 ? Regras.LOTM : ((S.regrasV || []).find(x => x.versao === v) || {}).regras || vigorTeste());
+  function nomeTeste(id) { const a = vigorTeste().atributos.find(x => x.id === id); return a ? a.nome : NOME_ATTR[id] || id; }
+  const opcoesTeste = () => '<option value="">Nenhum (só o dado)</option>' + vigorTeste().atributos.map(a => `<option value="${esc(a.id)}">${esc(a.nome)}</option>`).join('');
+  const fichaMesaDe = u => (S.fichas || []).find(f => f.user_id === u);
+  function cfgHTML(m) {
+    const chave = (id, on, rot, dis) => `<button type="button" class="fm-b m-chave ${on ? 'on' : ''}" id="${id}" aria-pressed="${on}" ${dis ? 'disabled' : ''}><span class="m-chave-tr" aria-hidden="true"><i></i></span><span class="m-chave-txt"><small>${rot}</small><b>${on ? 'Ligada' : 'Desligada'}</b></span></button>`;
+    return `<div class="m-cfg" id="m-cfg" role="group" aria-label="Fichas desta mesa">${chave('m-cfg-ficha', !!m.ficha_na_mesa, 'Ficha montada na mesa')}${chave('m-cfg-aprovar', !!m.aprovar_fichas, 'Aprovar cada ficha', !m.ficha_na_mesa)}
+      <small class="m-cfg-dica">${m.ficha_na_mesa ? `Os jogadores montam a ficha aqui, com dados rolados pelo servidor${m.aprovar_fichas ? ', e você aprova cada uma' : ''}.` : 'Desligada: cada jogador usa a ficha do site, como sempre.'}</small></div>`;
+  }
+  function ligarCfg() {
+    const mudar = (b, campo) => ocupado(b, async () => {
+      const novo = !S.mesa[campo];
+      if (campo === 'ficha_na_mesa' && novo && S.jogadores.length && !(await confirmar({ titulo: 'Montar as fichas na mesa?', texto: 'Cada jogador monta (ou traz) a ficha aqui, com dados rolados pelo servidor. Até a ficha dele valer, os testes dele vão sem modificador.', botao: 'Ligar' }))) return;
+      try {
+        await Rede.rpc('mestre', 'configurar_mesa', { p_mesa: S.mesa.id, p_ficha_na_mesa: campo === 'ficha_na_mesa' ? novo : null, p_aprovar_fichas: campo === 'aprovar_fichas' ? novo : null });
+        S.mesa[campo] = novo;
+        $('#m-cfg').outerHTML = cfgHTML(S.mesa); ligarCfg(); const nb = $('#' + b.id); if (nb) nb.focus();
+        anunciar(campo === 'ficha_na_mesa' ? (novo ? 'Ficha montada na mesa ligada' : 'Ficha montada na mesa desligada: vale a ficha do site') : (novo ? 'Cada ficha nova espera a sua aprovação' : 'Fichas novas valem sem aprovação'));
+        carregarJogadores(); carregarFichasMesa();
+      } catch (er) { erroEm('#m-erro-fichas', er); }
+    });
+    $('#m-cfg-ficha').addEventListener('click', e => mudar(e.currentTarget, 'ficha_na_mesa'));
+    $('#m-cfg-aprovar').addEventListener('click', e => mudar(e.currentTarget, 'aprovar_fichas'));
+  }
+  async function carregarFichasMesa() {
+    if (!S.mesa) return;
+    try {
+      const [f, r] = await Promise.all([
+        (await Rede.tabela('mestre', 'fichas_mesa')).select('*').eq('mesa_id', S.mesa.id),
+        (await Rede.tabela('mestre', 'mesa_regras')).select('versao,regras').eq('mesa_id', S.mesa.id).order('versao', { ascending: false }).limit(100),
+      ]);
+      if (f.error || r.error) throw f.error || r.error;
+      const antes = new Set((S.fichas || []).filter(x => x.estado === 'pendente').map(x => x.user_id));
+      S.fichas = f.data || []; S.regrasV = r.data || [];
+      const novas = S.fichas.filter(x => x.estado === 'pendente' && !antes.has(x.user_id));
+      if (novas.length && S.fichasCarregadas) { anunciar(`${nomeDe(novas[0].user_id)} mandou a ficha para você aprovar`); const c = $('#m-fichas'); if (c) { c.classList.remove('chegou'); void c.offsetWidth; c.classList.add('chegou'); } }
+      S.fichasCarregadas = true;
+    } catch (e) { return; }
+    const s = $('#t-attr'); if (s) { const v = s.value; s.innerHTML = opcoesTeste(); s.value = [...s.options].some(o => o.value === v) ? v : ''; }
+    desenharJogadores();
+  }
+  function fichaPendenteHTML(fm) {
+    const j = S.jogadores.find(x => x.user_id === fm.user_id) || {}, R = regrasDaVersao(fm.regras_versao), k = 'fmp-' + fm.user_id;
+    const seq = num(obj(j.ficha).seq, 0, 9), cam = typeof caminhoPorId === 'function' && fm.caminho_id ? caminhoPorId(fm.caminho_id) : null;
+    const rc = typeof RACAS !== 'undefined' && fm.raca_id ? RACAS.find(x => x.id === fm.raca_id) : null;
+    let c; try { c = Regras.calcular(R, { base: fm.base, caminhoId: fm.caminho_id || '', racaId: fm.raca_id || '', seq: seq == null ? 9 : seq }); } catch (e) { c = { attrs: {}, mods: {}, maximos: {} }; }
+    return `<article class="fmp ${fm.origem === 'convertida' ? 'conv' : ''}" data-u="${esc(fm.user_id)}">
+      <header class="fmp-cab"><span class="fmp-selo" aria-hidden="true">${cam ? `<img src="img/sigilos/${esc(cam.id)}.webp" alt="">` : ''}</span><div><b>${esc(j.nome || 'Jogador')}</b>
+        <small>${fm.origem === 'convertida' ? 'Trazida do site: dados rolados no navegador' : `Dados rolados pelo servidor${fm.rolagens_feitas > 1 ? ` (${fm.rolagens_feitas}ª rolagem)` : ''}`}</small>
+        <small>${cam ? `Caminho ${esc(cam.nome)}` : 'Sem Caminho'} · ${rc ? `${esc(rc.icone)} ${esc(rc.nome)}` : 'sem raça'} · regras v${fm.regras_versao}</small></div></header>
+      <ul class="fmp-ats" aria-label="Atributos">${R.atributos.map(a => `<li title="${esc(a.nome)}"><span>${esc(a.abrev)}</span><b>${fm.base[a.id] ?? '—'}</b><em>${c.mods[a.id] == null ? '' : sinal(c.mods[a.id])}</em></li>`).join('')}</ul>
+      ${(R.recursos || []).length ? `<p class="fmp-rec">${R.recursos.map(r => `<span style="--rc:${corOk(r.cor)}">${esc(r.nome)} <b>${c.maximos[r.id] ?? '—'}</b></span>`).join('')}</p>` : ''}
+      <label class="sr-only" for="${k}-r">Recado para ${esc(j.nome || 'o jogador')}</label>
+      <input type="text" id="${k}-r" class="fmp-recado" maxlength="300" placeholder="Recado ao jogador (opcional)" autocomplete="off" value="${esc((S.recadoFicha || {})[fm.user_id] || '')}">
+      <div class="fmp-ac"><button type="button" class="primary fmp-ok" id="${k}-ok">Aprovar</button><button type="button" class="ghost fmp-nao" id="${k}-nao">Recusar</button></div>
+      <p class="m-erro fmp-erro" role="alert" hidden></p></article>`;
+  }
+  function desenharFichasMesa() {
+    const c = $('#m-fichas'); if (!c) return;
+    const ps = S.mesa && S.mesa.ficha_na_mesa ? (S.fichas || []).filter(f => f.estado === 'pendente' && S.jogadores.some(j => j.user_id === f.user_id)) : [];
+    const idFoco = c.contains(document.activeElement) ? document.activeElement.id : '';
+    c.hidden = !ps.length;
+    c.innerHTML = ps.length ? `<h3 class="hp-tit"><span>Fichas para aprovar</span><b aria-label="${ps.length} esperando">${ps.length}</b></h3><p class="hint hp-dica">Confira os dados e a origem; recusar deixa o jogador rolar de novo.</p>${ps.map(fichaPendenteHTML).join('')}` : '';
+    S.recadoFicha = S.recadoFicha || {};
+    c.querySelectorAll('.fmp').forEach(el => {
+      const u = el.dataset.u, campo = el.querySelector('.fmp-recado');
+      campo.addEventListener('input', () => { S.recadoFicha[u] = campo.value; });
+      const julgar = (b, ok) => ocupado(b, async () => {
+        try {
+          await Rede.rpc('mestre', 'julgar_ficha', { p_mesa: S.mesa.id, p_user: u, p_aprovar: ok, p_resposta: campo.value.trim().slice(0, 300) });
+          delete S.recadoFicha[u]; anunciar(ok ? `Ficha de ${nomeDe(u)} aprovada` : `Ficha de ${nomeDe(u)} recusada: pode rolar de novo`);
+          await carregarFichasMesa();
+          const prox = $('#m-fichas .fmp-ok') || $(`.m-carta-j[data-u="${CSS.escape(u)}"] .m-cj-ver`); if (prox) prox.focus();
+        } catch (er) { const e = el.querySelector('.fmp-erro'); e.textContent = Rede.mensagem(er); e.hidden = false; }
+      });
+      el.querySelector('.fmp-ok').addEventListener('click', e => julgar(e.currentTarget, true));
+      el.querySelector('.fmp-nao').addEventListener('click', e => julgar(e.currentTarget, false));
+    });
+    if (idFoco) { const el = document.getElementById(idFoco); if (el) el.focus({ preventScroll: true }); }
+  }
+  function fichaLinha(u) {
+    if (!S.mesa || !S.mesa.ficha_na_mesa) return '';
+    const fm = fichaMesaDe(u), vv = versaoEmVigor();
+    const EST = { rolada: ['rolando', 'Montando a ficha'], pendente: ['espera', 'Ficha esperando você'], aprovada: ['ok', 'Ficha da mesa valendo'], recusada: ['nao', 'Ficha recusada'] };
+    const [cls, rot] = fm ? EST[fm.estado] || ['', fm.estado] : ['sem', 'Sem ficha da mesa'];
+    const velha = !!fm && fm.estado === 'aprovada' && fm.regras_versao !== vv;
+    return `<span class="m-cj-fm ${cls}">${rot}${fm && fm.liberada ? ' · nova liberada' : ''}${velha ? ` · regras v${fm.regras_versao}` : ''}</span>`
+      + (velha ? `<button type="button" class="fm-b m-cj-acao m-fm-migrar" data-u="${esc(u)}">Migrar para a v${vv}</button>` : '')
+      + (fm && !fm.liberada && fm.estado !== 'recusada' ? `<button type="button" class="fm-b m-cj-acao m-fm-liberar" data-u="${esc(u)}">Liberar nova ficha <span class="sr-only">para ${esc(nomeDe(u))}</span></button>` : '');
+  }
+  function liberarFicha(b) {
+    const u = b.dataset.u, nome = nomeDe(u);
+    return ocupado(b, async () => {
+      if (!(await confirmar({ titulo: `Liberar uma ficha nova para ${nome}?`, texto: `${nome} poderá rolar os atributos de novo (ou trazer outra ficha). A ficha atual vale até a nova ser rolada.`, botao: 'Liberar' }))) return;
+      try { await Rede.rpc('mestre', 'liberar_ficha', { p_mesa: S.mesa.id, p_user: u }); $('#m-erro-fichas').hidden = true; anunciar(`${nome} pode montar uma ficha nova`); await carregarFichasMesa(); }
+      catch (er) { erroEm('#m-erro-fichas', er); }
+    });
+  }
+  function migrarFicha(b) {
+    const u = b.dataset.u, nome = nomeDe(u);
+    return ocupado(b, async () => {
+      try { const v = await Rede.rpc('mestre', 'migrar_ficha', { p_mesa: S.mesa.id, p_user: u }); $('#m-erro-fichas').hidden = true; anunciar(`Ficha de ${nome} agora usa as regras da versão ${v}`); await carregarFichasMesa(); }
+      catch (er) { erroEm('#m-erro-fichas', er); }
+    });
+  }
   // ---------- bênçãos, maldições e selos (efeitos sobre o jogador, avisados ou secretos) ----------
   const TIPO_EF = { bencao: { nome: 'Bênção', ic: '✦' }, maldicao: { nome: 'Maldição', ic: '☠' }, bloqueio: { nome: 'Selo', ic: '⛓' }, perda: { nome: 'Perda', ic: '✕' } };
   const efeitosDe = u => (S.efeitos || []).filter(e => e.user_id === u);
@@ -1572,7 +1686,7 @@ ${EditorRegras.secao()}
     return `<li class="m-r ${r.passou ? 'passou' : 'falhou'} ${nat}">
       <span class="m-r-h">${hora(r.criado_em)}</span>
       <div class="m-r-txt"><b>${esc(nomeDe(r.user_id))}</b> · ${esc(r.rotulo)} <em class="m-tipo ${r.tipo}">${r.tipo === 'secreto' ? 'secreto' : 'aberto'}</em>
-        <small>${r.lados === 100 ? 'd%' : 'd' + r.lados}: ${r.dado}${r.modificador ? ' ' + sinal(r.modificador) : ''}${r.atributo ? ` (${esc(NOME_ATTR[r.atributo] || r.atributo)})` : ''} · dificuldade ${r.dificuldade}${nat ? ` · ${nat === 'crit' ? '20 natural' : '1 natural'}` : ''}</small></div>
+        <small>${r.lados === 100 ? 'd%' : 'd' + r.lados}: ${r.dado}${r.modificador ? ' ' + sinal(r.modificador) : ''}${r.atributo ? ` (${esc(nomeTeste(r.atributo))})` : ''} · dificuldade ${r.dificuldade}${nat ? ` · ${nat === 'crit' ? '20 natural' : '1 natural'}` : ''}</small></div>
       <b class="m-r-total">${r.total}</b><span class="m-veredito">${r.passou ? 'Passou' : 'Falhou'}</span></li>`;
   }
 
@@ -1585,7 +1699,7 @@ ${EditorRegras.secao()}
 
   // ---------- testes ----------
   async function testar(tipo) {
-    const para = $('#t-para').value, atributo = $('#t-attr').value, lados = +$('#t-lados').value, rotulo = $('#t-rotulo').value.trim() || (atributo ? 'Teste de ' + NOME_ATTR[atributo] : 'Teste'), dif = num($('#t-dif').value, 1, 200);
+    const para = $('#t-para').value, atributo = $('#t-attr').value, lados = +$('#t-lados').value, rotulo = $('#t-rotulo').value.trim() || (atributo ? 'Teste de ' + nomeTeste(atributo) : 'Teste'), dif = num($('#t-dif').value, 1, 200);
     const erro = $('#m-erro-teste'); erro.hidden = true;
     if (!S.jogadores.length || !para) return erroEm('#m-erro-teste', new Rede.ErroRede('Espere um jogador entrar na mesa.'));
     if (dif == null || String($('#t-dif').value).trim() === '') return erroEm('#m-erro-teste', new Rede.ErroRede('Defina a dificuldade (1 a 200).'));
@@ -1625,6 +1739,8 @@ ${EditorRegras.secao()}
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'due', 'disputas', f, adiar(carregarDisputas)));
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'hab', 'habilidades', f, adiar(carregarHabs)));
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'efe', 'efeitos', f, adiar(carregarEfeitos)));
+      S.pararDeOuvir.push(await Rede.ouvir('mestre', 'fim', 'fichas_mesa', f, adiar(carregarFichasMesa)));
+      S.pararDeOuvir.push(await Rede.ouvir('mestre', 'reg', 'mesa_regras', f, adiar(carregarFichasMesa)));
       S.pararDeOuvir.push(await Rede.presenca('mestre', id, 'mestre', null, st => { S.online = new Set(Object.keys(st || {}).filter(k => k !== 'mestre')); atualizarVelas(); }));
     } catch (e) { const v = $('#m-ao-vivo'); if (v) { v.textContent = 'sem tempo real'; v.classList.add('off'); } }
   }

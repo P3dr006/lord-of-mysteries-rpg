@@ -76,7 +76,7 @@ const Jogador = Object.freeze((() => {
   }
 
   async function sairDaMesa() {
-    const c = con; desligar(); con = null; gravarConexao(null); pedidos = []; sussurros = []; lidos = new Set(); fila = []; habs = []; efeitos = []; decretos = []; estado = 'fora'; erro = ''; redesenhar();
+    const c = con; desligar(); con = null; gravarConexao(null); pedidos = []; sussurros = []; lidos = new Set(); fila = []; habs = []; efeitos = []; decretos = []; cfg = { naMesa: false, aprovar: false }; fichaM = null; srv = null; estado = 'fora'; erro = ''; redesenhar();
     if (c && uid) { try { await (await Rede.tabela('jogador', 'jogadores')).delete().eq('mesa_id', c.mesa).eq('user_id', uid); } catch (e) { /* sem rede: o mestre remove depois */ } }
   }
 
@@ -111,6 +111,17 @@ const Jogador = Object.freeze((() => {
         await carregarHabs(); parar.push(await Rede.ouvir('jogador', 'habilidades', 'habilidades', 'user_id=eq.' + uid, () => carregarHabs().catch(() => {})));
         await carregarEfeitos(); parar.push(await Rede.ouvir('jogador', 'efeitos', 'efeitos', 'user_id=eq.' + uid, () => carregarEfeitos().catch(() => {})));
       } catch (e) { /* sem habilidades da mesa nesta conexão */ }
+      try {   // ficha montada na mesa (o mestre liga): a ficha do servidor, as regras e o veredito do mestre
+        await carregarFichaMesa();
+        parar.push(await Rede.ouvir('jogador', 'fichas_mesa', 'fichas_mesa', 'user_id=eq.' + uid, () => carregarFichaMesa().catch(() => {})));
+        parar.push(await Rede.ouvir('jogador', 'regras', 'mesa_regras', 'mesa_id=eq.' + con.mesa, () => carregarFichaMesa().catch(() => {})));
+        parar.push(await Rede.ouvir('jogador', 'eu', 'jogadores', 'user_id=eq.' + uid, ev => {
+          const f = ev && ev.new && ev.new.ficha; if (!f || ev.new.mesa_id !== con.mesa) return;
+          // o mestre ligou/desligou a ficha na mesa ou julgou: recarrega; senão, só guarda os números do servidor
+          if ((f.ficha_estado || '') !== ((srv && srv.ficha_estado) || '') || f.regras_versao !== (srv && srv.regras_versao)) carregarFichaMesa().catch(() => {});
+          else { srv = f; redesenhar(); }
+        }));
+      } catch (e) { /* sem ficha da mesa nesta conexão: segue como a ficha do site */ }
       try { parar.push(await Rede.presenca('jogador', con.mesa, uid, { nome: con.nome }, () => {})); } catch (e) { /* sem vela */ }
       clearInterval(vigia); vigia = setInterval(conferirSeAindaEstou, 45000);
     } catch (e) { estado = 'desligado'; erro = Rede.mensagem(e); redesenhar(); }
@@ -295,6 +306,7 @@ const Jogador = Object.freeze((() => {
     if (!decretos.length || document.querySelector('.decreto')) return;
     if (document.querySelector('.sussurro, .duelo-cena')) { setTimeout(mostrarDecreto, 1500); return; }   // não atropela outra cena
     if (decretos[0] && decretos[0].ef) return decretoEfeito(decretos.shift().ef);
+    if (decretos[0] && decretos[0].fm) return decretoFicha(decretos.shift().fm);
     const { h, antes } = decretos.shift(), rej = h.estado === 'rejeitada';
     const ja = antes && antes.startsWith('aprovada');
     const titulo = rej ? 'O mestre recusa' : ja ? 'O mestre reescreve' : h.origem === 'mestre' ? 'O mestre concede' : h.alterada ? 'Aprovada, com mudanças' : 'O mestre aprova';
@@ -310,6 +322,125 @@ const Jogador = Object.freeze((() => {
     anunciar(`${titulo}: ${h.nome}${h.resposta ? '. O mestre diz: ' + h.resposta : ''}`);
     let soltar = () => {};
     const fechar = () => { marcarVista(h); soltar(); m.classList.add('saindo'); setTimeout(() => { m.remove(); mostrarDecreto(); }, 220); };
+    m.querySelector('#dec-ok').addEventListener('click', fechar);
+    soltar = typeof prenderFoco === 'function' ? prenderFoco(m, fechar) : () => {};
+    setTimeout(() => { const b = m.querySelector('#dec-ok'); if (b && b.isConnected) b.focus(); }, 60);
+  }
+
+  // ---------- ficha montada na mesa (Fase B2): o servidor rola, o mestre pode aprovar, cada ficha na sua versão das regras ----------
+  let cfg = { naMesa: false, aprovar: false }, fichaM = null, regrasM = null, regrasFicha = null, srv = null;
+  const KF = 'lotm-rpg-ficha-vista';
+  let fichaNoDecreto = false;
+  const estadoVisto = () => { try { return (JSON.parse(localStorage.getItem(KF)) || {})[con.mesa] || ''; } catch (e) { return ''; } };
+  const guardarEstado = est => { try { const v = JSON.parse(localStorage.getItem(KF)) || {}; v[con.mesa] = est; localStorage.setItem(KF, JSON.stringify(v)); } catch (e) { /* só nesta visita */ } };
+  async function carregarFichaMesa() {
+    if (!con || !uid) return;
+    const e = await Rede.rpc('jogador', 'estado_da_mesa', { p_mesa: con.mesa });
+    cfg = { naMesa: !!(e && e.ficha_na_mesa), aprovar: !!(e && e.aprovar_fichas) };
+    if (!cfg.naMesa) { fichaM = null; srv = null; return redesenhar(); }
+    const tab = t => Rede.tabela('jogador', t);
+    const [fm, rg, eu] = await Promise.all([
+      (await tab('fichas_mesa')).select('*').eq('mesa_id', con.mesa).eq('user_id', uid),
+      (await tab('mesa_regras')).select('versao,regras').eq('mesa_id', con.mesa).order('versao', { ascending: false }).limit(1),
+      (await tab('jogadores')).select('ficha').eq('mesa_id', con.mesa).eq('user_id', uid),
+    ]);
+    if (fm.error || rg.error || eu.error) throw fm.error || rg.error || eu.error;
+    fichaM = (fm.data || [])[0] || null;
+    regrasM = rg.data && rg.data[0] ? { regras: rg.data[0].regras, versao: rg.data[0].versao } : { regras: Regras.LOTM, versao: 0 };
+    srv = eu.data && eu.data[0] ? eu.data[0].ficha : null;
+    regrasFicha = regrasM;   // cada ficha fica na versão em que foi feita
+    if (fichaM && fichaM.regras_versao !== regrasM.versao) {
+      if (fichaM.regras_versao === 0) regrasFicha = { regras: Regras.LOTM, versao: 0 };
+      else { const r = await (await tab('mesa_regras')).select('versao,regras').eq('mesa_id', con.mesa).eq('versao', fichaM.regras_versao); if (r.data && r.data[0]) regrasFicha = { regras: r.data[0].regras, versao: r.data[0].versao }; }
+    }
+    // o veredito do mestre chega com o selo de cera (uma vez)
+    // só na passagem "pendente" → aprovada/recusada (vista neste navegador); o resto só atualiza o estado visto
+    if (!fichaNoDecreto && !decretos.some(d => d.fm)) {
+      if (fichaM && estadoVisto() === 'pendente' && ['aprovada', 'recusada'].includes(fichaM.estado)) { decretos.push({ fm: fichaM }); mostrarDecreto(); }
+      else guardarEstado(fichaM ? fichaM.estado : '');
+    }
+    redesenhar();
+  }
+  const naMesaAtiva = () => estado === 'ligado' && cfg.naMesa;
+  // nome, cor e modificador de um atributo do teste: na ficha da mesa vêm das regras e do servidor
+  function atrInfo(id) {
+    const a = ATTRS.find(x => x.key === id);
+    if (!naMesaAtiva()) return a ? { nome: a.nome, cor: a.cor, mod: total(a.key) != null ? mod(total(a.key)) : 0 } : null;
+    const r = id && [regrasFicha, regrasM, { regras: Regras.LOTM }].map(x => x && x.regras.atributos.find(y => y.id === id)).find(Boolean);
+    if (!r && !a) return null;
+    const v = srv && srv.mods ? srv.mods[id] : null;
+    return { nome: r ? r.nome : a.nome, cor: a ? a.cor : '#d9b86a', mod: Number.isInteger(v) ? v : 0 };
+  }
+  function cartaFichaMesa() {
+    if (!naMesaAtiva()) return '';
+    const fm = fichaM, livre = !fm || fm.liberada || fm.estado === 'recusada';
+    const R = (regrasFicha || regrasM).regras, mesmo = !fm || !regrasM || fm.regras_versao === regrasM.versao;
+    let classe, corpo, botao = '';
+    if (livre) {
+      classe = fm && fm.estado === 'recusada' ? 'recusada' : 'livre'; botao = fm ? 'Montar de novo' : 'Montar minha ficha';
+      corpo = fm && fm.estado === 'recusada' ? `<b>O mestre recusou sua ficha</b>${fm.resposta ? `<q>${esc2(fm.resposta)}</q>` : ''}<span>Monte outra: os dados rolam de novo.</span>`
+        : fm ? '<b>O mestre liberou uma ficha nova</b><span>Você pode rolar de novo ou trazer outra ficha.</span>'
+          : '<b>Esta mesa monta a ficha aqui</b><span>Os atributos são rolados pelo servidor, com as regras do mestre. Até lá, seus testes vão sem modificador.</span>';
+    } else if (fm.estado === 'rolada') { classe = 'rolada'; botao = 'Continuar a ficha'; corpo = '<b>Atributos rolados</b><span>Falta escolher a origem e selar.</span>'; }
+    else if (fm.estado === 'pendente') { classe = 'pendente'; corpo = `<b>Ficha com o mestre <span class="hm-selo espera">Aguardando</span></b><span>${fm.origem === 'convertida' ? 'Ficha trazida do site. ' : ''}Até o mestre aprovar, seus testes vão sem modificador.</span>`; }
+    else {
+      classe = 'aprovada';
+      const mods = (srv && srv.mods) || {};
+      corpo = `<b>Ficha da mesa <span class="hm-selo">Valendo</span></b>
+        <ul class="fm-chipsat">${R.atributos.map(a => `<li><span>${esc2(a.abrev)}</span><b>${Number.isInteger(mods[a.id]) ? sinal(mods[a.id]) : '—'}</b></li>`).join('')}</ul>
+        ${mesmo ? '' : `<span class="fm-versao">Regras da versão ${fm.regras_versao} (em vigor: ${regrasM.versao}). O mestre decide quando migrar.</span>`}`;
+    }
+    return `<section class="fm-carta fm-${classe}" aria-label="Ficha da mesa"><span class="fm-selo" aria-hidden="true"></span><div>${corpo}</div>${botao ? `<button type="button" class="primary" id="fm-abrir">${botao}</button>` : ''}</section>`;
+  }
+  function abrirAssistente() {
+    if (!naMesaAtiva() || typeof FichaMesa !== 'object') return;
+    const fm = fichaM, continua = fm && fm.estado === 'rolada' && !fm.liberada;
+    const f = ficha();
+    FichaMesa.abrir({
+      codigo: con.codigo, nome: P.nome || con.nome, aprovar: cfg.aprovar, fm,
+      regras: (continua ? regrasFicha : regrasM).regras,
+      local: { base: f.base, caminho: P.caminho, raca: P.raca, seq: P.sequencia, nome: P.nome },
+      mensagem: e => Rede.mensagem(e), anunciar,
+      rolar: () => Rede.rpc('jogador', 'rolar_ficha', { p_mesa: con.mesa }),
+      enviar: (c, r) => Rede.rpc('jogador', 'enviar_ficha', { p_mesa: con.mesa, p_caminho: c || '', p_raca: r || '' }),
+      converter: (b, c, r) => Rede.rpc('jogador', 'converter_ficha', { p_mesa: con.mesa, p_base: b, p_caminho: c || '', p_raca: r || '' }),
+      aoRolar: () => carregarFichaMesa().catch(() => {}),
+      aoTerminar: async fim => {
+        guardarNaFichaLocal(fim);
+        try { await carregarFichaMesa(); } catch (e) { /* o aviso ao vivo traz depois */ }
+        anunciar(fim.estado === 'pendente' ? 'Ficha enviada ao mestre. Aguardando a aprovação.' : 'Ficha selada. Ela já vale nos testes.');
+        const b = document.querySelector('#on-sair'); if (b) b.focus();
+      },
+    });
+  }
+  // a cópia local (para jogar offline como hoje): atributos rolados pelo servidor e a origem escolhida
+  function guardarNaFichaLocal(fim) {
+    if (!minhaFicha()) return;
+    if (fim.modo === 'rolar' && fim.metodo !== '3d6' && fim.rolagens) ATTRS.forEach(a => {
+      const d = fim.rolagens[a.key], t = fim.base && fim.base[a.key];
+      if (!Array.isArray(d) || d.length !== 4) return;
+      const menor = d.indexOf(Math.min(...d));
+      if (d.reduce((s, v) => s + v, 0) - d[menor] === t) P.attrs[a.key] = { dados: d.slice(), descartado: menor, total: t };
+    });
+    if (fim.caminho && typeof caminhoPorId === 'function' && caminhoPorId(fim.caminho)) P.caminho = fim.caminho;
+    if (fim.raca && typeof racaPorId === 'function' && racaPorId(fim.raca)) P.raca = fim.raca;
+    salvar();
+  }
+  function decretoFicha(fm) {
+    const rej = fm.estado === 'recusada', titulo = rej ? 'O mestre recusa sua ficha' : 'O mestre aprova sua ficha';
+    const R = (regrasFicha || regrasM || { regras: Regras.LOTM }).regras, mods = (srv && srv.mods) || {};
+    const m = document.createElement('div'); m.className = 'decreto' + (rej ? ' recusa' : ''); m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'dec-t');
+    m.innerHTML = `<div class="dec-papel"><span class="dec-selo" aria-hidden="true"><i></i></span>
+      <small class="dec-olho">Ficha da mesa</small><h2 id="dec-t">${esc2(titulo)}</h2>
+      ${rej ? '<p class="dec-hab">Monte outra: os dados rolam de novo.</p>' : `<ul class="fm-chipsat dec-ats">${R.atributos.map(a => `<li><span>${esc2(a.abrev)}</span><b>${Number.isInteger(mods[a.id]) ? sinal(mods[a.id]) : '—'}</b></li>`).join('')}</ul>`}
+      ${fm.resposta ? `<blockquote class="dec-recado">${esc2(fm.resposta)}<cite>o mestre</cite></blockquote>` : ''}
+      <button type="button" class="primary" id="dec-ok">${rej ? 'Entendi' : 'Guardar na ficha'}</button></div>`;
+    document.body.appendChild(m); Cenas.decreto(m);
+    if (typeof Som === 'object') { try { rej ? Som.falha() : Som.selar(); } catch (e) { /* sem som */ } }
+    anunciar(`${titulo}${fm.resposta ? '. O mestre diz: ' + fm.resposta : ''}`);
+    let soltar = () => {};
+    fichaNoDecreto = true;
+    const fechar = () => { fichaNoDecreto = false; guardarEstado(fm.estado); soltar(); m.classList.add('saindo'); setTimeout(() => { m.remove(); mostrarDecreto(); }, 220); };
     m.querySelector('#dec-ok').addEventListener('click', fechar);
     soltar = typeof prenderFoco === 'function' ? prenderFoco(m, fechar) : () => {};
     setTimeout(() => { const b = m.querySelector('#dec-ok'); if (b && b.isConnected) b.focus(); }, 60);
@@ -484,11 +615,11 @@ const Jogador = Object.freeze((() => {
   async function rolarPedido(id) {
     const p = pedidos.find(x => x.id === id); if (!p || rolandoPedido || (typeof Mesa === 'object' && Mesa.rolando)) return;
     rolandoPedido = true; erro = '';
-    const modificador = p.atributo && total(p.atributo) != null ? mod(total(p.atributo)) : 0;
+    const info = atrInfo(p.atributo), modificador = info ? info.mod : 0;
     try {
       const r = await Rede.rpc('jogador', 'responder_pedido', { p_pedido: p.id, p_modificador: modificador });   // o dado sai do servidor
       pedidos = pedidos.filter(x => x.id !== p.id); redesenhar();
-      const nomeAttr = p.atributo ? (ATTRS.find(a => a.key === p.atributo) || {}).nome : '';
+      const nomeAttr = info ? info.nome : '';
       await Mesa.rolar({ lados: r.lados, qtd: 1, mod: r.modificador, rotulo: p.rotulo, fixo: [r.dado], nota: 'pedido do mestre' + (nomeAttr ? ` · ${nomeAttr} ${sinal(r.modificador)}` : '') });
     } catch (e) { erro = Rede.mensagem(e); try { await carregarPedidos(); } catch (e2) { /* fica a lista antiga */ } redesenhar(); }
     finally { rolandoPedido = false; }
@@ -524,15 +655,17 @@ const Jogador = Object.freeze((() => {
         <button type="button" class="link-remover" id="on-sair">Sair da mesa</button>`;
     } else {
       el.innerHTML = `${cab}<div class="on-status ligado"><span class="on-luz" aria-hidden="true"></span><span>Conectado. O mestre vê sua ficha ao vivo.</span></div>
+        ${cartaFichaMesa()}
         ${outra ? `<p class="hint">Você está com outra ficha aberta. Abra <b>${esc2(con.nome)}</b> para o mestre ver PV e Sanidade atualizados.</p>` : ''}
         ${pedidos.length ? `<ul class="pedidos">${pedidos.map(p => {
-          const a = p.atributo && ATTRS.find(x => x.key === p.atributo), m = a && total(a.key) != null ? mod(total(a.key)) : 0;
-          return `<li class="pedido" style="--ac:${a ? a.cor : '#d9b86a'}"><div><small>O mestre pede</small><b>${esc2(p.rotulo)}</b><i>${p.lados === 100 ? 'd%' : 'd' + p.lados}${a ? ` + ${a.nome} ${sinal(m)}` : ''}</i></div>
+          const a = p.atributo && atrInfo(p.atributo), m = a ? a.mod : 0;
+          return `<li class="pedido" style="--ac:${a ? a.cor : '#d9b86a'}"><div><small>O mestre pede</small><b>${esc2(p.rotulo)}</b><i>${p.lados === 100 ? 'd%' : 'd' + p.lados}${a ? ` + ${esc2(a.nome)} ${sinal(m)}` : ''}</i></div>
             <button type="button" class="primary rolar-pedido" data-id="${esc2(p.id)}" data-ic="dado" ${outra ? 'disabled' : ''}>Rolar</button></li>`;
         }).join('')}</ul>` : '<p class="hint on-espera">Aguardando o mestre. Os testes que ele pedir aparecem aqui.</p>'}
         ${listaPistas()}${msgErro}<button type="button" class="link-remover" id="on-sair">Sair da mesa</button>`;
     }
     const b = el.querySelector('#on-religar'); if (b) b.addEventListener('click', ligar);
+    const fa = el.querySelector('#fm-abrir'); if (fa) fa.addEventListener('click', abrirAssistente);
     el.querySelector('#on-sair').addEventListener('click', sairDaMesa);
     el.querySelectorAll('.rolar-pedido').forEach(x => x.addEventListener('click', () => rolarPedido(x.dataset.id)));
     el.querySelectorAll('.pista-b').forEach(x => x.addEventListener('click', () => { const s = sussurros.find(y => y.id === x.dataset.sus); if (s && !aberto) mostrarSussurro(s, lidos.has(s.id)); }));
@@ -567,5 +700,5 @@ const Jogador = Object.freeze((() => {
     if (fab) fab.addEventListener('click', () => { const m = document.querySelector('#mesa'); if (pedidos.length && estado === 'ligado' && m && !m.hidden) Mesa.irParaTestes(); });
   });
 
-  return { desenhar, entrar, sairDaMesa, ligar, rolarPedido, fichaParaMestre: ficha, propor, retirar, podePropor, desenharHabsMesa, get habilidades() { return habs.slice(); }, get efeitos() { return efeitos.slice(); }, get estado() { return estado; }, get encontro() { return encontro; }, get pedidos() { return pedidos.slice(); } };
+  return { desenhar, entrar, sairDaMesa, ligar, rolarPedido, fichaParaMestre: ficha, propor, retirar, podePropor, desenharHabsMesa, get habilidades() { return habs.slice(); }, get efeitos() { return efeitos.slice(); }, get estado() { return estado; }, get encontro() { return encontro; }, get pedidos() { return pedidos.slice(); }, abrirAssistente, get fichaDaMesa() { return { ...cfg, ficha: fichaM, servidor: srv }; } };
 })());

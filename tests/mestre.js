@@ -397,6 +397,120 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('sem erros na página do mestre', m.erros.length === 0, m.erros.join(' | '));
   }
 
+  console.log('\n7a3) Ficha montada na mesa: dados do servidor, aprovação, versões');
+  { const Regras = require('../js/regras.js'), mesaId = srv.db.mesas[0].id, sn = v => (v >= 0 ? '+' : '−') + Math.abs(v);
+    const print = async (pg, nome, sel) => { if (process.env.PRINTS) { await pg.waitForTimeout(500); await pg.locator(sel).first().screenshot({ path: path.join(process.env.PRINTS, 'b2-' + nome + '.png') }); } };
+    const fm = u => srv.db.fichas_mesa.find(x => x.mesa_id === mesaId && x.user_id === u);
+    const fichaDe = u => srv.db.jogadores.find(x => x.mesa_id === mesaId && x.user_id === u).ficha;
+    const inserir = regras => m.evaluate(async ([mid, rg]) => { const r = await (await Rede.tabela('mestre', 'mesa_regras')).insert({ mesa_id: mid, regras: rg }).select('versao'); return r.error ? 'erro: ' + r.error.message : r.data[0].versao; }, [mesaId, regras]);
+    const secreto = async (u, attr, rot) => { srv.proximosDados(5); await m.selectOption('#t-para', u); await m.selectOption('#t-attr', attr); await m.fill('#t-rotulo', rot); await m.fill('#t-dif', '12'); await m.click('#t-secreto'); };
+    const sec = async () => ((await m.textContent('.m-sec')) || '').replace(/\s+/g, ' ');
+    const entrar = async (ctx, nome, ficha) => { const p = await jogadorPronto(ctx, { nome, ...ficha }); await p.fill('#on-cod', codigo); await p.click('#on-entrar'); await ate(() => p.isVisible('.on-status.ligado')); return p; };
+    const uidDe = async p => p.evaluate(async () => (await Rede.usuario('jogador')).id);
+    const carta = u => `.m-carta-j[data-u="${u}"]`;
+    // 1) o mestre liga: quem já está na mesa joga sem modificador até ter a ficha da mesa
+    ok('a chave começa desligada e "Aprovar" fica travada', (await m.getAttribute('#m-cfg-ficha', 'aria-pressed')) === 'false' && await m.isDisabled('#m-cfg-aprovar'));
+    await m.click('#m-cfg-ficha'); await m.waitForSelector('#cf-ok'); await m.click('#cf-ok');
+    ok('ligar pede confirmação e liga no servidor', await ate(async () => (await m.getAttribute('#m-cfg-ficha', 'aria-pressed')) === 'true') && srv.db.mesas[0].ficha_na_mesa === true && !(await m.isDisabled('#m-cfg-aprovar')));
+    ok('a ficha de Klein fica sem modificador (base do site guardada à parte)', await ate(() => JSON.stringify(fichaDe(uidJ).mods) === '{}' && fichaDe(uidJ).ficha_estado === 'sem' && !!fichaDe(uidJ).do_site));
+    ok('Klein vê a carta "Esta mesa monta a ficha aqui"', await ate(async () => /monta a ficha aqui/.test(await j.textContent('.fm-carta.fm-livre'))));
+    ok('a carta do mestre mostra "Sem ficha da mesa"', await ate(async () => /Sem ficha da mesa/.test(await m.textContent(carta(uidJ)))));
+    await print(j, '1-carta-jogador', '#online');
+    // 2) Audrey entra só com o código e rola no servidor
+    const ctxA = await contexto(browser, srv), a = await entrar(ctxA, 'Audrey', { caminho: 'louco', raca: 'humano' }), uidA = await uidDe(a);
+    await ate(() => a.isVisible('#fm-abrir')); await a.click('#fm-abrir');
+    ok('o assistente abre com as duas escolhas', await ate(() => a.isVisible('.fm-assist')) && (await a.$$('.fm-op')).length === 2);
+    { const v = await axe(a); ok('assistente sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    await print(a, '2-escolha', '.fm-livro');
+    await a.click('.fm-op[data-ir=nova]');
+    ok('a tela de rolagem explica o método da regra', /4d6, descartando o menor/.test(await a.textContent('.fm-corpo')));
+    srv.proximosDados(...Array(6).fill([6, 5, 4, 1]).flat());
+    await a.click('#fm-rolar');
+    ok('o servidor rola: 6 atributos, o menor dado riscado, total 15', await ate(async () => (await a.$$eval('.fm-ats.revela .fm-total', b => b.map(x => x.textContent))).join() === '15,15,15,15,15,15') && (await a.$$('.fm-dados i.fora')).length === 6);
+    ok('a ficha fica "rolada" no servidor, com os dados guardados', fm(uidA) && fm(uidA).estado === 'rolada' && fm(uidA).base.forca === 15 && fm(uidA).rolagens.forca.join() === '6,5,4,1');
+    await print(a, '3-rolagem', '.fm-livro');
+    ok('rolar de novo é recusado pelo servidor', /já foram rolados/.test(await a.evaluate(async mid => { try { await Rede.rpc('jogador', 'rolar_ficha', { p_mesa: mid }); return 'rolou'; } catch (e) { return Rede.mensagem(e); } }, mesaId)));
+    ok('o mestre vê "Montando a ficha"', await ate(async () => /Montando a ficha/.test(await m.textContent(carta(uidA)))));
+    await a.click('[data-ir=origem]'); await a.click('[data-cam=tirano]'); await a.click('[data-raca=gigante]');
+    ok('Caminho e raça escolhidos em cartas (aria-pressed), com o bônus da regra', (await a.getAttribute('[data-cam=tirano]', 'aria-pressed')) === 'true' && (await a.getAttribute('[data-raca=gigante]', 'aria-pressed')) === 'true' && /FOR \+2/.test(await a.textContent('[data-cam=tirano]')));
+    await print(a, '4-origem', '.fm-livro');
+    await a.click('[data-ir=selar]');
+    const linhaFor = await a.$$eval('.fm-tab tbody tr:first-child > *', c => c.map(x => x.textContent.trim()).join('|'));
+    ok('a prévia soma Caminho (+2) e raça (+3): Força 20, mod +5', linhaFor === 'Força|15|20 (+5)|+5', linhaFor);
+    ok('sem aprovação, o botão é "Selar a ficha"', /Selar a ficha/.test(await a.textContent('#fm-selar')));
+    await print(a, '5-selar', '.fm-livro');
+    await a.click('#fm-selar');
+    ok('selada: vale na hora, com a base do servidor', await ate(() => fm(uidA).estado === 'aprovada' && fichaDe(uidA).mods.forca === 5 && fichaDe(uidA).caminhoId === 'tirano'));
+    ok('a carta do jogador mostra "Valendo" e nenhum selo de cera aparece', await ate(() => a.isVisible('.fm-carta.fm-aprovada')) && !(await a.$('.decreto')));
+    ok('a cópia local guarda os dados rolados e a origem', await a.evaluate(() => P.attrs.forca.total === 15 && P.attrs.forca.dados.join() === '6,5,4,1' && P.caminho === 'tirano' && P.raca === 'gigante'));
+    await a.evaluate(() => { P.attrs.forca = { dados: [6, 6, 6, 6], descartado: 0, total: 18 }; salvar(); });
+    ok('mexer na cópia local não muda a ficha da mesa', await ate(() => fichaDe(uidA).do_site.base.forca === 18) && fichaDe(uidA).base.forca === 15 && fichaDe(uidA).mods.forca === 5);
+    await secreto(uidA, 'forca', 'Força da Audrey');
+    ok('o teste secreto usa a ficha da mesa (+5)', await ate(async () => (await sec()).includes('5 +5 = 10')), await sec());
+    // 3) aprovação ligada + ficha trazida do site
+    await m.click('#m-cfg-aprovar');
+    ok('"Aprovar cada ficha" liga', await ate(async () => (await m.getAttribute('#m-cfg-aprovar', 'aria-pressed')) === 'true') && srv.db.mesas[0].aprovar_fichas === true);
+    const ctxB = await contexto(browser, srv), b = await entrar(ctxB, 'Bernadette', {}), uidB = await uidDe(b);
+    await ate(() => b.isVisible('#fm-abrir')); await b.click('#fm-abrir'); await ate(() => b.isVisible('.fm-assist'));
+    ok('a ficha do site serve: "Trazer" habilitado, com os atributos dela', !(await b.isDisabled('.fm-op[data-ir=converter]')) && (await b.$$('.fm-mini .fm-mi')).length === 6);
+    await b.click('.fm-op[data-ir=converter]');
+    ok('a origem vem preenchida da ficha do site', (await b.getAttribute('[data-cam=louco]', 'aria-pressed')) === 'true' && (await b.getAttribute('[data-raca=humano]', 'aria-pressed')) === 'true');
+    await b.click('[data-ir=selar]');
+    ok('ficha trazida sempre vai ao mestre ("Enviar ao mestre")', /Enviar ao mestre/.test(await b.textContent('#fm-selar')) && /confere antes de valer/.test(await b.textContent('.fm-nota')));
+    await b.click('#fm-selar');
+    ok('fica pendente, convertida, e joga sem modificador', await ate(() => fm(uidB) && fm(uidB).estado === 'pendente' && fm(uidB).origem === 'convertida' && JSON.stringify(fichaDe(uidB).mods) === '{}') && await ate(() => b.isVisible('.fm-carta.fm-pendente')));
+    ok('o mestre recebe a ficha na fila "Fichas para aprovar"', await ate(() => m.isVisible(`#m-fichas .fmp.conv[data-u="${uidB}"]`)) && /Trazida do site/.test(await m.textContent('#m-fichas')));
+    ok('a fila mostra os atributos e os modificadores pela regra', (await m.$$eval(`#m-fichas .fmp[data-u="${uidB}"] .fmp-ats li`, l => l.length)) === 6);
+    { const v = await axe(m); ok('Grimório com a fila sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    await print(m, '6-fila-mestre', '.m-jog');
+    await m.fill(`#fmp-${uidB}-r`, 'Bem-vinda à mesa.'); await m.click(`#fmp-${uidB}-ok`);
+    ok('aprovada: os modificadores passam a valer', await ate(() => fm(uidB).estado === 'aprovada' && fichaDe(uidB).mods.espir === Regras.calcular(Regras.LOTM, { base: fm(uidB).base, caminhoId: 'louco', racaId: 'humano', seq: 7 }).mods.espir));
+    ok('Bernadette recebe o selo de cera com o recado', await ate(async () => /O mestre aprova sua ficha/.test(await b.textContent('.decreto')) && /Bem-vinda à mesa/.test(await b.textContent('.decreto'))));
+    await print(b, '7-decreto', '.dec-papel');
+    await b.click('#dec-ok');
+    ok('depois do selo, a carta mostra a ficha valendo', await ate(() => b.isVisible('.fm-carta.fm-aprovada')));
+    // 4) cada ficha na sua versão; o Teste lista os atributos da regra em vigor
+    const comSorte = { ...Regras.LOTM, modificador: 'ATR - 10', atributos: [...Regras.LOTM.atributos, { id: 'sorte', nome: 'Sorte', abrev: 'SOR' }] };
+    ok('o mestre salva a versão 5 (com Sorte)', (await inserir(comSorte)) === 5);
+    ok('o seletor do Teste passa a listar Sorte (ao vivo)', await ate(async () => (await m.$$eval('#t-attr option', o => o.map(x => x.value))).includes('sorte')));
+    ok('a carta de Audrey avisa a versão antiga e oferece migrar', await ate(async () => /regras v4/.test(await m.textContent(carta(uidA))) && await m.isVisible(`${carta(uidA)} .m-fm-migrar`)));
+    await secreto(uidA, 'forca', 'Força na v4');
+    ok('a ficha continua na versão dela (+5, não +10)', await ate(async () => (await sec()).includes('5 +5 = 10')), await sec());
+    await m.selectOption('#t-para', uidA); await m.selectOption('#t-attr', 'sorte'); await m.fill('#t-rotulo', 'Teste de Sorte'); await m.click('#t-aberto');
+    ok('o pedido de Sorte chega ao jogador com o nome da regra', await ate(async () => /Sorte \+0/.test(await a.textContent('.pedidos'))));
+    ok('o servidor recusa atributo que não existe na regra', /não existe nas regras/.test(await m.evaluate(async ([mid, u]) => { try { await Rede.rpc('mestre', 'pedir_teste', { p_mesa: mid, p_para: u, p_rotulo: 'x', p_atributo: 'xyz', p_lados: 20, p_dificuldade: 10 }); return 'pediu'; } catch (e) { return Rede.mensagem(e); } }, [mesaId, uidA])));
+    await m.click(`${carta(uidA)} .m-fm-migrar`);
+    ok('migrar para a v5 é recusado: falta Sorte na ficha', await ate(async () => /não tem \(Sorte\)/.test(await m.textContent('#m-erro-fichas'))) && fm(uidA).regras_versao === 4);
+    ok('o mestre salva a versão 6 (sem Sorte, ATR - 10)', (await inserir({ ...Regras.LOTM, modificador: 'ATR - 10' })) === 6);
+    await ate(() => m.isVisible(`${carta(uidA)} .m-fm-migrar`)); await m.click(`${carta(uidA)} .m-fm-migrar`);
+    ok('migrar para a v6 funciona', await ate(() => fm(uidA).regras_versao === 6 && fichaDe(uidA).regras_versao === 6));
+    await secreto(uidA, 'forca', 'Força na v6');
+    ok('agora a rolagem usa a v6 (20 - 10 = +10)', await ate(async () => (await sec()).includes('5 +10 = 15')), await sec());
+    // 5) liberar nova ficha; recusar
+    await m.click(`${carta(uidA)} .m-fm-liberar`); await m.waitForSelector('#cf-ok'); await m.click('#cf-ok');
+    ok('liberar: o jogador vê que pode montar de novo', await ate(() => fm(uidA).liberada === true) && await ate(async () => /liberou uma ficha nova/.test(await a.textContent('.fm-carta'))));
+    await a.click('#fm-abrir'); await a.click('.fm-op[data-ir=nova]'); srv.proximosDados(...Array(6).fill([3, 3, 3, 1]).flat()); await a.click('#fm-rolar');
+    await ate(() => a.isVisible('.fm-ats.revela')); await a.click('[data-ir=origem]'); await a.click('[data-ir=selar]'); await a.click('#fm-selar');
+    ok('a ficha nova vai ao mestre (aprovação ligada) e conta a 2ª rolagem', await ate(() => fm(uidA).estado === 'pendente' && fm(uidA).rolagens_feitas === 2) && await ate(async () => /2ª rolagem/.test(await m.textContent(`#m-fichas .fmp[data-u="${uidA}"]`))));
+    await m.fill(`#fmp-${uidA}-r`, 'Role de novo, por favor.'); await m.click(`#fmp-${uidA}-nao`);
+    ok('recusada: selo de cera de recusa com o recado', await ate(async () => /O mestre recusa sua ficha/.test(await a.textContent('.decreto.recusa')) && /Role de novo/.test(await a.textContent('.decreto'))));
+    await a.click('#dec-ok');
+    ok('a carta oferece "Montar de novo"', await ate(async () => /Montar de novo/.test(await a.textContent('#fm-abrir')) && await a.isVisible('.fm-carta.fm-recusada')));
+    // 6) celular e limpeza: desligar devolve a ficha do site
+    await a.setViewportSize({ width: 375, height: 812 }); await a.click('#fm-abrir'); await a.click('.fm-op[data-ir=nova]');
+    ok('no celular o assistente ocupa a tela sem rolagem lateral', await a.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.querySelector('.fm-livro').getBoundingClientRect().width <= innerWidth));
+    await print(a, '8-celular', '.fm-livro');
+    await a.click('#fm-fechar');
+    ok('fechar o assistente devolve o foco', await ate(async () => !(await a.$('.fm-assist')) && await a.evaluate(() => document.activeElement && document.activeElement.id === 'fm-abrir')));
+    ok('o mestre volta ao LotM (versão 7)', (await inserir(Regras.LOTM)) === 7);
+    await m.click('#m-cfg-ficha');
+    ok('desligar volta a ficha do site de Klein (mods de antes)', await ate(() => srv.db.mesas[0].ficha_na_mesa === false && JSON.stringify(fichaDe(uidJ).mods) === JSON.stringify(esperado.mods) && !('do_site' in fichaDe(uidJ))));
+    ok('a carta some para o jogador', await ate(async () => !(await j.$('.fm-carta'))));
+    ok('sem erros nas páginas', m.erros.length + a.erros.length + b.erros.length + j.erros.length === 0, [...m.erros, ...a.erros, ...b.erros, ...j.erros].join(' | '));
+    for (const p of [a, b]) { await p.click('#on-sair'); }
+    await ate(() => srv.db.jogadores.length === 1); await ctxA.close(); await ctxB.close();
+  }
+
   console.log('\n7b) Sussurros e pistas');
   { const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
     const uidM = srv.db.mesas[0].mestre_id;

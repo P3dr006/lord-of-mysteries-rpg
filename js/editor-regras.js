@@ -445,7 +445,7 @@ const EditorRegras = Object.freeze((() => {
     const L = limpo(R), el = $('#er-msg'); el.hidden = true;
     if (Regras.validar(L).length) return atualizar();
     const n = (versoes[0] ? versoes[0].versao : 0) + 1;
-    if (!(await C.confirmar({ titulo: `Salvar a versão ${n}?`, texto: `Os testes desta mesa passam a usar estas regras na hora. Cada ficha é recalculada quando o jogador sincronizar. A ${nomeVigor()} continua guardada.`, botao: `Salvar versão ${n}` }))) return;
+    if (!(await C.confirmar({ titulo: `Salvar a versão ${n}?`, texto: `${C.fichaNaMesa && C.fichaNaMesa() ? 'As fichas montadas na mesa continuam na versão delas até você migrar (botão na carta do jogador); fichas novas já usam esta.' : 'Os testes desta mesa passam a usar estas regras na hora.'} Cada ficha é recalculada quando o jogador sincronizar. A ${nomeVigor()} continua guardada.`, botao: `Salvar versão ${n}` }))) return;
     try {
       const r = await (await Rede.tabela('mestre', 'mesa_regras')).insert({ mesa_id: C.mesaId, regras: L }).select('versao,regras,criado_em');
       if (r.error) throw r.error;
@@ -453,6 +453,7 @@ const EditorRegras = Object.freeze((() => {
       const vn = nova ? nova.versao : n;
       carregarNoLivro(nova ? nova.regras : L, `versão ${vn}`); irPara(secao, '#er-salvar'); desenharResumo();
       C.anunciar(`Regras salvas: versão ${vn} em vigor`);
+      if (C.aoSalvar) C.aoSalvar();
       el.textContent = `Versão ${vn} salva e em vigor.`; el.classList.add('m-ok'); el.hidden = false;
     } catch (e) { el.classList.remove('m-ok'); el.textContent = Rede.mensagem(e); el.hidden = false; }
   }
