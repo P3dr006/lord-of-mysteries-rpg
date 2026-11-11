@@ -76,7 +76,7 @@ const Jogador = Object.freeze((() => {
   }
 
   async function sairDaMesa() {
-    const c = con; desligar(); con = null; gravarConexao(null); pedidos = []; sussurros = []; lidos = new Set(); fila = []; habs = []; efeitos = []; decretos = []; cfg = { naMesa: false, aprovar: false }; fichaM = null; srv = null; estado = 'fora'; erro = ''; redesenhar();
+    const c = con; desligar(); con = null; gravarConexao(null); pedidos = []; sussurros = []; lidos = new Set(); fila = []; habs = []; efeitos = []; decretos = []; seqSrv = null; ascs = []; cfg = { naMesa: false, aprovar: false }; fichaM = null; srv = null; estado = 'fora'; erro = ''; redesenhar();
     if (c && uid) { try { await (await Rede.tabela('jogador', 'jogadores')).delete().eq('mesa_id', c.mesa).eq('user_id', uid); } catch (e) { /* sem rede: o mestre remove depois */ } }
   }
 
@@ -113,10 +113,12 @@ const Jogador = Object.freeze((() => {
       } catch (e) { /* sem habilidades da mesa nesta conexão */ }
       try {   // ficha montada na mesa (o mestre liga): a ficha do servidor, as regras e o veredito do mestre
         await carregarFichaMesa();
+        try { await carregarAscensoes(); parar.push(await Rede.ouvir('jogador', 'ascensoes', 'ascensoes', 'user_id=eq.' + uid, () => carregarAscensoes().catch(() => {}))); } catch (e) { /* sem ascensões nesta conexão */ }
         parar.push(await Rede.ouvir('jogador', 'fichas_mesa', 'fichas_mesa', 'user_id=eq.' + uid, () => carregarFichaMesa().catch(() => {})));
         parar.push(await Rede.ouvir('jogador', 'regras', 'mesa_regras', 'mesa_id=eq.' + con.mesa, () => carregarFichaMesa().catch(() => {})));
         parar.push(await Rede.ouvir('jogador', 'eu', 'jogadores', 'user_id=eq.' + uid, ev => {
           const f = ev && ev.new && ev.new.ficha; if (!f || ev.new.mesa_id !== con.mesa) return;
+          if (Number.isInteger(ev.new.sequencia) && ev.new.sequencia !== seqSrv) carregarAscensoes().catch(() => {});
           // o mestre ligou/desligou a ficha na mesa ou julgou: recarrega; senão, só guarda os números do servidor
           if ((f.ficha_estado || '') !== ((srv && srv.ficha_estado) || '') || f.regras_versao !== (srv && srv.regras_versao)) carregarFichaMesa().catch(() => {});
           else { srv = f; redesenhar(); }
@@ -307,6 +309,7 @@ const Jogador = Object.freeze((() => {
     if (document.querySelector('.sussurro, .duelo-cena')) { setTimeout(mostrarDecreto, 1500); return; }   // não atropela outra cena
     if (decretos[0] && decretos[0].ef) return decretoEfeito(decretos.shift().ef);
     if (decretos[0] && decretos[0].fm) return decretoFicha(decretos.shift().fm);
+    if (decretos[0] && decretos[0].asc) return decretoAscensao(decretos.shift().asc);
     const { h, antes } = decretos.shift(), rej = h.estado === 'rejeitada';
     const ja = antes && antes.startsWith('aprovada');
     const titulo = rej ? 'O mestre recusa' : ja ? 'O mestre reescreve' : h.origem === 'mestre' ? 'O mestre concede' : h.alterada ? 'Aprovada, com mudanças' : 'O mestre aprova';
@@ -322,6 +325,87 @@ const Jogador = Object.freeze((() => {
     anunciar(`${titulo}: ${h.nome}${h.resposta ? '. O mestre diz: ' + h.resposta : ''}`);
     let soltar = () => {};
     const fechar = () => { marcarVista(h); soltar(); m.classList.add('saindo'); setTimeout(() => { m.remove(); mostrarDecreto(); }, 220); };
+    m.querySelector('#dec-ok').addEventListener('click', fechar);
+    soltar = typeof prenderFoco === 'function' ? prenderFoco(m, fechar) : () => {};
+    setTimeout(() => { const b = m.querySelector('#dec-ok'); if (b && b.isConnected) b.focus(); }, 60);
+  }
+
+  // ---------- Sequência no servidor (20261117): a ascensão na mesa vira um pedido ao mestre ----------
+  // O site continua livre fora da mesa. Na mesa, vale jogadores.sequencia: subir na escada pede ao mestre; recusado ou
+  // mudado pelo mestre, a ficha local volta para a Sequência do servidor.
+  let seqSrv = null, ascs = [], ascSync = false, ascNaTela = null;   // ascNaTela: o selo aberto agora (dois avisos quase juntos não repetem)
+  const KA = 'lotm-rpg-asc-vistas';
+  const ascVistas = () => { try { return JSON.parse(localStorage.getItem(KA)) || {}; } catch (e) { return {}; } };
+  const ascMarcar = ids => { try { const v = ascVistas(); ids.forEach(i => { v[i] = 1; }); localStorage.setItem(KA, JSON.stringify(v)); } catch (e) { /* só nesta visita */ } };
+  const ascPendente = () => ascs.find(a => a.estado === 'pendente') || null;
+  const nomeDaSeq = n => (P.caminho && typeof nomeDaSequencia === 'function' ? nomeDaSequencia(P.caminho, n) : '') || '';
+  async function carregarAscensoes() {
+    if (!con || !uid) return;
+    const [eu, a] = await Promise.all([
+      (await Rede.tabela('jogador', 'jogadores')).select('sequencia').eq('mesa_id', con.mesa).eq('user_id', uid),
+      (await Rede.tabela('jogador', 'ascensoes')).select('id,de,para,origem,estado,resposta,criado_em,atualizado_em').eq('mesa_id', con.mesa).eq('user_id', uid).order('criado_em'),
+    ]);
+    if (eu.error || a.error) throw eu.error || a.error;
+    seqSrv = eu.data && eu.data[0] && Number.isInteger(eu.data[0].sequencia) ? eu.data[0].sequencia : null;
+    ascs = a.data || [];
+    // decidido e ainda não visto: a ficha local passa a ser a do servidor; o selo de cera mostra só o mais recente
+    const vistas = ascVistas(), novas = ascs.filter(x => x.estado !== 'pendente' && !vistas[x.id]);
+    if (novas.length) {
+      alinharSeq();
+      ascMarcar(novas.slice(0, -1).map(x => x.id));
+      const ult = novas[novas.length - 1];
+      if (ascNaTela !== ult.id && !decretos.some(d => d.asc && d.asc.id === ult.id)) { decretos.push({ asc: ult }); mostrarDecreto(); }
+    }
+    await sincronizarSeq();
+    redesenhar();
+  }
+  // a ficha local fica na Sequência do servidor (sem cerimônia: o selo de cera conta o que houve)
+  function alinharSeq() {
+    if (!minhaFicha() || seqSrv == null || P.sequencia === seqSrv) return;
+    P.sequencia = seqSrv;
+    if (P.pv != null && typeof pvMax === 'function') P.pv = Math.min(P.pv, pvMax());
+    if (P.san != null && typeof sanMax === 'function') P.san = Math.min(P.san, sanMax());
+    salvar();
+    const corpo = document.querySelector('#step-body');
+    if (P.step === 5 && corpo && typeof renderFicha === 'function') { try { renderFicha(corpo); } catch (e) { /* a ficha redesenha ao navegar */ } }
+  }
+  // a ficha do site está adiante da mesa: pede a ascensão (um pedido por vez; o novo substitui o anterior)
+  async function sincronizarSeq() {
+    if (ascSync || estado !== 'ligado' || !minhaFicha() || seqSrv == null) return;
+    const pend = ascPendente();
+    if (P.sequencia >= seqSrv || (pend && pend.para === P.sequencia)) return;
+    ascSync = true;
+    try {
+      await Rede.rpc('jogador', 'pedir_ascensao', { p_mesa: con.mesa, p_para: P.sequencia });
+      anunciar(`Pedido de ascensão à Sequência ${P.sequencia} enviado ao mestre`);
+      const a = await (await Rede.tabela('jogador', 'ascensoes')).select('id,de,para,origem,estado,resposta,criado_em,atualizado_em').eq('mesa_id', con.mesa).eq('user_id', uid).order('criado_em');
+      if (!a.error) ascs = a.data || [];
+    } catch (e) { /* tenta de novo na próxima mudança da ficha */ }
+    finally { ascSync = false; }
+    redesenhar();
+  }
+  function cartaAscensao() {
+    const p = estado === 'ligado' && minhaFicha() ? ascPendente() : null; if (!p) return '';
+    const nome = nomeDaSeq(p.para);
+    return `<section class="fm-carta fm-pendente asc-carta" aria-label="Ascensão"><span class="fm-selo" aria-hidden="true"><i>⧗</i></span><div><small class="fm-carta-olho">Ascensão</small>
+      <b>Sequência ${p.de} → ${p.para}${nome ? ` <i>· ${esc2(nome)}</i>` : ''}</b><span>O mestre precisa aprovar. Até lá, a mesa usa a Sequência ${p.de}.</span></div></section>`;
+  }
+  function decretoAscensao(a) {
+    const rej = a.estado === 'recusada', sobe = a.para < a.de;
+    const titulo = rej ? 'O mestre nega a ascensão' : a.origem === 'mestre' ? (sobe ? 'O mestre eleva você' : 'O mestre rebaixa sua Sequência') : 'O mestre aprova a ascensão';
+    const nome = nomeDaSeq(a.para);
+    ascNaTela = a.id;
+    const m = document.createElement('div'); m.className = 'decreto' + (rej || !sobe ? ' recusa' : ''); m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'dec-t');
+    m.innerHTML = `<div class="dec-papel"><span class="dec-selo" aria-hidden="true"><i></i></span>
+      <small class="dec-olho">Escada de poder</small><h2 id="dec-t">${esc2(titulo)}</h2>
+      <div class="dec-hab"><b class="${rej ? 'riscado' : ''}">Sequência ${a.de} → ${a.para}</b>${nome ? `<p>${esc2(nome)}</p>` : ''}${rej ? `<p>Sua ficha volta para a Sequência ${a.de}.</p>` : ''}</div>
+      ${a.resposta ? `<blockquote class="dec-recado">${esc2(a.resposta)}<cite>o mestre</cite></blockquote>` : ''}
+      <button type="button" class="primary" id="dec-ok">${rej ? 'Entendi' : 'Guardar na ficha'}</button></div>`;
+    document.body.appendChild(m); Cenas.decreto(m);
+    if (typeof Som === 'object') { try { rej || !sobe ? Som.falha() : Som.selar(); } catch (e) { /* sem som */ } }
+    anunciar(`${titulo}: Sequência ${a.de} para ${a.para}${a.resposta ? '. O mestre diz: ' + a.resposta : ''}`);
+    let soltar = () => {};
+    const fechar = () => { ascMarcar([a.id]); ascNaTela = null; soltar(); m.classList.add('saindo'); setTimeout(() => { m.remove(); mostrarDecreto(); }, 220); };
     m.querySelector('#dec-ok').addEventListener('click', fechar);
     soltar = typeof prenderFoco === 'function' ? prenderFoco(m, fechar) : () => {};
     setTimeout(() => { const b = m.querySelector('#dec-ok'); if (b && b.isConnected) b.focus(); }, 60);
@@ -609,6 +693,7 @@ const Jogador = Object.freeze((() => {
       if (r.error) throw r.error;
       if (!r.data || !r.data.length) { desligar(); con = null; gravarConexao(null); estado = 'fora'; erro = 'O mestre encerrou a mesa ou removeu você.'; return redesenhar(); }
       ultimaFicha = json;
+      sincronizarSeq();
     } catch (e) { /* tenta de novo na próxima mudança */ }
   }
 
@@ -656,7 +741,7 @@ const Jogador = Object.freeze((() => {
         <button type="button" class="link-remover" id="on-sair">Sair da mesa</button>`;
     } else {
       el.innerHTML = `${cab}<div class="on-status ligado"><span class="on-luz" aria-hidden="true"></span><span>Conectado. O mestre vê sua ficha ao vivo.</span></div>
-        ${cartaFichaMesa()}
+        ${cartaAscensao()}${cartaFichaMesa()}
         ${outra ? `<p class="hint">Você está com outra ficha aberta. Abra <b>${esc2(con.nome)}</b> para o mestre ver PV e Sanidade atualizados.</p>` : ''}
         ${pedidos.length ? `<ul class="pedidos">${pedidos.map(p => {
           const a = p.atributo && atrInfo(p.atributo), m = a ? a.mod : 0;
@@ -701,5 +786,5 @@ const Jogador = Object.freeze((() => {
     if (fab) fab.addEventListener('click', () => { const m = document.querySelector('#mesa'); if (pedidos.length && estado === 'ligado' && m && !m.hidden) Mesa.irParaTestes(); });
   });
 
-  return { desenhar, entrar, sairDaMesa, ligar, rolarPedido, fichaParaMestre: ficha, propor, retirar, podePropor, desenharHabsMesa, get habilidades() { return habs.slice(); }, get efeitos() { return efeitos.slice(); }, get estado() { return estado; }, get encontro() { return encontro; }, get pedidos() { return pedidos.slice(); }, abrirAssistente, get fichaDaMesa() { return { ...cfg, ficha: fichaM, servidor: srv }; } };
+  return { desenhar, entrar, sairDaMesa, ligar, rolarPedido, fichaParaMestre: ficha, propor, retirar, podePropor, desenharHabsMesa, get habilidades() { return habs.slice(); }, get efeitos() { return efeitos.slice(); }, get estado() { return estado; }, get encontro() { return encontro; }, get pedidos() { return pedidos.slice(); }, abrirAssistente, get naMesa() { return estado === 'ligado' && !!minhaFicha(); }, get sequenciaDaMesa() { return seqSrv; }, get fichaDaMesa() { return { ...cfg, ficha: fichaM, servidor: srv }; } };
 })());

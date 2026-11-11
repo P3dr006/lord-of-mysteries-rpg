@@ -185,6 +185,11 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
   await j.fill('#on-cod', codigo.toLowerCase().replace(/(...)/, '$1 ')); await j.click('#on-entrar');
   ok('código em minúsculas e com espaço funciona', await ate(() => j.isVisible('.on-status.ligado')), await j.textContent('#online').catch(() => ''));
   ok('o mestre vê o jogador entrar ao vivo', await ate(() => m.isVisible('.m-carta-j')));
+  // Sequência no servidor (20261117): quem entra começa na 9; a ficha do site (Seq. 7) vira pedido de ascensão ao mestre
+  ok('a ficha do site adiante da mesa vira pedido de ascensão (9 → 7)', await ate(() => m.isVisible('#m-ascensoes .fmp-ok')) && /Sequência 9 → 7/.test(await m.textContent('#m-ascensoes')));
+  await m.click('#m-ascensoes .fmp-ok');
+  ok('aprovada: o jogador recebe o selo de cera', await ate(async () => /aprova a ascensão/.test(await j.textContent('.decreto'))));
+  await j.click('#dec-ok'); await ate(async () => !(await j.$('.decreto')));
   const esperado = await j.evaluate(() => ({ mods: Object.fromEntries(ATTRS.map(a => [a.key, mod(total(a.key))])), pv: P.pv, pvMax: pvMax(), san: P.san, sanMax: sanMax() }));
   const naTela = await m.evaluate(() => ({ nome: document.querySelector('.m-carta-j .m-cj-id b').firstChild.textContent, mods: [...document.querySelectorAll('.m-carta-j .m-mods b')].map(b => b.textContent), pv: document.querySelector('.m-carta-j .m-barra b').textContent }));
   ok('nome do personagem no painel', naTela.nome === 'Klein', naTela.nome);
@@ -490,7 +495,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('agora a rolagem usa a v6 (20 - 10 = +10)', await ate(async () => (await sec()).includes('5 +10 = 15')), await sec());
     // 5) liberar nova ficha; recusar
     await m.click(`${carta(uidA)} .m-fm-liberar`); await m.waitForSelector('#cf-ok'); await m.click('#cf-ok');
-    ok('liberar: o jogador vê que pode montar de novo', await ate(() => fm(uidA).liberada === true) && await ate(async () => /liberou uma ficha nova/.test(await a.textContent('.fm-carta'))));
+    ok('liberar: o jogador vê que pode montar de novo', await ate(() => fm(uidA).liberada === true) && await ate(async () => /liberou uma ficha nova/.test(await a.textContent('.fm-carta:not(.asc-carta)'))));
     await a.click('#fm-abrir'); await a.click('.fm-op[data-ir=nova]'); srv.proximosDados(...Array(6).fill([3, 3, 3, 1]).flat()); await a.click('#fm-rolar');
     await ate(() => a.isVisible('.fm-ats.revela')); await a.click('[data-ir=origem]'); await a.click('[data-ir=selar]'); await a.click('#fm-selar');
     ok('a ficha nova vai ao mestre (aprovação ligada) e conta a 2ª rolagem', await ate(() => fm(uidA).estado === 'pendente' && fm(uidA).rolagens_feitas === 2) && await ate(async () => /2ª rolagem/.test(await m.textContent(`#m-fichas .fmp[data-u="${uidA}"]`))));
@@ -508,10 +513,69 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('o mestre volta ao LotM (versão 7)', (await inserir(Regras.LOTM)) === 7);
     await m.click('#m-cfg-ficha');
     ok('desligar volta a ficha do site de Klein (mods de antes)', await ate(() => srv.db.mesas[0].ficha_na_mesa === false && JSON.stringify(fichaDe(uidJ).mods) === JSON.stringify(esperado.mods) && !('do_site' in fichaDe(uidJ))));
-    ok('a carta some para o jogador', await ate(async () => !(await j.$('.fm-carta'))));
+    ok('a carta some para o jogador', await ate(async () => !(await j.$('.fm-carta:not(.asc-carta)'))));
     ok('sem erros nas páginas', m.erros.length + a.erros.length + b.erros.length + j.erros.length === 0, [...m.erros, ...a.erros, ...b.erros, ...j.erros].join(' | '));
     for (const p of [a, b]) { await p.click('#on-sair'); }
     await ate(() => srv.db.jogadores.length === 1); await ctxA.close(); await ctxB.close();
+  }
+
+  console.log('\n7a4) Sequência no servidor: ascensão pedida ao mestre; atributos da regra no Grimório');
+  { const Regras = require('../js/regras.js'), mesaId = srv.db.mesas[0].id;
+    const print = async (pg, nome, sel) => { if (process.env.PRINTS) { await pg.waitForTimeout(500); await pg.locator(sel).first().screenshot({ path: path.join(process.env.PRINTS, 'seq-' + nome + '.png') }); } };
+    const linha = () => srv.db.jogadores.find(x => x.mesa_id === mesaId && x.user_id === uidJ);
+    const fechaDecreto = async () => { await j.click('#dec-ok'); await ate(async () => !(await j.$('.decreto'))); };
+    const ascenderNoSite = async () => { await j.evaluate(() => ascender(false)); await j.waitForSelector('.asc'); };
+    await j.click('#mesa-x').catch(() => {});
+    ok('Klein começa na Sequência 7, igual no site e no servidor', linha().sequencia === 7 && (await j.evaluate(() => P.sequencia)) === 7);
+    // 1) a cerimônia do site avisa e vira pedido
+    await ascenderNoSite();
+    ok('a cerimônia avisa que, na mesa, o mestre precisa aprovar', /quando o mestre aprovar/.test(await j.textContent('.asc-mesa')));
+    await print(j, '1-cerimonia', '.asc-core');
+    await j.click('#asc-ok'); await ate(async () => !(await j.$('.asc')));
+    ok('o pedido 7 → 6 chega ao mestre e a Sequência do servidor não muda', await ate(async () => /Sequência 7 → 6/.test(await m.textContent('#m-ascensoes'))) && linha().sequencia === 7);
+    ok('a carta do jogador no Grimório marca "ascensão à 6"', await ate(async () => /ascensão à 6/.test(await m.textContent(`.m-carta-j[data-u="${uidJ}"]`))));
+    { const v = await axe(m); ok('Grimório com a fila de ascensão sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    await print(m, '2-fila', '#m-ascensoes');
+    await j.click('#fab-mesa'); await j.click('.aba[data-aba=testes]');
+    ok('o jogador vê "Sequência 7 → 6" aguardando o mestre', await ate(async () => /Sequência 7 → 6/.test(await j.textContent('.asc-carta'))));
+    await print(j, '3-aguardando', '.asc-carta');
+    // 2) recusa: selo de cera e a ficha local volta
+    const idAsc = await m.getAttribute('#m-ascensoes .asc-p', 'data-a');
+    await m.fill(`#asc-${idAsc}-r`, 'A poção ainda ferve em você.'); await m.click(`#asc-${idAsc}-nao`);
+    ok('recusada: o jogador recebe o selo com o recado', await ate(async () => /nega a ascensão/.test(await j.textContent('.decreto.recusa')) && /ainda ferve/.test(await j.textContent('.decreto'))));
+    await print(j, '4-recusa', '.dec-papel');
+    ok('a ficha local volta para a Sequência 7 e o pedido some', await ate(async () => (await j.evaluate(() => P.sequencia)) === 7) && !(await j.$('.asc-carta')) && !srv.db.ascensoes.some(a => a.user_id === uidJ && a.estado === 'pendente'));
+    await fechaDecreto();
+    // 3) pede de novo; o mestre aprova
+    await j.click('#mesa-x').catch(() => {}); await ascenderNoSite(); await j.click('#asc-ok'); await ate(async () => !(await j.$('.asc')));
+    await ate(() => m.isVisible('#m-ascensoes .fmp-ok')); await m.click('#m-ascensoes .fmp-ok');
+    ok('aprovada: o servidor passa para a 6 e o jogador recebe o selo', await ate(() => linha().sequencia === 6 && linha().ficha.seq === 6) && await ate(async () => /aprova a ascensão/.test(await j.textContent('.decreto'))));
+    await fechaDecreto();
+    // 4) o mestre rebaixa direto pela ficha do jogador
+    await m.click(`.m-carta-j[data-u="${uidJ}"] .m-cj-ver`); await m.waitForSelector('.mf-seqctl');
+    ok('a ficha no Grimório mostra Elevar à 5 e Rebaixar à 7', /Elevar à 5/.test(await m.textContent('.mf-seqctl')) && /Rebaixar à 7/.test(await m.textContent('.mf-seqctl')));
+    await print(m, '5-controle', '.mf-cab');
+    await m.click('.mf-seq-menos'); await m.waitForSelector('#cf-ok'); await m.click('#cf-ok');
+    ok('rebaixado: o servidor vai para a 7 e o jogador recebe o selo', await ate(() => linha().sequencia === 7) && await ate(async () => /rebaixa sua Sequência/.test(await j.textContent('.decreto'))));
+    ok('a ficha local acompanha o servidor (7)', await ate(async () => (await j.evaluate(() => P.sequencia)) === 7));
+    await fechaDecreto(); await m.click('.m-ficha-x');
+    // 5) forjar a Sequência na ficha não muda nada
+    const forja = await j.evaluate(async ([mid, u]) => { const r = await (await Rede.tabela('jogador', 'jogadores')).update({ ficha: { ...Jogador.fichaParaMestre(), seq: 0 } }).eq('mesa_id', mid).eq('user_id', u).select('user_id'); return r.error ? r.error.message : 'ok'; }, [mesaId, uidJ]);
+    ok('mandar seq 0 na ficha não muda a Sequência do servidor', forja === 'ok' && linha().ficha.seq === 7 && linha().ficha.seq_site === 0);
+    ok('mudar a coluna direto é recusado', /permission denied/.test(await j.evaluate(async ([mid, u]) => { const r = await (await Rede.tabela('jogador', 'jogadores')).update({ sequencia: 0 }).eq('mesa_id', mid).eq('user_id', u); return r.error ? r.error.message : 'ok'; }, [mesaId, uidJ])));
+    await j.evaluate(() => { P.notas = (P.notas || '') + ' '; salvar(); });   // a próxima ficha do site volta a ser a verdadeira
+    // 6) atributo novo da regra aparece na carta, na ficha, no Teste e no Duelo
+    const inserir = regras => m.evaluate(async ([mid, rg]) => { const r = await (await Rede.tabela('mestre', 'mesa_regras')).insert({ mesa_id: mid, regras: rg }).select('versao'); return r.error ? 'erro: ' + r.error.message : r.data[0].versao; }, [mesaId, regras]);
+    const vSorte = await inserir({ ...Regras.LOTM, atributos: [...Regras.LOTM.atributos, { id: 'sorte', nome: 'Sorte', abrev: 'SOR' }] });
+    await j.evaluate(() => { P.notas = (P.notas || '') + '.'; salvar(); });
+    ok('com a regra nova, a carta do jogador mostra 7 atributos (Sorte incluída)', await ate(() => linha().ficha.regras_versao === vSorte) && await ate(async () => (await m.$$eval(`.m-carta-j[data-u="${uidJ}"] .m-mods li`, l => l.map(x => x.textContent))).some(t => /^Sor/.test(t.trim())) && (await m.$$(`.m-carta-j[data-u="${uidJ}"] .m-mods li`)).length === 7));
+    ok('o Teste e o Duelo listam Sorte', await ate(async () => (await m.$$eval('#t-attr option', o => o.map(x => x.value))).includes('sorte')) && (await m.$$eval('select option', o => o.filter(x => x.value === 'sorte').length)) >= 2);
+    await print(m, '6-carta-sorte', `.m-carta-j[data-u="${uidJ}"]`);
+    ok('o mestre volta ao LotM', typeof (await inserir(Regras.LOTM)) === 'number');
+    await j.evaluate(() => { P.notas = (P.notas || '').trim(); salvar(); });
+    await ate(() => linha().ficha.regras_versao === vSorte + 1);
+    ok('sem erros nas páginas', m.erros.length + j.erros.length === 0, [...m.erros, ...j.erros].join(' | '));
+    await j.click('#fab-mesa').catch(() => {}); await j.click('.aba[data-aba=testes]').catch(() => {});
   }
 
   console.log('\n7b) Sussurros e pistas');

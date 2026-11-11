@@ -88,6 +88,7 @@ function mostrarAscensao(o) {
       <h2 class="asc-nome">${esc(nomeSeq(o.novo, true))}</h2>
       ${o.mudou ? `<div class="asc-pat"><small>NOVO PATAMAR</small><b>${o.pat.nome}</b></div>` : `<div class="asc-pat sem"><b>${o.pat.nome}</b></div>`}
       <p class="asc-ganhos">${o.ganhos.map(g => `<span>${g}</span>`).join('')}</p>
+      ${typeof Jogador === 'object' && Jogador.naMesa ? '<p class="asc-mesa">Na mesa, a nova Sequência vale quando o mestre aprovar.</p>' : ''}
       ${o.forcado ? `<p class="asc-aviso">A poção não estava digerida. A mente cobra o preço: <b>−${o.perda} Sanidade</b>${o.fim ? ' — <b>PERDA DE CONTROLE</b>' : ''}.</p>` : ''}
       <button class="primary" id="asc-ok">Continuar</button></div>`;
   document.body.appendChild(el0);

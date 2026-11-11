@@ -75,7 +75,7 @@ const CLIENTE = `(() => {
 })();`;
 
 function criarServidor() {
-  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [], figuras: [], efeitos: [], encontros: [], disputas: [], cronica: [], bestiario: [], habilidades: [], arquivos: [], mesa_regras: [], fichas_mesa: [] };
+  const db = { usuarios: [], mesas: [], jogadores: [], pedidos: [], segredos_pedido: [], resultados: [], sussurros: [], sussurros_leituras: [], ordens: [], notas_mestre: [], figuras: [], efeitos: [], encontros: [], disputas: [], cronica: [], bestiario: [], habilidades: [], arquivos: [], mesa_regras: [], fichas_mesa: [], ascensoes: [] };
   const naMesa = (u, mesa) => db.jogadores.some(j => j.mesa_id === mesa && j.user_id === u);
   const assinaturas = [];          // { id, uid, tabela, filtro, page }
   const entregue = {};             // uid -> [cada resposta entregue a esse usuário]
@@ -107,6 +107,7 @@ function criarServidor() {
     bestiario: (u, r) => r.dono === u && !anonimo(u),
     habilidades: (u, r) => mestreDe(r.mesa_id) === u || (r.user_id === u && naMesa(u, r.mesa_id)),
     fichas_mesa: (u, r) => mestreDe(r.mesa_id) === u || (r.user_id === u && naMesa(u, r.mesa_id)),
+    ascensoes: (u, r) => mestreDe(r.mesa_id) === u || (r.user_id === u && naMesa(u, r.mesa_id)),
   };
   function visao(u) {     // resultados_mestre (security_invoker: vale a RLS de quem consulta)
     return db.resultados.filter(r => VE.resultados(u, r)).map(r => {
@@ -138,9 +139,12 @@ function criarServidor() {
   // cada ficha na sua versão (só na mesa com ficha montada)
   const modCalculado = (mesa, f, attr) => { try { const R = mesaDe(mesa).ficha_na_mesa && f && typeof f.regras_versao === 'number' ? regrasNaVersao(mesa, f.regras_versao).regras : regrasDaMesa(mesa).regras; return Regras.modificador(R, f, attr); } catch (e) { return 0; } };
   // igual ao gatilho ficha_do_servidor (20261116): na mesa com ficha montada, base/Caminho/raça vêm da ficha aprovada
-  const fichaDoServidor = (mesa, f0, u) => {
+  const fichaDoServidor = (mesa, f0, u, recalculo) => {
     if (!f0 || typeof f0 !== 'object' || Array.isArray(f0)) return f0;
     let f = { ...f0 }, rg;
+    const jj = db.jogadores.find(x => x.mesa_id === mesa && x.user_id === u);
+    if (!recalculo) f.seq_site = f0.seq ?? null;
+    f.seq = jj ? jj.sequencia : 9;
     try {
       if (mesaDe(mesa).ficha_na_mesa) {
         if (!('do_site' in f)) f.do_site = { base: f.base || {}, caminhoId: f.caminhoId || '', racaId: f.racaId || '' };
@@ -172,7 +176,7 @@ function criarServidor() {
     if (tipo === 'figura') { const f = db.figuras.find(x => x.mesa_id === mesa && x.id === idL); if (!f) throw new Error('Figura não encontrada.'); const d = d20(), tem = !!attr && Object.hasOwn(f.mods || {}, attr), m = tem ? modDaFicha({ mods: f.mods }, attr) : f.bonus; return { tipo, id: idL, nome: f.nome, atributo: tem ? attr : null, dado: d, mod: m, total: d + m }; }
     throw new Error('Lado inválido.');
   }
-  const recalcular = (mesa, u) => db.jogadores.filter(j => j.mesa_id === mesa && (!u || j.user_id === u)).forEach(j => { j.ficha = fichaDoServidor(mesa, j.ficha, j.user_id); j.atualizado_em = new Date().toISOString(); avisar('jogadores', j); });
+  const recalcular = (mesa, u) => db.jogadores.filter(j => j.mesa_id === mesa && (!u || j.user_id === u)).forEach(j => { j.ficha = fichaDoServidor(mesa, j.ficha, j.user_id, true); j.atualizado_em = new Date().toISOString(); avisar('jogadores', j); });
   const fichaLivre = (mesa, u) => { const fm = fichaMesa(mesa, u); return !fm || fm.liberada || fm.estado === 'recusada'; };
   const conferirFicha = (u, mesa) => !naMesa(u, mesa) ? erro('Entre na mesa primeiro.') : !mesaDe(mesa).ficha_na_mesa ? erro('Nesta mesa a ficha é feita no site.') : null;
   const idOk = v => !v || /^[a-z]{2,20}$/.test(v);
@@ -271,6 +275,34 @@ function criarServidor() {
       if (!(naMesa(u, a.p_mesa) || mestreDe(a.p_mesa) === u)) return erro('Mesa inválida.');
       const m = mesaDe(a.p_mesa); return { data: { terror: !!m.terror, ficha_na_mesa: !!m.ficha_na_mesa, aprovar_fichas: !!m.aprovar_fichas }, error: null };
     },
+    // ---- Sequência no servidor (20261117) ----
+    pedir_ascensao(u, a) {
+      const j = db.jogadores.find(x => x.mesa_id === a.p_mesa && x.user_id === u); if (!j) return erro('Entre na mesa primeiro.');
+      if (!Number.isInteger(a.p_para) || a.p_para < 0 || a.p_para >= j.sequencia) return erro(`Só dá para pedir uma Sequência acima da atual (${j.sequencia}).`);
+      db.ascensoes.filter(x => x.mesa_id === a.p_mesa && x.user_id === u && x.estado === 'pendente').forEach(x => { db.ascensoes.splice(db.ascensoes.indexOf(x), 1); avisar('ascensoes', x); });
+      const agora = new Date().toISOString(), r = { id: id('asc'), mesa_id: a.p_mesa, user_id: u, de: j.sequencia, para: a.p_para, origem: 'jogador', estado: 'pendente', resposta: null, criado_em: agora, atualizado_em: agora };
+      db.ascensoes.push(r); avisar('ascensoes', r); return { data: r.id, error: null };
+    },
+    julgar_ascensao(u, a) {
+      const r = db.ascensoes.find(x => x.id === a.p_id); if (!r || mestreDe(r.mesa_id) !== u) return erro('Só o mestre decide a ascensão.');
+      if (r.estado !== 'pendente') return erro('Este pedido já foi decidido.');
+      if (a.p_aprovar) {
+        const j = db.jogadores.find(x => x.mesa_id === r.mesa_id && x.user_id === r.user_id && x.sequencia === r.de); if (!j) return erro('A Sequência deste jogador mudou desde o pedido.');
+        j.sequencia = r.para; recalcular(r.mesa_id, r.user_id);
+      }
+      Object.assign(r, { estado: a.p_aprovar ? 'aprovada' : 'recusada', resposta: String(a.p_resposta || '').trim().slice(0, 300) || null, atualizado_em: new Date().toISOString() });
+      avisar('ascensoes', r); return { data: null, error: null };
+    },
+    definir_sequencia(u, a) {
+      if (mestreDe(a.p_mesa) !== u) return erro('Só o mestre muda a Sequência.');
+      if (!Number.isInteger(a.p_seq) || a.p_seq < 0 || a.p_seq > 9) return erro('A Sequência vai de 9 a 0.');
+      const j = db.jogadores.find(x => x.mesa_id === a.p_mesa && x.user_id === a.p_user); if (!j) return erro('Jogador não encontrado.');
+      if (j.sequencia === a.p_seq) return erro(`O jogador já está na Sequência ${j.sequencia}.`);
+      const de = j.sequencia; j.sequencia = a.p_seq; recalcular(a.p_mesa, a.p_user);
+      db.ascensoes.filter(x => x.mesa_id === a.p_mesa && x.user_id === a.p_user && x.estado === 'pendente').forEach(x => { db.ascensoes.splice(db.ascensoes.indexOf(x), 1); avisar('ascensoes', x); });
+      const agora = new Date().toISOString(), r = { id: id('asc'), mesa_id: a.p_mesa, user_id: a.p_user, de, para: a.p_seq, origem: 'mestre', estado: 'aprovada', resposta: String(a.p_resposta || '').trim().slice(0, 300) || null, criado_em: agora, atualizado_em: agora };
+      db.ascensoes.push(r); avisar('ascensoes', r); return { data: null, error: null };
+    },
     // ---- ficha montada na mesa (20261116) ----
     rolar_ficha(u, a) {
       const e = conferirFicha(u, a.p_mesa); if (e) return e;
@@ -361,7 +393,7 @@ function criarServidor() {
       const m = db.mesas.find(x => x.codigo === String(a.p_codigo).trim().toUpperCase()); if (!m) { db.tentativas.push({ u, t: agora }); return { data: null, error: null }; }
       let j = db.jogadores.find(x => x.mesa_id === m.id && x.user_id === u);
       if (j) Object.assign(j, { nome: a.p_nome, ficha: fichaDoServidor(m.id, a.p_ficha || {}, u) });
-      else db.jogadores.push(j = { mesa_id: m.id, user_id: u, nome: String(a.p_nome).trim().slice(0, 40), ficha: fichaDoServidor(m.id, a.p_ficha || {}, u), atualizado_em: new Date().toISOString() });
+      else db.jogadores.push(j = { mesa_id: m.id, user_id: u, nome: String(a.p_nome).trim().slice(0, 40), sequencia: 9, ficha: fichaDoServidor(m.id, a.p_ficha || {}, u), atualizado_em: new Date().toISOString() });
       avisar('jogadores', j); return { data: m.id, error: null };
     },
     pedir_teste(u, a) {
@@ -535,7 +567,7 @@ function criarServidor() {
     if (q.op === 'update') {
       const COLS = { jogadores: ['nome', 'ficha'], notas_mestre: ['texto'], figuras: ['nome', 'bonus', 'pv', 'pv_max'], bestiario: ['nome', 'tipo', 'perigo', 'pv_max', 'defesa', 'horror', 'mods', 'habilidades', 'descricao', 'notas', 'imagem', 'imagem_caminho', 'categoria', 'caminho', 'sequencia', 'faccao', 'relacao', 'local', 'personalidade', 'falas', 'segredos'], habilidades: ['nome', 'descricao', 'custo', 'efeito', 'estado', 'resposta', 'alterada'], efeitos: ['rotulo', 'descricao', 'secreto', 'valor'] }[q.tabela];
       if (!COLS) return erro('permission denied for table ' + q.tabela);
-      if (['bestiario', 'habilidades', 'efeitos'].includes(q.tabela) && Object.keys(q.valores).some(k => !COLS.includes(k))) return erro('permission denied for table ' + q.tabela);   // grant de update só nas colunas permitidas
+      if (['bestiario', 'habilidades', 'efeitos', 'jogadores'].includes(q.tabela) && Object.keys(q.valores).some(k => !COLS.includes(k))) return erro('permission denied for table ' + q.tabela);   // grant de update só nas colunas permitidas
       if (q.tabela === 'bestiario') { const ch = validarBestiario(q.valores, true, u); if (ch) return erro('new row violates check constraint "bestiario_' + ch + '_check"'); }
       if (q.tabela === 'habilidades' && 'estado' in q.valores && !['pendente', 'aprovada', 'rejeitada'].includes(q.valores.estado)) return erro('new row violates check constraint "habilidades_estado_check"');
       const pode = linhas.filter(r => q.tabela === 'jogadores' ? r.user_id === u : q.tabela === 'bestiario' ? r.dono === u : mestreDe(r.mesa_id) === u);

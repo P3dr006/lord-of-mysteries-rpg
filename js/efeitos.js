@@ -317,7 +317,7 @@ const Efeitos = Object.freeze((() => {
   let cv = null, raf = 0; const IMG = {};
   const img = id => IMG[id] || (IMG[id] = Object.assign(new Image(), { src: `img/sigilos/${id}.webp` }));
   const cor = id => { const c = typeof caminhoPorId === 'function' ? caminhoPorId(id) : null; return c ? c.cor : '#fff'; };
-  function tela() { if (cv) return cv; cv = document.createElement('canvas'); cv.id = 'fx-canvas'; cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60'; document.body.appendChild(cv); return cv; }
+  function tela() { if (cv) return cv; cv = document.createElement('canvas'); cv.id = 'fx-canvas'; cv.setAttribute('aria-hidden', 'true'); cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60'; document.body.appendChild(cv); return cv; }
 
   // O sigilo do Caminho surge no clímax, com o nome
   function selo(c, id, w, h, p, T) {

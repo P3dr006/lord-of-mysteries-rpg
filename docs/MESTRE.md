@@ -111,6 +111,12 @@ jogador vê o número sem o segredo e o mestre vê o total real (coluna `oculto`
 **Teste aberto à prova de trapaça:** o modificador do teste aberto agora vem da ficha guardada no servidor (a mesma que o
 mestre vê), não do que o navegador manda. Modificador ilegível na ficha vale 0 em vez de dar erro.
 
+**Sequência na mesa:** a Sequência que vale nas rolagens é a do servidor, não a que a ficha do site declara. Quando o jogador
+ascende na escada de poder, a cerimônia continua igual para ele, mas vira um **pedido de ascensão**: aparece na fila "Pedidos
+de ascensão" (com a digestão da poção, para ajudar a decidir) e a carta ganha "▲ ascensão". Aprovando, a Sequência muda na
+hora; recusando (com recado), a ficha dele volta. Na ficha do jogador, "Elevar" e "Rebaixar" mudam direto. Em todos os casos
+ele recebe o selo de cera. Quem entra numa mesa começa na Sequência 9; se a ficha do site estiver adiante, o pedido chega sozinho.
+
 **Ficha montada na mesa** (opcional, Fase B2 de [SISTEMAS-DA-MESA.md](SISTEMAS-DA-MESA.md)): no cabeçalho da mesa, ligue a pena
 "Ficha montada na mesa". O jogador entra só com o código e monta a ficha num assistente (Atributos, Origem, Selar) guiado pelas
 regras em vigor; os atributos são **rolados pelo servidor** (`rolar_ficha`) e só rolam de novo se você **Liberar nova ficha** ou
@@ -159,6 +165,8 @@ Tudo com RLS: o navegador só lê o que a política permite e só escreve pelas 
 | `habilidades` | o mestre; o jogador só as suas (enquanto está na mesa) | mestre concede/edita/apaga; jogador só por `propor_habilidade` e `retirar_habilidade` |
 | `efeitos` (bênçãos, maldições, selos) | o mestre; o jogador só os próprios avisados | só o mestre |
 | `mesa_regras` (versões das regras) | o mestre e os jogadores da mesa | só o mestre (versão nova; nada é sobrescrito) |
+| `jogadores.sequencia` | o mestre e o próprio jogador | só por função: `julgar_ascensao`, `definir_sequencia` |
+| `ascensoes` (pedidos de ascensão) | o mestre; o jogador só os seus | jogador por `pedir_ascensao`; mestre por `julgar_ascensao`, `definir_sequencia` |
 | `fichas_mesa` (ficha montada na mesa) | o mestre; o jogador só a sua | só por função: `rolar_ficha`, `enviar_ficha`, `converter_ficha`, `julgar_ficha`, `liberar_ficha`, `migrar_ficha` |
 
 O dado é rolado **no servidor** (`responder_pedido`, `rolar_secreto`); o site só anima até o número.
@@ -167,8 +175,8 @@ a partir de `ficha.base` (os dados rolados, 3 a 18), Caminho, Raça e Sequência
 nova; sem regras = predefinição `lotm`, idêntica ao site). Vale para o teste secreto, o aberto, a Roda e o Duelo. Ao gravar a ficha,
 um gatilho regrava `mods`, `attrs`, `pvMax`, `sanMax`, `espMax`, `maximos` e `regras_versao`: o mestre vê o número verdadeiro.
 Fórmulas das regras: mini-linguagem sem `eval` (números, `+ - * /`, parênteses, `NdM`, abreviações, `SEQ`, `NIVEL`, `mod/min/max/floor`),
-com o mesmo intérprete em `js/regras.js` e em plpgsql; fórmula inválida é recusada com a posição. A Sequência ainda é
-declarada pelo jogador. Na mesa com ficha montada, a base vem de `fichas_mesa` (dados rolados pelo servidor), na versão das
+com o mesmo intérprete em `js/regras.js` e em plpgsql; fórmula inválida é recusada com a posição. A Sequência vem de
+`jogadores.sequencia` (o navegador não decide). Na mesa com ficha montada, a base vem de `fichas_mesa` (dados rolados pelo servidor), na versão das
 regras em que a ficha foi feita.
 
 As migrações ficam em `supabase/migrations/` (em ordem) e os cenários de verificação de cada uma em `supabase/verificacoes/`.

@@ -150,7 +150,7 @@
   // ---------- painel da mesa ----------
   async function abrirMesa(m, nova = false) {
     if (!m || !m.id) return listaMesas();
-    S.mesa = m; S.fichas = []; S.regrasV = null; S.fichasCarregadas = false; S.ultimoSecreto = null; S.habs = []; S.habsCarregadas = false; S.habModo = {}; S.keep = {};
+    S.mesa = m; S.fichas = []; S.regrasV = null; S.fichasCarregadas = false; S.ascs = []; S.ascsCarregadas = false; S.ultimoSecreto = null; S.habs = []; S.habsCarregadas = false; S.habModo = {}; S.keep = {};
     tela(`<div class="m-painel">
       <section class="m-cartao m-cab">
         <button type="button" class="link-remover m-voltar" id="m-voltar">← Suas mesas</button>
@@ -164,7 +164,7 @@
         ${nova ? '<p class="m-ok m-dica">Mesa criada. Os jogadores abrem a Mesa do Destino, aba Testes, e digitam este código.</p>' : ''}
       </section>
       <section class="m-roda" id="m-roda" aria-label="Roda do Destino" hidden></section>
-      <section class="m-cartao m-jog" aria-labelledby="t-jog"><h2 id="t-jog">Jogadores <small id="m-ao-vivo" class="m-vivo">ao vivo</small></h2><div id="m-jogadores" class="m-jogadores"></div><div id="m-propostas" class="hp-fila" aria-label="Pedidos de poder dos jogadores" hidden></div><div id="m-fichas" class="hp-fila fmp-fila" aria-label="Fichas esperando aprovação" hidden></div><p class="m-erro" id="m-erro-fichas" role="alert" hidden></p></section>
+      <section class="m-cartao m-jog" aria-labelledby="t-jog"><h2 id="t-jog">Jogadores <small id="m-ao-vivo" class="m-vivo">ao vivo</small></h2><div id="m-jogadores" class="m-jogadores"></div><div id="m-propostas" class="hp-fila" aria-label="Pedidos de poder dos jogadores" hidden></div><div id="m-fichas" class="hp-fila fmp-fila" aria-label="Fichas esperando aprovação" hidden></div><div id="m-ascensoes" class="hp-fila fmp-fila" aria-label="Pedidos de ascensão" hidden></div><p class="m-erro" id="m-erro-fichas" role="alert" hidden></p></section>
       <div class="m-lado">
         <nav class="m-abas" role="tablist" aria-label="Seções do grimório"><button type="button" role="tab" class="m-aba on" id="aba-acoes" data-aba="acoes" aria-controls="p-acoes" aria-selected="true" tabindex="0">Ações</button><button type="button" role="tab" class="m-aba" id="aba-cena" data-aba="cena" aria-controls="p-cena" aria-selected="false" tabindex="-1">Cena</button><button type="button" role="tab" class="m-aba" id="aba-bestiario" data-aba="bestiario" aria-controls="p-bestiario" aria-selected="false" tabindex="-1">Bestiário</button><button type="button" role="tab" class="m-aba" id="aba-segredos" data-aba="segredos" aria-controls="p-segredos" aria-selected="false" tabindex="-1">Segredos</button><button type="button" role="tab" class="m-aba" id="aba-cronica" data-aba="cronica" aria-controls="p-cronica" aria-selected="false" tabindex="-1">Crônica</button><button type="button" role="tab" class="m-aba" id="aba-dados" data-aba="dados" aria-controls="p-dados" aria-selected="false" tabindex="-1">Dados</button><button type="button" role="tab" class="m-aba" id="aba-regras" data-aba="regras" aria-controls="p-regras" aria-selected="false" tabindex="-1">Regras</button></nav>
         <div class="m-aba-p" role="tabpanel" id="p-acoes" aria-labelledby="aba-acoes" data-p="acoes">
@@ -251,7 +251,7 @@ ${EditorRegras.secao()}
     ligarFormSussurro(); ligarControle(); ligarAbas(); ligarDuelo(); ligarFiguras(); ligarCronica(); ligarDadosMestre(); ligarBestiario();
     EditorRegras.ligar({ raiz: $('#p-regras'), mesaId: m.id, confirmar, anunciar, jogadores: () => S.jogadores, fichaNaMesa: () => !!(S.mesa && S.mesa.ficha_na_mesa), aoSalvar: () => carregarFichasMesa() });
     ligarCfg();
-    await Promise.all([carregarJogadores(), carregarResultados(), carregarSussurros(), carregarOrdens(), carregarNotas(), carregarFiguras(), carregarEncontro(), carregarDisputas(), carregarCronica(), carregarBestiario(), carregarHabs(), carregarEfeitos(), carregarFichasMesa()]);
+    await Promise.all([carregarJogadores(), carregarResultados(), carregarSussurros(), carregarOrdens(), carregarNotas(), carregarFiguras(), carregarEncontro(), carregarDisputas(), carregarCronica(), carregarBestiario(), carregarHabs(), carregarEfeitos(), carregarFichasMesa(), carregarAscensoesM()]);
     ouvirMesa();
   }
 
@@ -299,7 +299,7 @@ ${EditorRegras.secao()}
   const EST_PV = ['Caído', 'Grave', 'Ferido', 'Arranhado', 'Ileso'], EST_SAN = ['Rompido', 'Vacilando', 'Abalado', 'Inquieto', 'Lúcido'];
   function haQuanto(t) { const s = (Date.now() - new Date(t).getTime()) / 1000; if (!Number.isFinite(s)) return ''; if (s < 60) return 'agora'; if (s < 3600) return `há ${Math.floor(s / 60)} min`; if (s < 86400) return `há ${Math.floor(s / 3600)} h`; return `há ${Math.floor(s / 86400)} d`; }
   const selo = (f, nome, tam) => { const id = idOk(f.caminhoId); return id ? `<img src="img/sigilos/${id}.webp" alt="" width="${tam}" height="${tam}" loading="lazy">` : `<span class="m-sem-selo" aria-hidden="true">${esc((nome || '?').trim().charAt(0).toUpperCase())}</span>`; };
-  const linhaSeq = f => { const s = num(f.seq, 0, 9); return [txt(f.seqNome, 60), s != null ? `Sequência ${s}` : '', txt(f.patamar, 40)].filter(Boolean).join(' · '); };
+  const linhaSeq = f => { const s = num(f.seq, 0, 9), igual = f.seq_site == null || f.seq_site === f.seq; return [nomeSeqMesa(f), s != null ? `Sequência ${s}` : '', igual ? txt(f.patamar, 40) : ''].filter(Boolean).join(' · '); };
   const linhaOrigem = f => [txt(obj(f.raca).nome, 40), txt(obj(f.origem).nome, 40)].filter(Boolean).join(' · ');
 
   function cartaJogador(j) {
@@ -310,17 +310,18 @@ ${EditorRegras.secao()}
       <header class="m-cj-cab">
         <div class="m-cj-selo">${selo(f, j.nome, 46)}${num(f.seq, 0, 9) != null ? `<b class="m-cj-seq" aria-hidden="true">${num(f.seq, 0, 9)}</b>` : ''}</div>
         <div class="m-cj-id"><b>${esc(j.nome)}<span class="m-vela ${S.online && S.online.has(j.user_id) ? 'acesa' : ''}" title="${S.online && S.online.has(j.user_id) ? 'Com a mesa aberta agora' : 'Fora da mesa agora'}"><i aria-hidden="true"></i><span class="sr-only">${S.online && S.online.has(j.user_id) ? 'presente' : 'ausente'}</span></span></b>
-          <small class="m-cj-cam">${cam ? `${esc(txt(f.seqNome, 60) || cam)} <i>· Caminho ${esc(cam)}${num(f.seq, 0, 9) != null ? ` · Seq. ${num(f.seq, 0, 9)}` : ''}</i>` : 'Ficha em construção'}</small>
+          <small class="m-cj-cam">${cam ? `${esc(nomeSeqMesa(f) || cam)} <i>· Caminho ${esc(cam)}${num(f.seq, 0, 9) != null ? ` · Seq. ${num(f.seq, 0, 9)}` : ''}</i>` : 'Ficha em construção'}</small>
           ${linhaOrigem(f) ? `<small class="m-cj-orig">${esc(linhaOrigem(f))}</small>` : ''}</div>
       </header>
       <div class="m-cj-estados">${ePV ? `<span class="m-est pv ${ePV.cls}">${ePV.txt}</span>` : ''}${eSan ? `<span class="m-est san ${eSan.cls}">${eSan.txt}</span>` : ''}</div>
       ${barra('PV', f.pv, f.pvMax, '#e05a6a')}${barra('Sanidade', f.san, f.sanMax, '#6fb4ff')}
-      <ul class="m-mods" aria-label="Modificadores">${ATTRS.map(a => { const v = num(mods[a.key], -30, 30), t = num(attrs[a.key], 1, 60), principal = f.attrCaminho === a.key;
+      <ul class="m-mods" aria-label="Modificadores">${atributosDe(f).map(a => { const v = num(mods[a.key], -30, 30), t = num(attrs[a.key], 1, 60), principal = f.attrCaminho === a.key;
         return `<li class="${principal ? 'cam' : ''}" style="--ac:${a.cor}" title="${a.nome}${t != null ? ` ${t}` : ''}${principal ? ' · atributo do Caminho' : ''}"><span>${a.nome.slice(0, 3)}</span><b>${v == null ? '—' : sinal(v)}</b></li>`; }).join('')}</ul>
       <footer class="m-cj-pe"><span class="m-cj-hora" data-t="${esc(j.atualizado_em || '')}">${haQuanto(j.atualizado_em)}</span>
         <span class="m-cj-nota" title="Você tem uma nota secreta sobre este jogador" ${S.notas && S.notas[j.user_id] && S.notas[j.user_id].texto.trim() ? '' : 'hidden'}>✎ nota secreta</span>
         ${resumoEfeitos(j.user_id)}
         ${pendentesDe(j.user_id).length ? `<span class="m-cj-prop" title="Habilidades esperando a sua decisão">✦ ${pendentesDe(j.user_id).length} ${pendentesDe(j.user_id).length === 1 ? 'proposta' : 'propostas'}</span>` : ''}
+        ${ascPendenteDe(j.user_id) ? `<span class="m-cj-prop" title="Pedido de ascensão esperando a sua decisão">▲ ascensão à ${ascPendenteDe(j.user_id).para}</span>` : ''}
         ${fichaLinha(j.user_id)}
         <button type="button" class="ghost m-cj-ver" data-u="${esc(j.user_id)}">Ver ficha <span class="sr-only">de ${esc(j.nome)}</span></button></footer>
     </article>`;
@@ -332,7 +333,7 @@ ${EditorRegras.secao()}
     c.querySelectorAll('.m-cj-ver').forEach(b => b.addEventListener('click', () => abrirFicha(b.dataset.u, b)));
     c.querySelectorAll('.m-fm-liberar').forEach(b => b.addEventListener('click', () => liberarFicha(b)));
     c.querySelectorAll('.m-fm-migrar').forEach(b => b.addEventListener('click', () => migrarFicha(b)));
-    desenharFichasMesa();
+    desenharFichasMesa(); desenharAscensoes();
     EditorRegras.jogadoresMudaram();
     if (S.fichaAberta) desenharFicha();
     const sel = $('#t-para'); if (sel) {
@@ -529,7 +530,7 @@ ${EditorRegras.secao()}
   // =====================================================================================================
   // CENA: abas, Roda do Destino, Duelo, Figuras, Crônica, Dados do mestre, presença, apagar/tirar
   // =====================================================================================================
-  const opcoesAttr = (vazio = 'Só o dado') => `<option value="">${vazio}</option>` + ATTRS.map(a => `<option value="${a.key}">${a.nome}</option>`).join('');
+  const opcoesAttr = (vazio = 'Só o dado') => `<option value="">${vazio}</option>` + vigorTeste().atributos.map(a => `<option value="${esc(a.id)}">${esc(a.nome)}</option>`).join('');
   const sub = t => `<small class="m-sub">${t}</small>`;
   function secaoDuelo() {
     return `<section class="m-cartao m-duelo" aria-labelledby="t-duelo"><h2 id="t-duelo">Duelo ${sub('teste contestado')}</h2>
@@ -627,7 +628,7 @@ ${EditorRegras.secao()}
   function duelHTML(d, paraMestre = true) {
     const A = obj(d.a), B = obj(d.b), ta = num(A.total, -99, 999), tb = num(B.total, -99, 999), venc = ta === tb ? null : ta > tb ? 'a' : 'b';
     const lado = (L, k) => `<div class="du-lado ${venc === k ? 'vence' : venc ? 'perde' : 'empata'}">${medalhao(L, 54)}<b class="du-nome">${esc(L.nome)}</b>
-      <span class="du-num">${num(L.total, -99, 999)}</span><small>d20 ${num(L.dado, 1, 20)}${num(L.mod, -30, 30) ? ' ' + sinal(num(L.mod, -30, 30)) : ''}${L.atributo ? ' · ' + esc(NOME_ATTR[L.atributo] || '') : ''}</small></div>`;
+      <span class="du-num">${num(L.total, -99, 999)}</span><small>d20 ${num(L.dado, 1, 20)}${num(L.mod, -30, 30) ? ' ' + sinal(num(L.mod, -30, 30)) : ''}${L.atributo ? ' · ' + esc(nomeTeste(L.atributo)) : ''}</small></div>`;
     return `<div class="du ${paraMestre ? '' : 'jog'}"><p class="du-rot">${esc(d.rotulo || 'Duelo')}</p><div class="du-arena">${lado(A, 'a')}<span class="du-x" aria-hidden="true">×</span>${lado(B, 'b')}</div>
       <p class="du-fim">${venc ? `<b>${esc((venc === 'a' ? A : B).nome)}</b> leva a melhor` : '<b>Empate</b> — o mestre decide'}${paraMestre && d.visivel === false ? ' · <i>só você viu</i>' : ''}</p></div>`;
   }
@@ -1313,6 +1314,87 @@ ${EditorRegras.secao()}
     if (idFoco) { const el = document.getElementById(idFoco); if (el) el.focus({ preventScroll: true }); }
   }
   function redesenharHabs() { desenharPropostas(); if (S.fichaAberta) desenharFicha(); }
+  // ---------- atributos da regra da ficha (a carta e a ficha mostram os atributos da versão em que ela foi calculada) ----------
+  const COR_ATTR = Object.fromEntries(ATTRS.map(a => [a.key, a.cor])), CORES_EXTRA = ['#d9b86a', '#8fd0c0', '#e08fb0', '#9fb0ff', '#f0a868', '#b0e07a'];
+  function atributosDe(f) {
+    const R = regrasDaVersao(Number.isInteger(obj(f).regras_versao) ? f.regras_versao : versaoEmVigor());
+    return R.atributos.map((a, i) => ({ key: a.id, nome: a.nome, abrev: a.abrev, cor: COR_ATTR[a.id] || CORES_EXTRA[i % CORES_EXTRA.length] }));
+  }
+  // nome da Sequência: o escrito pelo jogador só vale se a Sequência do site é a mesma do servidor
+  function nomeSeqMesa(f) {
+    const s = num(f.seq, 0, 9); if (s == null) return '';
+    if (txt(f.seqNome, 60) && (f.seq_site == null || f.seq_site === f.seq)) return txt(f.seqNome, 60);
+    return typeof nomeDaSequencia === 'function' && idOk(f.caminhoId) ? nomeDaSequencia(idOk(f.caminhoId), s) || '' : '';
+  }
+
+  // ---------- Sequência no servidor (20261117): pedidos de ascensão e o mestre muda direto ----------
+  const ascPendenteDe = u => (S.ascs || []).find(a => a.user_id === u && a.estado === 'pendente');
+  async function carregarAscensoesM() {
+    if (!S.mesa) return;
+    try {
+      const r = await (await Rede.tabela('mestre', 'ascensoes')).select('*').eq('mesa_id', S.mesa.id).order('criado_em', { ascending: false }).limit(200);
+      if (r.error) throw r.error;
+      const antes = new Set((S.ascs || []).filter(a => a.estado === 'pendente').map(a => a.id));
+      S.ascs = r.data || [];
+      const novas = S.ascs.filter(a => a.estado === 'pendente' && !antes.has(a.id));
+      if (novas.length && S.ascsCarregadas) { anunciar(`${nomeDe(novas[0].user_id)} pede para ascender à Sequência ${novas[0].para}`); const c = $('#m-ascensoes'); if (c) { c.classList.remove('chegou'); void c.offsetWidth; c.classList.add('chegou'); } }
+      S.ascsCarregadas = true;
+    } catch (e) { return; }
+    desenharJogadores();
+  }
+  function ascensaoHTML(a) {
+    const j = S.jogadores.find(x => x.user_id === a.user_id) || {}, f = fichaDe(j), k = 'asc-' + a.id;
+    const nome = typeof nomeDaSequencia === 'function' && idOk(f.caminhoId) ? nomeDaSequencia(idOk(f.caminhoId), a.para) : '';
+    const dig = num(f.digestao, 0, 99), digMax = num(f.digMax, 1, 99), passos = a.de - a.para;
+    return `<article class="fmp asc-p" data-a="${esc(a.id)}">
+      <header class="fmp-cab"><span class="fmp-selo asc-selo" aria-hidden="true"><b>${a.para}</b></span><div><b>${esc(j.nome || 'Jogador')}</b>
+        <small>Sequência ${a.de} → ${a.para}${nome ? ` · ${esc(nome)}` : ''}${passos > 1 ? ` · <em>${passos} passos de uma vez</em>` : ''}</small>
+        <small>${dig != null && digMax ? `Digestão da poção ${dig}/${digMax}${dig < digMax ? ' · ainda não digerida' : ''}` : 'Digestão não informada'}${idOk(f.caminhoId) ? ` · Caminho ${esc(txt(f.caminho, 40))}` : ''}</small></div></header>
+      <label class="sr-only" for="${k}-r">Recado para ${esc(j.nome || 'o jogador')}</label>
+      <input type="text" id="${k}-r" class="fmp-recado" maxlength="300" placeholder="Recado ao jogador (opcional)" autocomplete="off" value="${esc((S.recadoAsc || {})[a.id] || '')}">
+      <div class="fmp-ac"><button type="button" class="primary fmp-ok" id="${k}-ok">Aprovar</button><button type="button" class="ghost fmp-nao" id="${k}-nao">Recusar</button></div>
+      <p class="m-erro fmp-erro" role="alert" hidden></p></article>`;
+  }
+  function desenharAscensoes() {
+    const c = $('#m-ascensoes'); if (!c) return;
+    const ps = (S.ascs || []).filter(a => a.estado === 'pendente' && S.jogadores.some(j => j.user_id === a.user_id)).reverse();
+    const idFoco = c.contains(document.activeElement) ? document.activeElement.id : '';
+    c.hidden = !ps.length;
+    c.innerHTML = ps.length ? `<h3 class="hp-tit"><span>Pedidos de ascensão</span><b aria-label="${ps.length} esperando">${ps.length}</b></h3><p class="hint hp-dica">A Sequência só muda nas rolagens quando você aprova.</p>${ps.map(ascensaoHTML).join('')}` : '';
+    S.recadoAsc = S.recadoAsc || {};
+    c.querySelectorAll('.asc-p').forEach(el => {
+      const id = el.dataset.a, a = S.ascs.find(x => x.id === id), campo = el.querySelector('.fmp-recado');
+      campo.addEventListener('input', () => { S.recadoAsc[id] = campo.value; });
+      const julgar = (b, ok) => ocupado(b, async () => {
+        try {
+          await Rede.rpc('mestre', 'julgar_ascensao', { p_id: id, p_aprovar: ok, p_resposta: campo.value.trim().slice(0, 300) });
+          delete S.recadoAsc[id]; anunciar(ok ? `${nomeDe(a.user_id)} ascende à Sequência ${a.para}` : `Ascensão de ${nomeDe(a.user_id)} recusada`);
+          await carregarAscensoesM(); await carregarJogadores();
+          const prox = $('#m-ascensoes .fmp-ok') || $(`.m-carta-j[data-u="${CSS.escape(a.user_id)}"] .m-cj-ver`); if (prox) prox.focus();
+        } catch (er) { const e = el.querySelector('.fmp-erro'); e.textContent = Rede.mensagem(er); e.hidden = false; }
+      });
+      el.querySelector('.fmp-ok').addEventListener('click', e => julgar(e.currentTarget, true));
+      el.querySelector('.fmp-nao').addEventListener('click', e => julgar(e.currentTarget, false));
+    });
+    if (idFoco) { const el = document.getElementById(idFoco); if (el) el.focus({ preventScroll: true }); }
+  }
+  // na ficha do jogador: elevar ou rebaixar direto (o jogador recebe o selo de cera)
+  function seqControleHTML(j) {
+    const s = num(fichaDe(j).seq, 0, 9);
+    if (s == null) return '';
+    return `<div class="mf-seqctl" role="group" aria-label="Sequência na mesa"><small>Na mesa</small>
+      <button type="button" class="fm-b m-cj-acao mf-seq-mais" data-s="${s - 1}" ${s <= 0 ? 'disabled' : ''}>▲ Elevar à ${Math.max(0, s - 1)}</button>
+      <button type="button" class="fm-b m-cj-acao mf-seq-menos" data-s="${s + 1}" ${s >= 9 ? 'disabled' : ''}>▼ Rebaixar à ${Math.min(9, s + 1)}</button></div>`;
+  }
+  function ligarSeqControle(caixa, j) {
+    caixa.querySelectorAll('.mf-seq-mais, .mf-seq-menos').forEach(b => b.addEventListener('click', () => ocupado(b, async () => {
+      const alvo = +b.dataset.s, sobe = b.classList.contains('mf-seq-mais');
+      if (!(await confirmar({ titulo: `${sobe ? 'Elevar' : 'Rebaixar'} ${j.nome} à Sequência ${alvo}?`, texto: `A Sequência muda na hora nas rolagens desta mesa, e ${j.nome} recebe o aviso com selo de cera.${sobe ? '' : ' A ficha dele volta para essa Sequência.'}`, botao: sobe ? 'Elevar' : 'Rebaixar', perigo: !sobe }))) return;
+      try { await Rede.rpc('mestre', 'definir_sequencia', { p_mesa: S.mesa.id, p_user: j.user_id, p_seq: alvo, p_resposta: '' }); anunciar(`${j.nome} agora está na Sequência ${alvo}`); await carregarJogadores(); await carregarAscensoesM(); }
+      catch (er) { const st = caixa.querySelector('#mf-nota-st'); if (st) st.textContent = Rede.mensagem(er); }
+    })));
+  }
+
   // ---------- ficha montada na mesa (Fase B2): configurar, aprovar/recusar, liberar nova rolagem, migrar de versão ----------
   const vigorTeste = () => (S.regrasV && S.regrasV[0] ? S.regrasV[0].regras : Regras.LOTM);
   const versaoEmVigor = () => (S.regrasV && S.regrasV[0] ? S.regrasV[0].versao : 0);
@@ -1354,7 +1436,8 @@ ${EditorRegras.secao()}
       if (novas.length && S.fichasCarregadas) { anunciar(`${nomeDe(novas[0].user_id)} mandou a ficha para você aprovar`); const c = $('#m-fichas'); if (c) { c.classList.remove('chegou'); void c.offsetWidth; c.classList.add('chegou'); } }
       S.fichasCarregadas = true;
     } catch (e) { return; }
-    const s = $('#t-attr'); if (s) { const v = s.value; s.innerHTML = opcoesTeste(); s.value = [...s.options].some(o => o.value === v) ? v : ''; }
+    // os seletores de atributo (Teste e os dois lados do Duelo) seguem a regra em vigor, mantendo a escolha quando ela ainda existe
+    [{ sel: '#t-attr', html: opcoesTeste() }, { sel: '#d-a-attr', html: opcoesAttr() }, { sel: '#d-b-attr', html: opcoesAttr() }].forEach(({ sel, html }) => { const s = $(sel); if (!s) return; const v = s.value; s.innerHTML = html; s.value = [...s.options].some(o => o.value === v) ? v : ''; });
     desenharJogadores();
   }
   function fichaPendenteHTML(fm) {
@@ -1437,7 +1520,7 @@ ${EditorRegras.secao()}
     const partes = Object.entries(g).map(([k, n]) => { const [t, sec] = k.split('-'); return `<span class="ef-${t}${sec ? ' oculto' : ''}">${TIPO_EF[t].ic} ${n} ${pal[t][n === 1 ? 0 : 1]}${sec ? ' ' + (t === 'bloqueio' ? 'oculto' : 'oculta') + (n > 1 ? 's' : '') : ''}</span>`; });
     return `<span class="m-cj-ef" title="Efeitos ativos (os ocultos o jogador não vê)">${partes.join('<i aria-hidden="true">·</i>')}</span>`;
   }
-  const descEfeito = e => e.tipo === 'bencao' || e.tipo === 'maldicao' ? `${NOME_ATTR[e.atributo] || e.atributo} ${sinal(num(e.valor, -20, 20))}` : `${e.tipo === 'perda' ? 'Perdida' : 'Selada'}: ${e.habilidade}`;
+  const descEfeito = e => e.tipo === 'bencao' || e.tipo === 'maldicao' ? `${nomeTeste(e.atributo)} ${sinal(num(e.valor, -20, 20))}` : `${e.tipo === 'perda' ? 'Perdida' : 'Selada'}: ${e.habilidade}`;
   function efeitosFichaHTML(j, nomesHab) {
     const es = efeitosDe(j.user_id), k = 'x' + j.user_id, tipo = S.keep[k + 'tipo'] || 'bencao', hab = tipo === 'bloqueio' || tipo === 'perda', v = c => esc(S.keep[k + c] || '');
     const opt = (val, rot, atual) => `<option value="${esc(val)}" ${atual === val ? 'selected' : ''}>${esc(rot)}</option>`;
@@ -1452,7 +1535,7 @@ ${EditorRegras.secao()}
         <fieldset class="ef-tipos"><legend class="sr-only">Tipo de efeito</legend>${Object.entries(TIPO_EF).map(([t, d]) => `<label class="ef-tipo ef-${t}"><input type="radio" name="${k}-tipo" value="${t}" ${tipo === t ? 'checked' : ''}><span><i aria-hidden="true">${d.ic}</i>${t === 'bloqueio' ? 'Selar habilidade' : t === 'perda' ? 'Tirar habilidade' : d.nome}</span></label>`).join('')}</fieldset>
         <div class="m-grade">
           ${hab ? `<div class="m-campo m-largo"><label for="${k}-hab">Habilidade</label>${nomesHab.length ? `<select id="${k}-hab" data-keep="${k}hab">${nomesHab.map(n => opt(n, n, S.keep[k + 'hab'])).join('')}</select>` : `<input type="text" id="${k}-hab" data-keep="${k}hab" maxlength="80" value="${v('hab')}" placeholder="Nome da habilidade">`}</div>`
-            : `<div class="m-campo"><label for="${k}-attr">Atributo</label><select id="${k}-attr" data-keep="${k}attr">${ATTRS.map(a => opt(a.key, a.nome, S.keep[k + 'attr'])).join('')}</select></div>
+            : `<div class="m-campo"><label for="${k}-attr">Atributo</label><select id="${k}-attr" data-keep="${k}attr">${vigorTeste().atributos.map(a => opt(a.id, a.nome, S.keep[k + 'attr'])).join('')}</select></div>
                <div class="m-campo"><label for="${k}-val">${tipo === 'bencao' ? 'Bônus' : 'Penalidade'}</label><select id="${k}-val" data-keep="${k}val">${[1, 2, 3, 4, 5, 6, 8, 10].map(n => opt(String(n), (tipo === 'bencao' ? '+' : '−') + n, S.keep[k + 'val'] || '2')).join('')}</select></div>`}
           <div class="m-campo m-largo"><label for="${k}-rot">Nome</label><input type="text" id="${k}-rot" data-keep="${k}rot" maxlength="60" value="${v('rot')}" placeholder="${{ bencao: 'Ex.: Bênção da Deusa da Noite', maldicao: 'Ex.: Olhar do Abismo', bloqueio: 'Ex.: Selo do Bispo', perda: 'Ex.: Preço da Corrupção' }[tipo]}"></div>
           <div class="m-campo m-largo"><label for="${k}-desc">O que o jogador lê <i>(opcional)</i></label><input type="text" id="${k}-desc" data-keep="${k}desc" maxlength="300" value="${v('desc')}" placeholder="Ex.: Até a lua cheia, ou até quebrar a maldição."></div>
@@ -1617,6 +1700,7 @@ ${EditorRegras.secao()}
           <small class="mf-eyebrow">${f.caminho ? `Caminho ${esc(txt(f.caminho, 40))}` : 'Ficha em construção'}</small>
           <h2 id="mf-nome">${esc(j.nome)}</h2>
           <p class="mf-seq">${esc(linhaSeq(f)) || '—'}</p>
+          ${seqControleHTML(j)}
           <p class="mf-orig">${esc(linhaOrigem(f))}${txt(f.jogador, 60) ? `<span> · jogado por ${esc(txt(f.jogador, 60))}</span>` : ''}</p>
           ${dig != null && digMax ? `<div class="mf-dig" title="Digestão da poção"><span>Digestão da poção</span><div class="m-trilho" role="meter" aria-label="Digestão da poção" aria-valuemin="0" aria-valuemax="${digMax}" aria-valuenow="${Math.min(dig, digMax)}"><div style="transform:scaleX(${Math.min(1, dig / digMax)})"></div></div><b>${dig}/${digMax}</b></div>` : ''}
         </div>
@@ -1626,7 +1710,7 @@ ${EditorRegras.secao()}
           ${barra('PV', f.pv, f.pvMax, '#e05a6a')}${barra('Sanidade', f.san, f.sanMax, '#6fb4ff')}
           ${num(f.espMax, 0, 999) != null ? `<p class="mf-esp">Espiritualidade máxima <b>${num(f.espMax, 0, 999)}</b></p>` : ''}</section>
         <section class="mf-bloco"><h3>Atributos</h3>
-          <ul class="mf-attrs">${ATTRS.map(a => { const t = num(attrs[a.key], 1, 60), v = num(mods[a.key], -30, 30), p = f.attrCaminho === a.key;
+          <ul class="mf-attrs">${atributosDe(f).map(a => { const t = num(attrs[a.key], 1, 60), v = num(mods[a.key], -30, 30), p = f.attrCaminho === a.key;
             return `<li class="${p ? 'cam' : ''}" style="--ac:${a.cor}"><span>${a.nome}${p ? ' <i title="atributo do Caminho">✦</i>' : ''}</span><b>${t == null ? '—' : t}</b><em>${v == null ? '' : sinal(v)}</em></li>`; }).join('')}</ul></section>
         <section class="mf-bloco"><h3>Carta do Destino</h3>
           ${txt(tr.nome) || txt(ar.nome) ? `${txt(tr.nome) ? `<div class="mf-carta"><small>Traço</small><b>${esc(txt(tr.nome, 60))}</b><p>${esc(txt(tr.desc, 240))}</p></div>` : ''}
@@ -1649,6 +1733,7 @@ ${EditorRegras.secao()}
         <span class="mf-hora">Ficha atualizada ${esc(haQuanto(j.atualizado_em))}</span></div>`;
     caixa.scrollTop = rolagem;
     caixa.querySelector('.m-ficha-x').addEventListener('click', () => fecharFicha());
+    ligarSeqControle(caixa, j);
     caixa.querySelector('#mf-pedir').addEventListener('click', () => {
       const uid = j.user_id; fecharFicha(false);
       const sel = $('#t-para'); if (sel) sel.value = uid;
@@ -1741,6 +1826,7 @@ ${EditorRegras.secao()}
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'efe', 'efeitos', f, adiar(carregarEfeitos)));
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'fim', 'fichas_mesa', f, adiar(carregarFichasMesa)));
       S.pararDeOuvir.push(await Rede.ouvir('mestre', 'reg', 'mesa_regras', f, adiar(carregarFichasMesa)));
+      S.pararDeOuvir.push(await Rede.ouvir('mestre', 'asc', 'ascensoes', f, adiar(carregarAscensoesM)));
       S.pararDeOuvir.push(await Rede.presenca('mestre', id, 'mestre', null, st => { S.online = new Set(Object.keys(st || {}).filter(k => k !== 'mestre')); atualizarVelas(); }));
     } catch (e) { const v = $('#m-ao-vivo'); if (v) { v.textContent = 'sem tempo real'; v.classList.add('off'); } }
   }

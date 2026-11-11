@@ -2429,3 +2429,16 @@ button.m-cj-acao:hover{border-style:solid;border-color:var(--gold);color:var(--g
   .fm-tab .fm-mod span{min-width:32px;height:32px}
 }
 @media (prefers-reduced-motion:reduce){.fm-ats.revela li,.fm-pendente .fm-selo,.fm-assist{animation:none}}
+
+/* ===== Sequência no servidor: pedido de ascensão (jogador), fila e controle (Grimório) ===== */
+.asc-mesa{margin:0 0 12px;padding:6px 14px;border:1px dashed color-mix(in srgb,var(--pt,#d9b86a) 70%,transparent);border-radius:20px;color:#f3e3bf;font-size:.82rem;background:#0009;animation:sus-surge .6s 3.4s both}
+.asc-carta .fm-selo i{font-size:1rem}
+.asc-carta b i{font-style:normal;color:#e8d8c0;font-size:.86rem}
+.asc-selo{background:radial-gradient(circle at 40% 30%,#3a2a0a,#120c04);border-color:#8a6a2a}
+.asc-selo b{font-weight:normal;font-size:1.15rem;color:var(--gold2);text-shadow:0 0 10px #d9b86a88}
+.asc-p .fmp-cab small em{font-style:normal;color:#f0b070}
+.mf-seqctl{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 6px}
+.mf-seqctl small{font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+button.m-cj-acao[disabled]{opacity:.4;cursor:not-allowed;border-style:dashed}
+button.mf-seq-menos:hover:not([disabled]){border-color:#c0392b;color:#ffb0a8}
+@media (prefers-reduced-motion:reduce){.asc-mesa{animation:none}}
