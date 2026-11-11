@@ -47,5 +47,58 @@
     ["1234567", "ficha", 1, "número grande demais (máximo 6 algarismos)"],
     ["((((((((((((((((((((((1))))))))))))))))))))))", "ficha", 21, "aninhamento fundo demais (máximo 20)"],
     ["1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1", "ficha", 201, "fórmula longa demais (máximo 200 caracteres)"]
-  ]
+  ],
+  "_c1": "Fase C1 (20261118): ctx classe = ficha + DV (dado de vida da classe; vars com DV 10). Rodam no JS (tests/mestre.js) e no banco (supabase/verificacoes/20261118_nivel_e_classes.sql).",
+  "valores_c1": [
+    ["DV + 1", "classe", 11],
+    ["10 + DV + mod(VIG) + (NIVEL - 1) * (DV / 2 + mod(VIG))", "classe", 36],
+    ["DV / 4", "classe", 2],
+    ["max(DV, NIVEL * 5)", "classe", 15],
+    ["dv * 2 - NIVEL", "classe", 17]
+  ],
+  "erros_c1": [
+    ["DV + 1", "ficha", 1, "nome desconhecido: DV"],
+    ["dv(2)", "classe", 1, "função desconhecida: dv"],
+    ["DV 2", "classe", 4, "esperava + - * / ou o fim"],
+    ["2DV", "classe", 3, "faltou o número de lados do dado"]
+  ],
+  "fichas_c1": [
+    [{"base":{"forca":10, "agil":15, "vigor":14, "intel":10, "espir":12, "pres":9}, "classeId":"sentinela", "nivel":5}, {"pv":56, "furia":100}],
+    [{"base":{"forca":10, "agil":15, "vigor":14, "intel":10, "espir":12, "pres":9}, "classeId":"duelista", "nivel":1}, {"pv":22, "energia":44}],
+    [{"base":{"forca":10, "agil":15, "vigor":14, "intel":10, "espir":12, "pres":9}, "classeId":"lamparineiro", "nivel":20}, {"pv":134, "mana":124}],
+    [{"base":{"forca":10, "agil":15, "vigor":3, "intel":10, "espir":18, "pres":9}, "classeId":"lamparineiro", "nivel":20}, {"pv":14, "mana":136}],
+    [{"base":{"forca":10, "agil":15, "vigor":14, "intel":10, "espir":12, "pres":9}, "classeId":"arauto", "nivel":0}, {"pv":20, "mana":29}],
+    [{"base":{"forca":10, "agil":15, "vigor":14, "intel":10, "espir":12, "pres":9}, "classeId":""}, {"pv":null}],
+    [{"base":{"forca":10, "agil":15, "vigor":14, "intel":10, "espir":12, "pres":9}, "classeId":"mago", "nivel":7}, {"pv":null}],
+    [{"base":{"forca":10}, "classeId":"sentinela", "nivel":3}, {"pv":null, "furia":100}]
+  ],
+  "nivel_c1": [
+    [0,1],
+    [99,1],
+    [100,2],
+    [299,2],
+    [300,3],
+    [4499,9],
+    [4500,10],
+    [18999,19],
+    [19000,20],
+    [9999999,20]
+  ],
+  "ruins_c1": [
+    ["classes,0,papel", "mago", "Regras inválidas (classes[0].papel): papel: tanque, cura, dano ou suporte"],
+    ["classes,1,recurso", "vigor", "Regras inválidas (classes[1].recurso): recurso de classe: mana, furia ou energia"],
+    ["classes,2,principal", "sorte", "Regras inválidas (classes[2].principal): atributo principal: um atributo que existe"],
+    ["classes,3,dv", 3, "Regras inválidas (classes[3].dv): dado de vida: inteiro de 4 a 20"],
+    ["classes,0,dv", 21, "Regras inválidas (classes[0].dv): dado de vida: inteiro de 4 a 20"],
+    ["classes,1,id", "sentinela", "Regras inválidas (classes[1].id): id: de 1 a 12 letras minúsculas, sem repetir"],
+    ["classes,2,nome", "", "Regras inválidas (classes[2].nome): nome: de 1 a 30 letras"],
+    ["classes,0,desc", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "Regras inválidas (classes[0].desc): descrição: até 200 letras"],
+    ["recursos,1,so", "vigor", "Regras inválidas (recursos[1].so): recurso de classe: mana, furia ou energia"],
+    ["progressao,xp,19", 17000, "Regras inválidas (progressao.xp): tabela de XP: 20 valores inteiros crescentes, começando em 0 (até 1000000)"],
+    ["progressao,xp,0", 5, "Regras inválidas (progressao.xp): tabela de XP: 20 valores inteiros crescentes, começando em 0 (até 1000000)"],
+    ["progressao,xp,5", "muito", "Regras inválidas (progressao.xp): tabela de XP: 20 valores inteiros crescentes, começando em 0 (até 1000000)"],
+    ["atributos,0,abrev", "DV", "Regras inválidas (atributos[0].abrev): abreviação: de 2 a 4 letras maiúsculas, sem repetir nem usar nome reservado"],
+    ["recursos,0,max", "10 + DV + XP", "Regras inválidas (recursos[0].max): Fórmula inválida na posição 11: nome desconhecido: XP"]
+  ],
+  "xp_curta_c1": "Regras inválidas (progressao.xp): tabela de XP: 20 valores inteiros crescentes, começando em 0 (até 1000000)"
 }

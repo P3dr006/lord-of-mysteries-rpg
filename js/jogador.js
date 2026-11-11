@@ -14,7 +14,12 @@ const Jogador = Object.freeze((() => {
   const temAtributos = () => ATTRS.every(a => P.attrs && P.attrs[a.key]);
   const minhaFicha = () => con && con.slot && con.slot === idAtual();
   const sinal = n => (n >= 0 ? '+' : '−') + Math.abs(n);
-  const redesenhar = () => { if (typeof Mesa === 'object') Mesa.atualizar(); marcarFab(); desenharHabsMesa(); };
+  // redesenhar com um aviso ao vivo não rouba o foco: quem estava num botão da mesa continua nele (achado pelo id)
+  const redesenhar = () => {
+    const a = document.activeElement, id = a && a.id && a.closest && a.closest('#mesa') ? a.id : '';
+    if (typeof Mesa === 'object') Mesa.atualizar(); marcarFab(); desenharHabsMesa();
+    if (id && document.activeElement !== a) { const n = document.getElementById(id); if (n && (!document.activeElement || document.activeElement === document.body)) n.focus({ preventScroll: true }); }
+  };
 
   // O que o mestre vê: modificadores, PV e Sanidade (nada além disso sai do navegador).
   function ficha() {
@@ -113,6 +118,7 @@ const Jogador = Object.freeze((() => {
       } catch (e) { /* sem habilidades da mesa nesta conexão */ }
       try {   // ficha montada na mesa (o mestre liga): a ficha do servidor, as regras e o veredito do mestre
         await carregarFichaMesa();
+        try { await carregarMarcos(); parar.push(await Rede.ouvir('jogador', 'marcos', 'marcos', 'user_id=eq.' + uid, () => carregarMarcos().catch(() => {}))); } catch (e) { /* sem nível nesta conexão */ }
         try { await carregarAscensoes(); parar.push(await Rede.ouvir('jogador', 'ascensoes', 'ascensoes', 'user_id=eq.' + uid, () => carregarAscensoes().catch(() => {}))); } catch (e) { /* sem ascensões nesta conexão */ }
         parar.push(await Rede.ouvir('jogador', 'fichas_mesa', 'fichas_mesa', 'user_id=eq.' + uid, () => carregarFichaMesa().catch(() => {})));
         parar.push(await Rede.ouvir('jogador', 'regras', 'mesa_regras', 'mesa_id=eq.' + con.mesa, () => carregarFichaMesa().catch(() => {})));
@@ -310,6 +316,7 @@ const Jogador = Object.freeze((() => {
     if (decretos[0] && decretos[0].ef) return decretoEfeito(decretos.shift().ef);
     if (decretos[0] && decretos[0].fm) return decretoFicha(decretos.shift().fm);
     if (decretos[0] && decretos[0].asc) return decretoAscensao(decretos.shift().asc);
+    if (decretos[0] && decretos[0].marcos) { if (document.querySelector('[data-asc]')) { setTimeout(mostrarDecreto, 1500); return; } return decretoMarcos(decretos.shift().marcos); }
     const { h, antes } = decretos.shift(), rej = h.estado === 'rejeitada';
     const ja = antes && antes.startsWith('aprovada');
     const titulo = rej ? 'O mestre recusa' : ja ? 'O mestre reescreve' : h.origem === 'mestre' ? 'O mestre concede' : h.alterada ? 'Aprovada, com mudanças' : 'O mestre aprova';
@@ -411,6 +418,107 @@ const Jogador = Object.freeze((() => {
     setTimeout(() => { const b = m.querySelector('#dec-ok'); if (b && b.isConnected) b.focus(); }, 60);
   }
 
+  // ---------- nível e XP (Fase C1, 20261118): o mestre dá a XP, o servidor sobe o nível; aqui só a cerimônia ----------
+  // Cada XP dada vira um marco. Os que ainda não foram vistos neste navegador chegam juntos: subiu de nível = cerimônia;
+  // senão, o selo de cera com a XP. Marcos de mais de 7 dias (outro aparelho, por exemplo) entram sem cena.
+  let marcos = [], marcoNaTela = false;
+  const KN = 'lotm-rpg-marcos-vistos';
+  const mVistos = () => { try { return JSON.parse(localStorage.getItem(KN)) || {}; } catch (e) { return {}; } };
+  const mMarcar = ids => { try { const v = mVistos(); ids.forEach(i => { v[i] = 1; }); localStorage.setItem(KN, JSON.stringify(v)); } catch (e) { /* só nesta visita */ } };
+  async function carregarMarcos() {
+    if (!con || !uid) return;
+    const r = await (await Rede.tabela('jogador', 'marcos')).select('id,xp,de,para,motivo,criado_em').eq('mesa_id', con.mesa).eq('user_id', uid).order('criado_em');
+    if (r.error) throw r.error;
+    marcos = r.data || [];
+    const v = mVistos(), velho = Date.now() - 7 * 864e5, novos = marcos.filter(x => !v[x.id]);
+    const antigos = novos.filter(x => new Date(x.criado_em).getTime() < velho); if (antigos.length) mMarcar(antigos.map(x => x.id));
+    const cena = novos.filter(x => !antigos.includes(x));
+    if (cena.length && !marcoNaTela && !decretos.some(d => d.marcos)) { decretos.push({ marcos: cena }); mostrarDecreto(); }
+  }
+  // as regras e a ficha do servidor para a cena (a ficha da mesa já carregou; senão, busca)
+  async function regrasEFicha() {
+    let R = (regrasFicha || regrasM || {}).regras, f = srv;
+    if (!R || !f) {
+      const tab = t => Rede.tabela('jogador', t);
+      const [rg, eu] = await Promise.all([(await tab('mesa_regras')).select('versao,regras').eq('mesa_id', con.mesa).order('versao', { ascending: false }).limit(1), (await tab('jogadores')).select('ficha').eq('mesa_id', con.mesa).eq('user_id', uid)]);
+      R = R || (rg.data && rg.data[0] ? rg.data[0].regras : Regras.LOTM); f = f || (eu.data && eu.data[0] ? eu.data[0].ficha : {});
+    }
+    return { R, f: f || {} };
+  }
+  async function decretoMarcos(ms) {
+    marcoNaTela = true;
+    let R = Regras.LOTM, f = {};
+    try { ({ R, f } = await regrasEFicha()); } catch (e) { /* a cena sai sem os números */ }
+    const xp = ms.reduce((t, x) => t + x.xp, 0), de = Math.min(...ms.map(x => x.de)), para = Math.max(...ms.map(x => x.para));
+    const motivos = [...new Set(ms.map(x => x.motivo).filter(Boolean))], cl = Regras.classeDe(R, f);
+    const fim = () => { mMarcar(ms.map(x => x.id)); marcoNaTela = false; mostrarDecreto(); };
+    if (para > de) return cerimoniaNivel({ R, f, cl, xp, de, para, motivos, fim });
+    const P2 = typeof Papeis === 'object' ? Papeis : null, nv = Number.isInteger(f.nivel) ? f.nivel : para, t = P2 ? P2.trecho(R, f.xp, nv) : null;
+    const m = document.createElement('div'); m.className = 'decreto dec-xp'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'dec-t');
+    m.innerHTML = `<div class="dec-papel"><span class="dec-selo" aria-hidden="true"><i></i></span>
+      <small class="dec-olho">Experiência</small><h2 id="dec-t">O mestre concede experiência</h2>
+      <div class="dec-hab"><b class="dec-xp-n">+${xp} XP</b>${motivos.length ? `<p>${esc2(motivos.join(' · '))}</p>` : ''}
+        ${P2 ? `<div class="pp-xp dec-xp-trilha">${P2.corrente(R, f.xp, nv)}<small>${t && t.ate != null ? `Nível ${nv} · faltam ${t.falta} XP para o nível ${nv + 1}` : `Nível ${nv}`}</small></div>` : ''}</div>
+      <button type="button" class="primary" id="dec-ok">Guardar na ficha</button></div>`;
+    document.body.appendChild(m); Cenas.decreto(m);
+    if (typeof Som === 'object') { try { Som.selar(); } catch (e) { /* sem som */ } }
+    anunciar(`O mestre concede ${xp} de experiência${motivos.length ? ': ' + motivos.join(', ') : ''}`);
+    let soltar = () => {};
+    const fechar = () => { soltar(); m.classList.add('saindo'); setTimeout(() => { m.remove(); fim(); }, 220); };
+    m.querySelector('#dec-ok').addEventListener('click', fechar);
+    soltar = typeof prenderFoco === 'function' ? prenderFoco(m, fechar) : () => {};
+    setTimeout(() => { const b = m.querySelector('#dec-ok'); if (b && b.isConnected) b.focus(); }, 60);
+  }
+  // a cerimônia de nível: como a de ascensão, com o emblema da classe, os números do nível e o que cresceu
+  function cerimoniaNivel(o) {
+    const P2 = typeof Papeis === 'object' ? Papeis : null, pa = o.cl && P2 ? P2.PAPEL[o.cl.papel] : null;
+    const rr = o.cl ? (o.R.recursos || []).find(r => r.so === o.cl.recurso) : null;
+    const ganhos = [];
+    try {
+      const a = Regras.calcular(o.R, { ...o.f, nivel: o.de }).maximos, b = Regras.calcular(o.R, { ...o.f, nivel: o.para }).maximos;
+      (o.R.recursos || []).forEach(r => { if (a[r.id] != null && b[r.id] != null && b[r.id] > a[r.id]) ganhos.push(`+${b[r.id] - a[r.id]} ${r.nome || r.id}`); });
+    } catch (e) { /* sem os ganhos */ }
+    const el = document.createElement('div'); el.className = 'asc nivel'; el.dataset.asc = '1';
+    el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'niv-t');
+    el.style.cssText = `--pc:${pa ? pa.cor : '#d9b86a'};--pt:${rr && /^#[0-9a-f]{6}$/i.test(rr.cor || '') ? rr.cor : '#f3d58a'};--k:${Math.min(4, 1 + Math.floor(o.para / 5))}`;
+    el.innerHTML = `<div class="asc-rays"></div><div class="asc-ring r1"></div><div class="asc-ring r2"></div><div class="asc-ring r3"></div>
+      <div class="asc-core">
+        <span class="asc-sig niv-emb">${o.cl && P2 ? P2.emblema(o.cl.papel, 200) : ''}</span>
+        <div class="asc-num"><span class="old">${o.de}</span><span class="new">${o.para}</span></div>
+        <p class="asc-eyebrow">NÍVEL ${P2 ? P2.ROMANOS[o.para] : o.para}</p>
+        <h2 class="asc-nome" id="niv-t">${o.cl ? esc2(o.cl.nome) : `Nível ${o.para}`}</h2>
+        ${pa ? `<div class="asc-pat sem"><b>${esc2(pa.nome)}</b></div>` : ''}
+        <p class="asc-ganhos">${ganhos.map(g => `<span>${esc2(g)}</span>`).join('')}<span>+${o.xp} XP</span></p>
+        ${o.motivos.length ? `<p class="asc-mesa">${esc2(o.motivos.join(' · '))}</p>` : ''}
+        <button type="button" class="primary" id="niv-ok">Continuar</button></div>`;
+    document.body.appendChild(el);
+    const ok = el.querySelector('#niv-ok'), lento = !(typeof reduzido === 'function' && reduzido());
+    ok.disabled = lento;   // o botão só vale quando aparece na animação (Enter repetido não pula a cerimônia)
+    const devolver = typeof prenderFoco === 'function' ? prenderFoco(el, null) : () => {};
+    el.tabIndex = -1; el.focus();
+    setTimeout(() => { ok.disabled = false; ok.focus(); }, lento ? 4300 : 60);
+    requestAnimationFrame(() => el.classList.add('on'));
+    if (typeof Som === 'object') { try { Som.ascender(Math.min(4, Math.floor(o.para / 5)), false); } catch (e) { /* sem som */ } }
+    anunciar(`Você chegou ao nível ${o.para}${o.cl ? ', ' + o.cl.nome : ''}. ${ganhos.join(', ')}`);
+    ok.addEventListener('click', () => { el.classList.remove('on'); setTimeout(() => { el.remove(); devolver(); o.fim(); }, 500); });
+  }
+  // a classe, o nível, a trilha de XP e os frascos (vida e o recurso da classe) para a carta da aba Testes
+  function blocoNivel(R, f) {
+    if (typeof Papeis !== 'object' || !R || !f) return '';
+    const porNivel = !!(R.progressao && R.progressao.tipo === 'nivel'), cl = Regras.classeDe(R, f);
+    if (!porNivel && !cl) return '';
+    const pa = cl ? Papeis.PAPEL[cl.papel] : null, mx = f.maximos || {}, nv = Number.isInteger(f.nivel) ? f.nivel : 1, t = Papeis.trecho(R, f.xp, nv);
+    const frascos = (R.recursos || []).filter(r => mx[r.id] != null && (r.id === 'pv' || (cl && r.so === cl.recurso))).map(r => {
+      const cor = /^#[0-9a-f]{6}$/i.test(r.cor || '') ? r.cor : '#d9b86a', eRec = cl && r.so === cl.recurso;
+      return `<li class="pp-frasco" style="--rc:${cor}"><svg class="pp-fr" viewBox="0 0 24 30" aria-hidden="true" focusable="false"><path class="pp-fr-liq" d="M5.4 19.6a6.6 6.6 0 1 0 13.2 0c0-2.2-1-4-2.7-5.2H8.1c-1.7 1.2-2.7 3-2.7 5.2z"/><path class="pp-fr-vidro" d="M9 2.6h6M10 2.6v8.6a8.2 8.2 0 1 0 4 0V2.6"/><path class="pp-fr-brilho" d="M8.4 17.2c.4-1.2 1.2-2 2.2-2.5"/></svg>
+        <span class="pp-fr-txt">${eRec ? Papeis.glifo(r.so, 13) : ''}<b>${mx[r.id]}</b><small>${esc2(r.nome || r.id)}</small></span></li>`; }).join('');
+    return `<div class="pp-bloco" style="--pc:${pa ? pa.cor : '#d9b86a'}">
+      ${cl ? `<div class="pp-classe"><span class="pp-cl-emb">${Papeis.emblema(cl.papel, 46)}</span><div><small>${esc2(pa ? pa.nome : cl.papel)}</small><b>${esc2(cl.nome)}</b></div></div>` : ''}
+      ${porNivel ? `<span class="pp-nivel"><small>Nível</small><b>${nv}</b></span>
+        <div class="pp-xp">${Papeis.corrente(R, f.xp, nv)}<small>${esc2(String(f.xp || 0))} XP${t.ate != null ? ` · faltam ${t.falta} para o nível ${nv + 1}` : ' · nível máximo'}</small></div>` : ''}
+      ${frascos ? `<ul class="pp-frascos" aria-label="Vida e recurso da classe (máximos)">${frascos}</ul>` : ''}</div>`;
+  }
+
   // ---------- ficha montada na mesa (Fase B2): o servidor rola, o mestre pode aprovar, cada ficha na sua versão das regras ----------
   let cfg = { naMesa: false, aprovar: false }, fichaM = null, regrasM = null, regrasFicha = null, srv = null;
   const KF = 'lotm-rpg-ficha-vista';
@@ -472,6 +580,7 @@ const Jogador = Object.freeze((() => {
       const mods = (srv && srv.mods) || {};
       corpo = `<b>Ficha da mesa <span class="hm-selo">Valendo</span></b>
         <ul class="fm-chipsat">${R.atributos.map(a => `<li><span>${esc2(a.abrev)}</span><b>${Number.isInteger(mods[a.id]) ? sinal(mods[a.id]) : '—'}</b></li>`).join('')}</ul>
+        ${blocoNivel(R, srv)}
         ${mesmo ? '' : `<span class="fm-versao">Regras da versão ${fm.regras_versao} (em vigor: ${regrasM.versao}). O mestre decide quando migrar.</span>`}`;
     }
     const sinalSelo = { livre: '✎', recusada: '✕', rolada: '⚄', pendente: '⧗', aprovada: '✦' }[classe];
@@ -484,11 +593,12 @@ const Jogador = Object.freeze((() => {
     FichaMesa.abrir({
       codigo: con.codigo, nome: P.nome || con.nome, aprovar: cfg.aprovar, fm,
       regras: (continua ? regrasFicha : regrasM).regras,
-      local: { base: f.base, caminho: P.caminho, raca: P.raca, seq: P.sequencia, nome: P.nome },
+      local: { base: f.base, caminho: P.caminho, raca: P.raca, seq: P.sequencia, nivel: srv && Number.isInteger(srv.nivel) ? srv.nivel : 1, nome: P.nome },
       mensagem: e => Rede.mensagem(e), anunciar,
       rolar: () => Rede.rpc('jogador', 'rolar_ficha', { p_mesa: con.mesa }),
-      enviar: (c, r) => Rede.rpc('jogador', 'enviar_ficha', { p_mesa: con.mesa, p_caminho: c || '', p_raca: r || '' }),
-      converter: (b, c, r) => Rede.rpc('jogador', 'converter_ficha', { p_mesa: con.mesa, p_base: b, p_caminho: c || '', p_raca: r || '' }),
+      // a classe só vai quando existe (mesa sem classes chama como antes)
+      enviar: (c, r, cl) => Rede.rpc('jogador', 'enviar_ficha', { p_mesa: con.mesa, p_caminho: c || '', p_raca: r || '', ...(cl ? { p_classe: cl } : {}) }),
+      converter: (b, c, r, cl) => Rede.rpc('jogador', 'converter_ficha', { p_mesa: con.mesa, p_base: b, p_caminho: c || '', p_raca: r || '', ...(cl ? { p_classe: cl } : {}) }),
       aoRolar: () => carregarFichaMesa().catch(() => {}),
       aoTerminar: async fim => {
         guardarNaFichaLocal(fim);

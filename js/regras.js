@@ -1,6 +1,6 @@
 // Motor de regras da mesa (Fase A de docs/SISTEMAS-DA-MESA.md).
 // As regras são DADOS (um JSON por mesa). As fórmulas usam uma mini-linguagem lida aqui, NUNCA com eval:
-// números inteiros, + - * /, parênteses, dados NdM, abreviações dos atributos, NIVEL, SEQ e mod/min/max/floor.
+// números inteiros, + - * /, parênteses, dados NdM, abreviações dos atributos, NIVEL, SEQ, DV e mod/min/max/floor.
 // O MESMO intérprete existe em plpgsql (supabase/migrations/20261115_regras_da_mesa.sql): lá vale, aqui é prévia e teste.
 // Mudou uma regra aqui? Mude lá também (tests/mestre.js compara os dois com os mesmos casos).
 const Regras = Object.freeze((() => {
@@ -33,7 +33,34 @@ const Regras = Object.freeze((() => {
     classes: [], habilidades: 'livres',
   });
 
-  const RESERVADOS = ['ATR', 'SEQ', 'NIVEL', 'MOD', 'MIN', 'MAX', 'FLOOR'];
+  // Predefinição "aventura" (Fase C1, modo MMO): nível 1 a 20 com XP dada pelo mestre, uma classe por papel e um recurso
+  // de classe (mana, fúria ou energia). Os 6 atributos têm os ids do LotM: o Teste, o Duelo e a Roda continuam valendo.
+  // XP: para passar do nível N ao N+1 são 100 × N de experiência (a tabela guarda o total acumulado).
+  const AVENTURA = congelar({
+    versao: 1, base: 'aventura',
+    atributos: LOTM.atributos.map(a => ({ ...a })),
+    geracao: { metodo: '4d6-menor', min: 3, max: 18 },
+    total: 'max(1, ATR)',
+    modificador: 'floor((ATR - 10) / 2)',
+    bonus: {},
+    recursos: [
+      { id: 'pv', nome: 'Pontos de Vida', max: '10 + DV + mod(VIG) + (NIVEL - 1) * (DV / 2 + mod(VIG))', cor: '#e05a6a' },
+      { id: 'mana', nome: 'Mana', max: '20 + mod(ESP) * 4 + NIVEL * 5', cor: '#5b8cff', so: 'mana' },
+      { id: 'furia', nome: 'Fúria', max: '100', cor: '#e0652a', so: 'furia' },
+      { id: 'energia', nome: 'Energia', max: '40 + mod(AGI) * 2', cor: '#e8c84a', so: 'energia' },
+    ],
+    progressao: { tipo: 'nivel', de: 1, ate: 20, xp: Array.from({ length: 20 }, (_, n) => 50 * n * (n + 1)) },
+    classes: [
+      { id: 'sentinela', nome: 'Sentinela', papel: 'tanque', recurso: 'furia', principal: 'vigor', dv: 12, desc: 'Fica na frente e atrai os golpes para si. A fúria cresce a cada pancada, dada ou levada.' },
+      { id: 'lamparineiro', nome: 'Lamparineiro', papel: 'cura', recurso: 'mana', principal: 'espir', dv: 8, desc: 'Mantém a chama do grupo acesa: fecha feridas e devolve o fôlego a quem caiu.' },
+      { id: 'duelista', nome: 'Duelista', papel: 'dano', recurso: 'energia', principal: 'agil', dv: 10, desc: 'Golpes rápidos, de perto ou à distância. A energia volta depressa, mas acaba logo.' },
+      { id: 'arauto', nome: 'Arauto', papel: 'suporte', recurso: 'mana', principal: 'pres', dv: 8, desc: 'Ergue o estandarte: fortalece os aliados e atrapalha os inimigos.' },
+    ],
+    habilidades: 'livres',
+  });
+  const PAPEIS = ['tanque', 'cura', 'dano', 'suporte'], RECURSOS_CLASSE = ['mana', 'furia', 'energia'];
+
+  const RESERVADOS = ['ATR', 'SEQ', 'NIVEL', 'DV', 'MOD', 'MIN', 'MAX', 'FLOOR'];
   const FUNCOES = { MOD: [1, 1], FLOOR: [1, 1], MIN: [2, 10], MAX: [2, 10] };
   const PROF_MAX = 20, LIMITE = 9999;
   class ErroFormula extends Error { constructor(pos, motivo) { super(`Fórmula inválida na posição ${pos}: ${motivo}`); this.pos = pos; this.motivo = motivo; } }
@@ -179,16 +206,34 @@ const Regras = Object.freeze((() => {
     return R.total ? formula(R.total, CTX_ATR, { vars: { ATR: b + bonus } }) : b + bonus;
   }
 
-  // { attrs: {id: total}, mods: {id: mod}, maximos: {recurso: max|null} } — atributo não rolado não aparece
+  // a classe da ficha (ficha.classeId entre as classes das regras) ou null
+  function classeDe(regras, ficha) {
+    const id = obj(ficha).classeId, cs = Array.isArray(obj(regras).classes) ? regras.classes : [];
+    return typeof id === 'string' && id ? cs.find(c => obj(c).id === id) || null : null;
+  }
+  // o nível que a XP alcança na tabela (progressão por nível); 1 quando as regras não usam nível
+  function nivelPorXp(regras, xp) {
+    const p = obj(obj(regras).progressao), t = Array.isArray(p.xp) ? p.xp : [];
+    if (p.tipo !== 'nivel' || !inteiro(xp)) return 1;
+    let n = 0; for (let k = 0; k < t.length && k < 20; k++) if (inteiro(t[k]) && xp >= t[k]) n = k + 1;
+    return Math.max(1, n);
+  }
+
+  // { attrs: {id: total}, mods: {id: mod}, maximos: {recurso: max|null} } — atributo não rolado não aparece;
+  // recurso com "so" (mana/furia/energia) só aparece para a ficha cuja classe usa aquele recurso. DV = dado de vida da classe.
   function calcular(regras, ficha) {
-    const R = regras || LOTM, f = obj(ficha), attrs = {}, mods = {}, maximos = {}, vars = { SEQ: seqDe(f), NIVEL: nivelDe(f) };
+    const R = regras || LOTM, f = obj(ficha), attrs = {}, mods = {}, maximos = {}, cl = classeDe(R, f);
+    const vars = { SEQ: seqDe(f), NIVEL: nivelDe(f), DV: cl && inteiro(cl.dv) ? cl.dv : null };
     for (const a of R.atributos) {
       const t = totalDe(R, f, a.id);
       if (t == null) continue;
       attrs[a.id] = t; mods[a.id] = Math.max(-30, Math.min(30, modDe(R, t))); vars[a.abrev] = t;
     }
-    const nomes = R.atributos.map(a => a.abrev).concat(['SEQ', 'NIVEL']);
-    for (const r of R.recursos || []) maximos[r.id] = formula(r.max, { nomes, mod: true, dados: false }, { vars, modDe: v => modDe(R, v) });
+    const nomes = R.atributos.map(a => a.abrev).concat(['SEQ', 'NIVEL', 'DV']);
+    for (const r of R.recursos || []) {
+      if (r.so != null && !(cl && cl.recurso === r.so)) continue;
+      maximos[r.id] = formula(r.max, { nomes, mod: true, dados: false }, { vars, modDe: v => modDe(R, v) });
+    }
     return { attrs, mods, maximos };
   }
   // o modificador de UM atributo, para a rolagem (0 se não rolado, como antes)
@@ -219,17 +264,38 @@ const Regras = Object.freeze((() => {
     const rs = R.recursos == null ? [] : R.recursos;
     if (!Array.isArray(rs) || rs.length > 12) add('recursos', 'até 12 recursos');
     else {
-      const nomes = abrevs.concat(['SEQ', 'NIVEL']), rids = [];
+      const nomes = abrevs.concat(['SEQ', 'NIVEL', 'DV']), rids = [];
       rs.forEach((r, k) => {
         const x = obj(r);
         if (typeof x.id !== 'string' || !/^[a-z_]{1,12}$/.test(x.id) || rids.includes(x.id)) add(`recursos[${k}].id`, 'id: de 1 a 12 letras minúsculas, sem repetir');
         rids.push(x.id);
         f1(`recursos[${k}].max`, x.max, { nomes, mod: true, dados: false });
+        if (x.so != null && !RECURSOS_CLASSE.includes(x.so)) add(`recursos[${k}].so`, 'recurso de classe: mana, furia ou energia');
+      });
+    }
+    // progressão por nível: a tabela de XP acumulada (20 valores crescentes, começando em 0)
+    const pg = obj(R.progressao);
+    if (pg.tipo === 'nivel' && !(Array.isArray(pg.xp) && pg.xp.length === 20 && pg.xp[0] === 0 && pg.xp.every((x, k) => inteiro(x) && x <= 1000000 && (k === 0 || x > pg.xp[k - 1])))) add('progressao.xp', 'tabela de XP: 20 valores inteiros crescentes, começando em 0 (até 1000000)');
+    // classes (opcionais): papel, recurso de classe, atributo principal e dado de vida
+    const cs = R.classes == null ? [] : R.classes;
+    if (!Array.isArray(cs) || cs.length > 12) add('classes', 'até 12 classes');
+    else {
+      const cids = [];
+      cs.forEach((c, k) => {
+        const x = obj(c);
+        if (typeof x.id !== 'string' || !/^[a-z_]{1,12}$/.test(x.id) || cids.includes(x.id)) add(`classes[${k}].id`, 'id: de 1 a 12 letras minúsculas, sem repetir');
+        cids.push(x.id);
+        if (typeof x.nome !== 'string' || x.nome.length < 1 || x.nome.length > 30) add(`classes[${k}].nome`, 'nome: de 1 a 30 letras');
+        if (!PAPEIS.includes(x.papel)) add(`classes[${k}].papel`, 'papel: tanque, cura, dano ou suporte');
+        if (!RECURSOS_CLASSE.includes(x.recurso)) add(`classes[${k}].recurso`, 'recurso de classe: mana, furia ou energia');
+        if (!ids.includes(x.principal)) add(`classes[${k}].principal`, 'atributo principal: um atributo que existe');
+        if (!inteiro(x.dv) || x.dv < 4 || x.dv > 20) add(`classes[${k}].dv`, 'dado de vida: inteiro de 4 a 20');
+        if (x.desc != null && (typeof x.desc !== 'string' || x.desc.length > 200)) add(`classes[${k}].desc`, 'descrição: até 200 letras');
       });
     }
     return erros;
   }
 
-  return { LOTM, ErroFormula, tokens, analisar, avaliar, formula, checar, calcular, modificador, validar };
+  return { LOTM, AVENTURA, PAPEIS, RECURSOS_CLASSE, ErroFormula, tokens, analisar, avaliar, formula, checar, calcular, modificador, validar, classeDe, nivelPorXp };
 })());
 if (typeof module === 'object' && module) module.exports = Regras;

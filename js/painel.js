@@ -150,7 +150,7 @@
   // ---------- painel da mesa ----------
   async function abrirMesa(m, nova = false) {
     if (!m || !m.id) return listaMesas();
-    S.mesa = m; S.fichas = []; S.regrasV = null; S.fichasCarregadas = false; S.ascs = []; S.ascsCarregadas = false; S.ultimoSecreto = null; S.habs = []; S.habsCarregadas = false; S.habModo = {}; S.keep = {};
+    S.mesa = m; S.fichas = []; S.regrasV = null; S.fichasCarregadas = false; S.ascs = []; S.ascsCarregadas = false; S.xpPara = new Set(); S.xpUltimos = []; S.ultimoSecreto = null; S.habs = []; S.habsCarregadas = false; S.habModo = {}; S.keep = {};
     tela(`<div class="m-painel">
       <section class="m-cartao m-cab">
         <button type="button" class="link-remover m-voltar" id="m-voltar">← Suas mesas</button>
@@ -206,6 +206,7 @@ ${secaoDuelo()}
         </form>
         <ol id="m-ordens" class="m-ordens" aria-label="Últimas ordens"></ol>
       </section>
+${secaoXP()}
         </div>
         <div class="m-aba-p" role="tabpanel" id="p-cena" aria-labelledby="aba-cena" data-p="cena">
 ${secaoRoda()}
@@ -248,7 +249,7 @@ ${EditorRegras.secao()}
     $('#t-rotulo').addEventListener('input', e => { e.target.dataset.auto = ''; });
     $('#m-form-teste').addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#t-aberto'), () => testar('aberto')); });
     $('#t-secreto').addEventListener('click', e => ocupado(e.currentTarget, () => testar('secreto')));
-    ligarFormSussurro(); ligarControle(); ligarAbas(); ligarDuelo(); ligarFiguras(); ligarCronica(); ligarDadosMestre(); ligarBestiario();
+    ligarFormSussurro(); ligarControle(); ligarXP(); ligarAbas(); ligarDuelo(); ligarFiguras(); ligarCronica(); ligarDadosMestre(); ligarBestiario();
     EditorRegras.ligar({ raiz: $('#p-regras'), mesaId: m.id, confirmar, anunciar, jogadores: () => S.jogadores, fichaNaMesa: () => !!(S.mesa && S.mesa.ficha_na_mesa), aoSalvar: () => carregarFichasMesa() });
     ligarCfg();
     await Promise.all([carregarJogadores(), carregarResultados(), carregarSussurros(), carregarOrdens(), carregarNotas(), carregarFiguras(), carregarEncontro(), carregarDisputas(), carregarCronica(), carregarBestiario(), carregarHabs(), carregarEfeitos(), carregarFichasMesa(), carregarAscensoesM()]);
@@ -302,6 +303,29 @@ ${EditorRegras.secao()}
   const linhaSeq = f => { const s = num(f.seq, 0, 9), igual = f.seq_site == null || f.seq_site === f.seq; return [nomeSeqMesa(f), s != null ? `Sequência ${s}` : '', igual ? txt(f.patamar, 40) : ''].filter(Boolean).join(' · '); };
   const linhaOrigem = f => [txt(obj(f.raca).nome, 40), txt(obj(f.origem).nome, 40)].filter(Boolean).join(' · ');
 
+  // ---------- nível, classe e recurso (Fase C1): a ficha do servidor traz nivel, xp e classeId ----------
+  const regrasDaFichaJ = f => regrasDaVersao(typeof f.regras_versao === 'number' ? f.regras_versao : versaoEmVigor());
+  function classeDaFicha(f) {
+    const R = regrasDaFichaJ(f), cl = Regras.classeDe(R, f), pa = cl && typeof Papeis === 'object' ? Papeis.PAPEL[cl.papel] : null;
+    return { R, cl, pa, porNivel: !!(R.progressao && R.progressao.tipo === 'nivel'), nivel: num(f.nivel, 1, 20) || 1, xp: num(f.xp, 0, 10000000) || 0 };
+  }
+  function classeLinha(f) { const c = classeDaFicha(f); return c.cl ? `<small class="m-cj-classe" style="--pc:${c.pa ? c.pa.cor : '#d9b86a'}">${typeof Papeis === 'object' ? Papeis.glifo(c.cl.papel, 13) : ''}${esc(c.cl.nome)}${c.pa ? ` <i>· ${esc(c.pa.nome)}</i>` : ''}</small>` : ''; }
+  function nivelMedalha(f) {
+    const c = classeDaFicha(f); if (!c.porNivel && !c.cl) return '';
+    return `<div class="m-cj-nivel" style="--pc:${c.pa ? c.pa.cor : '#d9b86a'}" title="${c.cl ? esc(c.cl.nome) + ' · ' : ''}Nível ${c.nivel} · ${c.xp} XP">${c.cl && typeof Papeis === 'object' ? Papeis.emblema(c.cl.papel, 44) : ''}${c.porNivel ? `<b><small>Nv</small>${c.nivel}</b>` : ''}</div>`;
+  }
+  function recursoCarta(f) {
+    const c = classeDaFicha(f), mx = obj(f.maximos); if (!c.cl) return '';
+    const r = (c.R.recursos || []).find(x => x.so === c.cl.recurso && mx[x.id] != null); if (!r) return '';
+    return `<div class="m-cj-rec" style="--rc:${corOk(r.cor)}"><span class="m-cj-rec-ic">${typeof Papeis === 'object' ? Papeis.runa(c.cl.recurso, 22) : ''}</span><span>${esc(r.nome || r.id)}</span><b>${num(mx[r.id], 0, 9999)}</b><small>máx.</small></div>`;
+  }
+  function nivelFichaHTML(f) {
+    const c = classeDaFicha(f); if (!c.porNivel && !c.cl) return '';
+    const t = typeof Papeis === 'object' ? Papeis.trecho(c.R, c.xp, c.nivel) : null;
+    return `<div class="mf-nivel" style="--pc:${c.pa ? c.pa.cor : '#d9b86a'}">${c.cl && typeof Papeis === 'object' ? Papeis.emblema(c.cl.papel, 52) : ''}<div><small>${c.cl ? `${esc(c.cl.nome)}${c.pa ? ' · ' + esc(c.pa.nome) : ''}` : 'Sem classe'}</small>
+      ${c.porNivel ? `<b>Nível ${c.nivel}</b>${typeof Papeis === 'object' ? Papeis.corrente(c.R, c.xp, c.nivel) : ''}<span class="mf-nivel-xp">${c.xp} XP${t && t.ate != null ? ` · faltam ${t.falta} para o nível ${c.nivel + 1}` : ' · nível máximo'}</span>` : ''}</div></div>`;
+  }
+
   function cartaJogador(j) {
     const f = fichaDe(j), mods = obj(f.mods), attrs = obj(f.attrs), cor = corOk(f.cor), cam = txt(f.caminho, 40);
     const ePV = estado(f.pv, f.pvMax, EST_PV), eSan = estado(f.san, f.sanMax, EST_SAN);
@@ -311,10 +335,11 @@ ${EditorRegras.secao()}
         <div class="m-cj-selo">${selo(f, j.nome, 46)}${num(f.seq, 0, 9) != null ? `<b class="m-cj-seq" aria-hidden="true">${num(f.seq, 0, 9)}</b>` : ''}</div>
         <div class="m-cj-id"><b>${esc(j.nome)}<span class="m-vela ${S.online && S.online.has(j.user_id) ? 'acesa' : ''}" title="${S.online && S.online.has(j.user_id) ? 'Com a mesa aberta agora' : 'Fora da mesa agora'}"><i aria-hidden="true"></i><span class="sr-only">${S.online && S.online.has(j.user_id) ? 'presente' : 'ausente'}</span></span></b>
           <small class="m-cj-cam">${cam ? `${esc(nomeSeqMesa(f) || cam)} <i>· Caminho ${esc(cam)}${num(f.seq, 0, 9) != null ? ` · Seq. ${num(f.seq, 0, 9)}` : ''}</i>` : 'Ficha em construção'}</small>
-          ${linhaOrigem(f) ? `<small class="m-cj-orig">${esc(linhaOrigem(f))}</small>` : ''}</div>
+          ${linhaOrigem(f) ? `<small class="m-cj-orig">${esc(linhaOrigem(f))}</small>` : ''}${classeLinha(f)}</div>
+        ${nivelMedalha(f)}
       </header>
       <div class="m-cj-estados">${ePV ? `<span class="m-est pv ${ePV.cls}">${ePV.txt}</span>` : ''}${eSan ? `<span class="m-est san ${eSan.cls}">${eSan.txt}</span>` : ''}</div>
-      ${barra('PV', f.pv, f.pvMax, '#e05a6a')}${barra('Sanidade', f.san, f.sanMax, '#6fb4ff')}
+      ${barra('PV', f.pv, f.pvMax, '#e05a6a')}${barra('Sanidade', f.san, f.sanMax, '#6fb4ff')}${recursoCarta(f)}
       <ul class="m-mods" aria-label="Modificadores">${atributosDe(f).map(a => { const v = num(mods[a.key], -30, 30), t = num(attrs[a.key], 1, 60), principal = f.attrCaminho === a.key;
         return `<li class="${principal ? 'cam' : ''}" style="--ac:${a.cor}" title="${a.nome}${t != null ? ` ${t}` : ''}${principal ? ' · atributo do Caminho' : ''}"><span>${a.nome.slice(0, 3)}</span><b>${v == null ? '—' : sinal(v)}</b></li>`; }).join('')}</ul>
       <footer class="m-cj-pe"><span class="m-cj-hora" data-t="${esc(j.atualizado_em || '')}">${haQuanto(j.atualizado_em)}</span>
@@ -333,7 +358,7 @@ ${EditorRegras.secao()}
     c.querySelectorAll('.m-cj-ver').forEach(b => b.addEventListener('click', () => abrirFicha(b.dataset.u, b)));
     c.querySelectorAll('.m-fm-liberar').forEach(b => b.addEventListener('click', () => liberarFicha(b)));
     c.querySelectorAll('.m-fm-migrar').forEach(b => b.addEventListener('click', () => migrarFicha(b)));
-    desenharFichasMesa(); desenharAscensoes();
+    desenharFichasMesa(); desenharAscensoes(); desenharXP();
     EditorRegras.jogadoresMudaram();
     if (S.fichaAberta) desenharFicha();
     const sel = $('#t-para'); if (sel) {
@@ -458,7 +483,7 @@ ${EditorRegras.secao()}
   }
   function ligarControle() {
     document.querySelectorAll('input[name="c-alvo"]').forEach(r => r.addEventListener('change', rotularControle));
-    document.querySelectorAll('.c-chip').forEach(b => b.addEventListener('click', () => { $('#c-qtd').value = b.dataset.v; }));
+    document.querySelectorAll('#m-form-ctrl .c-chip').forEach(b => b.addEventListener('click', () => { $('#c-qtd').value = b.dataset.v; }));
     const mandar = sinalDano => async () => {
       $('#m-erro-ctrl').hidden = true;
       const q = num($('#c-qtd').value, 1, 999), para = $('#c-para').value || null, k = alvo();
@@ -1395,6 +1420,63 @@ ${EditorRegras.secao()}
     })));
   }
 
+  // ---------- dar experiência (Fase C1): ao grupo, a alguns ou a um; o servidor sobe o nível pela tabela ----------
+  const porNivelEmVigor = () => !!(vigorTeste().progressao && vigorTeste().progressao.tipo === 'nivel');
+  function secaoXP() {
+    return `<section class="m-cartao m-xp" id="m-xp" aria-labelledby="t-xp" hidden><h2 id="t-xp">Dar experiência</h2>
+        <form id="m-form-xp" class="m-form" novalidate>
+          <fieldset class="m-campo m-largo xp-para"><legend>Para <i>(ninguém marcado = o grupo todo)</i></legend><div class="xp-quem" id="xp-quem"></div></fieldset>
+          <div class="m-grade">
+            <div class="m-campo"><label for="xp-qtd">Quanto</label><div class="c-qtd-linha"><input type="number" id="xp-qtd" min="1" max="100000" value="100" inputmode="numeric">
+              <div class="c-chips" role="group" aria-label="Valores rápidos">${[50, 100, 300, 1000].map(v => `<button type="button" class="c-chip xp-chip" data-v="${v}">${v}</button>`).join('')}</div></div></div>
+            <div class="m-campo"><label for="xp-motivo">Motivo <i>(vai para a Crônica)</i></label><input type="text" id="xp-motivo" maxlength="120" placeholder="Ex.: A queda do Lorde Sombrio" autocomplete="off"></div>
+          </div>
+          <p class="m-erro" id="m-erro-xp" role="alert" hidden></p>
+          <div class="m-acoes"><button type="submit" class="primary xp-dar" id="xp-dar" data-ic="estrela">Conceder experiência</button></div>
+          <p class="hint">O nível sobe sozinho quando a XP alcança a tabela do Livro de regras, e o jogador recebe a cerimônia.</p>
+        </form>
+        <ol id="xp-ultimos" class="xp-ultimos" aria-label="Experiência concedida nesta sessão"></ol>
+      </section>`;
+  }
+  function desenharXP() {
+    const sec = $('#m-xp'); if (!sec) return;
+    sec.hidden = !porNivelEmVigor(); if (sec.hidden) return;
+    S.xpPara = new Set([...(S.xpPara || [])].filter(u => S.jogadores.some(j => j.user_id === u)));
+    const c = $('#xp-quem'), foco = c.contains(document.activeElement) ? document.activeElement.dataset.xu : null, todos = !S.xpPara.size;
+    c.innerHTML = `<button type="button" class="fm-b xp-alvo xp-grupo${todos ? ' on' : ''}" data-xu="*" aria-pressed="${todos}"><span class="xp-alvo-ic" aria-hidden="true">✦</span><b>O grupo todo</b><small>${S.jogadores.length} ${S.jogadores.length === 1 ? 'jogador' : 'jogadores'}</small></button>`
+      + S.jogadores.map(j => { const f = fichaDe(j), k = classeDaFicha(f), on = S.xpPara.has(j.user_id);
+        return `<button type="button" class="fm-b xp-alvo${on ? ' on' : ''}" data-xu="${esc(j.user_id)}" aria-pressed="${on}" style="--pc:${k.pa ? k.pa.cor : '#d9b86a'}"><span class="xp-alvo-ic" aria-hidden="true">${k.cl && typeof Papeis === 'object' ? Papeis.emblema(k.cl.papel, 30) : selo(f, j.nome, 26)}</span><b>${esc(j.nome)}</b><small>Nível ${k.nivel} · ${k.xp} XP</small></button>`; }).join('');
+    $('#xp-dar').disabled = !S.jogadores.length;
+    if (foco) { const b = c.querySelector(`[data-xu="${CSS.escape(foco)}"]`); if (b) b.focus(); }
+    const ul = $('#xp-ultimos');
+    ul.innerHTML = (S.xpUltimos || []).slice(0, 8).map(x => `<li><span class="xp-u-n">${esc(x.nome)}</span><b>+${x.ganho} XP</b>${x.para > x.de ? `<span class="xp-u-sobe">▲ nível ${x.para}</span>` : `<span class="xp-u-nv">nível ${x.para}</span>`}${x.motivo ? `<i>${esc(x.motivo)}</i>` : ''}</li>`).join('');
+  }
+  function ligarXP() {
+    const c = $('#xp-quem'); if (!c) return;
+    c.addEventListener('click', e => {
+      const b = /** @type {HTMLElement} */ (e.target).closest('[data-xu]'); if (!b) return;
+      const u = b.dataset.xu;
+      if (u === '*') S.xpPara.clear(); else if (S.xpPara.has(u)) S.xpPara.delete(u); else S.xpPara.add(u);
+      desenharXP();
+    });
+    document.querySelectorAll('.xp-chip').forEach(b => b.addEventListener('click', () => { $('#xp-qtd').value = b.dataset.v; }));
+    $('#m-form-xp').addEventListener('submit', ev => { ev.preventDefault(); ocupado($('#xp-dar'), async () => {
+      $('#m-erro-xp').hidden = true;
+      const bruto = String($('#xp-qtd').value).trim(), q = num(bruto, 1, 100000), mot = $('#xp-motivo').value.trim().slice(0, 120), us = [...S.xpPara];
+      if (!S.jogadores.length) return erroEm('#m-erro-xp', new Rede.ErroRede('Espere um jogador entrar na mesa.'));
+      if (!bruto || q == null || q !== Number(bruto)) return erroEm('#m-erro-xp', new Rede.ErroRede('Diga quanta experiência (1 a 100000).'));
+      try {
+        const r = await Rede.rpc('mestre', 'dar_xp', { p_mesa: S.mesa.id, p_users: us, p_xp: q, p_motivo: mot });
+        const lista = Array.isArray(r) ? r : [];
+        S.xpUltimos = lista.map(x => ({ ...x, ganho: q, motivo: mot })).concat(S.xpUltimos || []).slice(0, 20);
+        const subiram = lista.filter(x => x.para > x.de);
+        anunciar(`${q} XP para ${us.length ? lista.map(x => x.nome).join(', ') : 'o grupo todo'}${subiram.length ? '. Subiram de nível: ' + subiram.map(x => `${x.nome} (${x.para})`).join(', ') : ''}`);
+        $('#xp-motivo').value = '';
+        await carregarJogadores(); carregarCronica();
+      } catch (er) { erroEm('#m-erro-xp', er); }
+    }); });
+  }
+
   // ---------- ficha montada na mesa (Fase B2): configurar, aprovar/recusar, liberar nova rolagem, migrar de versão ----------
   const vigorTeste = () => (S.regrasV && S.regrasV[0] ? S.regrasV[0].regras : Regras.LOTM);
   const versaoEmVigor = () => (S.regrasV && S.regrasV[0] ? S.regrasV[0].versao : 0);
@@ -1444,13 +1526,14 @@ ${EditorRegras.secao()}
     const j = S.jogadores.find(x => x.user_id === fm.user_id) || {}, R = regrasDaVersao(fm.regras_versao), k = 'fmp-' + fm.user_id;
     const seq = num(obj(j.ficha).seq, 0, 9), cam = typeof caminhoPorId === 'function' && fm.caminho_id ? caminhoPorId(fm.caminho_id) : null;
     const rc = typeof RACAS !== 'undefined' && fm.raca_id ? RACAS.find(x => x.id === fm.raca_id) : null;
-    let c; try { c = Regras.calcular(R, { base: fm.base, caminhoId: fm.caminho_id || '', racaId: fm.raca_id || '', seq: seq == null ? 9 : seq }); } catch (e) { c = { attrs: {}, mods: {}, maximos: {} }; }
+    const fcl = Regras.classeDe(R, { classeId: fm.classe_id || '' }), fpa = fcl && typeof Papeis === 'object' ? Papeis.PAPEL[fcl.papel] : null;
+    let c; try { c = Regras.calcular(R, { base: fm.base, caminhoId: fm.caminho_id || '', racaId: fm.raca_id || '', classeId: fm.classe_id || '', seq: seq == null ? 9 : seq, nivel: num(obj(j.ficha).nivel, 1, 20) || 1 }); } catch (e) { c = { attrs: {}, mods: {}, maximos: {} }; }
     return `<article class="fmp ${fm.origem === 'convertida' ? 'conv' : ''}" data-u="${esc(fm.user_id)}">
       <header class="fmp-cab"><span class="fmp-selo" aria-hidden="true">${cam ? `<img src="img/sigilos/${esc(cam.id)}.webp" alt="">` : ''}</span><div><b>${esc(j.nome || 'Jogador')}</b>
         <small>${fm.origem === 'convertida' ? 'Trazida do site: dados rolados no navegador' : `Dados rolados pelo servidor${fm.rolagens_feitas > 1 ? ` (${fm.rolagens_feitas}ª rolagem)` : ''}`}</small>
-        <small>${cam ? `Caminho ${esc(cam.nome)}` : 'Sem Caminho'} · ${rc ? `${esc(rc.icone)} ${esc(rc.nome)}` : 'sem raça'} · regras v${fm.regras_versao}</small></div></header>
+        <small>${fcl ? `<span class="fmp-classe" style="--pc:${fpa ? fpa.cor : '#d9b86a'}">${typeof Papeis === 'object' ? Papeis.glifo(fcl.papel, 13) : ''}${esc(fcl.nome)}${fpa ? ` · ${esc(fpa.nome)}` : ''}</span>` : `${cam ? `Caminho ${esc(cam.nome)}` : 'Sem Caminho'} · ${rc ? `${esc(rc.icone)} ${esc(rc.nome)}` : 'sem raça'}`} · regras v${fm.regras_versao}</small></div></header>
       <ul class="fmp-ats" aria-label="Atributos">${R.atributos.map(a => `<li title="${esc(a.nome)}"><span>${esc(a.abrev)}</span><b>${fm.base[a.id] ?? '—'}</b><em>${c.mods[a.id] == null ? '' : sinal(c.mods[a.id])}</em></li>`).join('')}</ul>
-      ${(R.recursos || []).length ? `<p class="fmp-rec">${R.recursos.map(r => `<span style="--rc:${corOk(r.cor)}">${esc(r.nome)} <b>${c.maximos[r.id] ?? '—'}</b></span>`).join('')}</p>` : ''}
+      ${(R.recursos || []).some(r => Object.hasOwn(c.maximos, r.id)) ? `<p class="fmp-rec">${R.recursos.filter(r => Object.hasOwn(c.maximos, r.id)).map(r => `<span style="--rc:${corOk(r.cor)}">${esc(r.nome)} <b>${c.maximos[r.id] ?? '—'}</b></span>`).join('')}</p>` : ''}
       <label class="sr-only" for="${k}-r">Recado para ${esc(j.nome || 'o jogador')}</label>
       <input type="text" id="${k}-r" class="fmp-recado" maxlength="300" placeholder="Recado ao jogador (opcional)" autocomplete="off" value="${esc((S.recadoFicha || {})[fm.user_id] || '')}">
       <div class="fmp-ac"><button type="button" class="primary fmp-ok" id="${k}-ok">Aprovar</button><button type="button" class="ghost fmp-nao" id="${k}-nao">Recusar</button></div>
@@ -1701,6 +1784,7 @@ ${EditorRegras.secao()}
           <h2 id="mf-nome">${esc(j.nome)}</h2>
           <p class="mf-seq">${esc(linhaSeq(f)) || '—'}</p>
           ${seqControleHTML(j)}
+          ${nivelFichaHTML(f)}
           <p class="mf-orig">${esc(linhaOrigem(f))}${txt(f.jogador, 60) ? `<span> · jogado por ${esc(txt(f.jogador, 60))}</span>` : ''}</p>
           ${dig != null && digMax ? `<div class="mf-dig" title="Digestão da poção"><span>Digestão da poção</span><div class="m-trilho" role="meter" aria-label="Digestão da poção" aria-valuemin="0" aria-valuemax="${digMax}" aria-valuenow="${Math.min(dig, digMax)}"><div style="transform:scaleX(${Math.min(1, dig / digMax)})"></div></div><b>${dig}/${digMax}</b></div>` : ''}
         </div>

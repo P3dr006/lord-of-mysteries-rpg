@@ -323,7 +323,7 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     ok('a aba Regras mostra as regras em vigor em palavras', await ate(async () => { const t = await texto('#er-resumo'); return /versão 2/.test(await texto('#er-vigor')) && /\+1 a cada 2 pontos acima de 10/.test(t) && /Pontos de Vida/.test(t) && /de Caminho/.test(t); }), await texto('#er-resumo'));
     await print('0-aba-resumo', '#p-regras .er');
     await m.click('#er-abrir');
-    ok('o livro abre em tela cheia, na seção Começar, com modelos e versões', await ate(() => m.isVisible('.er-livro')) && (await m.$$('[data-modelo]')).length === 3 && (await m.$$('[data-versao]')).length === 2 && (await m.getAttribute('#erl-a-comecar', 'aria-selected')) === 'true');
+    ok('o livro abre em tela cheia, na seção Começar, com modelos e versões', await ate(() => m.isVisible('.er-livro')) && (await m.$$('[data-modelo]')).length === 4 && (await m.$$('[data-versao]')).length === 2 && (await m.getAttribute('#erl-a-comecar', 'aria-selected')) === 'true');
     ok('sem mudança, salvar fica desligado', await m.evaluate(() => document.querySelector('#er-salvar').disabled) && /Igual às regras em vigor/.test(await texto('#er-estado')));
     await print('1-comecar');
     // modificador em frase, com a tabela
@@ -575,6 +575,148 @@ const baixar = url => new Promise((ok2, falha) => https.get(url, r => { if (r.st
     await j.evaluate(() => { P.notas = (P.notas || '').trim(); salvar(); });
     await ate(() => linha().ficha.regras_versao === vSorte + 1);
     ok('sem erros nas páginas', m.erros.length + j.erros.length === 0, [...m.erros, ...j.erros].join(' | '));
+    await j.click('#fab-mesa').catch(() => {}); await j.click('.aba[data-aba=testes]').catch(() => {});
+  }
+
+  console.log('\n7a5) Modo MMO (C1): nível, classes, recursos de classe e XP dada pelo mestre');
+  { const Regras = require('../js/regras.js'), CASOS = require('./formulas-casos.json'), mesaId = srv.db.mesas[0].id;
+    const print = async (pg, nome, sel) => { if (process.env.PRINTS) { await pg.waitForTimeout(500); await pg.locator(sel).first().screenshot({ path: path.join(process.env.PRINTS, 'c1-' + nome + '.png') }); } };
+    const linha = () => srv.db.jogadores.find(x => x.mesa_id === mesaId && x.user_id === uidJ);
+    const fm = () => srv.db.fichas_mesa.find(x => x.mesa_id === mesaId && x.user_id === uidJ);
+    const inserir = regras => m.evaluate(async ([mid, rg]) => { const r = await (await Rede.tabela('mestre', 'mesa_regras')).insert({ mesa_id: mid, regras: rg }).select('versao'); return r.error ? 'erro: ' + r.error.message : r.data[0].versao; }, [mesaId, regras]);
+    const carta = `.m-carta-j[data-u="${uidJ}"]`;
+    // o assistente copia os dados rolados para a ficha do site: guarda a de antes para devolver no fim (as seções seguintes contam com ela)
+    const attrsAntes = await j.evaluate(() => JSON.stringify(P.attrs)), modsAntes = JSON.stringify(linha().ficha.mods);
+    // 1) o motor: os mesmos casos que a verificação do banco roda
+    { const ab = ['FOR', 'AGI', 'VIG', 'INT', 'ESP', 'PRE', 'SEQ', 'NIVEL'], CTX = { ficha: { nomes: ab, mod: true, dados: false }, classe: { nomes: ab.concat('DV'), mod: true, dados: false } };
+      const op = { vars: { VIG: 14, PRE: 8, FOR: 18, SEQ: 7, NIVEL: 3, ATR: 15, DV: 10 }, modDe: v => Regras.formula(Regras.LOTM.modificador, { nomes: ['ATR'], mod: false, dados: false }, { vars: { ATR: v } }) };
+      const val = CASOS.valores_c1.filter(([f, c, e]) => { try { return Regras.formula(f, CTX[c], op) !== e; } catch (x) { return true; } });
+      ok(`DV nas fórmulas: os ${CASOS.valores_c1.length} valores batem`, val.length === 0, val.map(v => v[0]).join(' | '));
+      const err = CASOS.erros_c1.filter(([f, c, p, mm]) => { const r = Regras.checar(f, CTX[c]); return !r || r.erro !== `Fórmula inválida na posição ${p}: ${mm}`; });
+      ok(`DV nas fórmulas: os ${CASOS.erros_c1.length} erros saem na posição certa`, err.length === 0, err.map(v => v[0]).join(' | '));
+      const fx = CASOS.fichas_c1.filter(([f, e]) => JSON.stringify(Regras.calcular(Regras.AVENTURA, f).maximos) !== JSON.stringify(e));
+      ok(`fichas Aventura: os ${CASOS.fichas_c1.length} máximos batem (recurso só para a classe que o usa)`, fx.length === 0, fx.map(x => JSON.stringify(x[0].classeId)).join(' | '));
+      ok('o nível pela XP bate com a tabela', CASOS.nivel_c1.every(([x, n]) => Regras.nivelPorXp(Regras.AVENTURA, x) === n) && Regras.nivelPorXp(Regras.LOTM, 5000) === 1);
+      const set = (o, cam, v) => { const r = JSON.parse(JSON.stringify(o)), k = cam.split(','); let x = r; for (let i = 0; i < k.length - 1; i++) x = x[k[i]]; x[k[k.length - 1]] = v; return r; };
+      const ruim = o => { const e = Regras.validar(o)[0]; return e ? `Regras inválidas (${e.campo}): ${e.erro}` : ''; };
+      const rr = CASOS.ruins_c1.filter(([c, v, mm]) => ruim(set(Regras.AVENTURA, c, v)) !== mm);
+      ok(`regras ruins da C1: as ${CASOS.ruins_c1.length} mensagens são as do banco`, rr.length === 0 && CASOS.ruins_c1.every(x => x[2]), rr.map(x => x[0]).join(' | '));
+      ok('a predefinição Aventura passa na validação e a LotM continua igual', Regras.validar(Regras.AVENTURA).length === 0 && Regras.validar(Regras.LOTM).length === 0);
+      const ver = fs.readFileSync(path.join(RAIZ, 'supabase/verificacoes/20261118_nivel_e_classes.sql'), 'utf8'), q = s => "'" + s.split("'").join("''") + "'";
+      ok('a verificação do banco roda os mesmos casos (fórmulas, fichas e regras ruins)', [...CASOS.valores_c1, ...CASOS.erros_c1].every(c => ver.includes(`privado.formula(${q(c[0])}, ctx_${c[1]})`))
+        && CASOS.fichas_c1.every(([f]) => ver.includes(q(JSON.stringify(f)))) && CASOS.ruins_c1.every(([, , mm]) => ver.includes(q(mm))) && ver.includes(q(JSON.stringify(Regras.AVENTURA)))); }
+    // 2) sem nível nas regras, o Grimório não oferece XP
+    ok('com as regras LotM, "Dar experiência" fica escondido', !(await m.isVisible('#m-xp')));
+    // 3) o mestre abre o Livro, escolhe Aventura e confere as abas Classes e Nível
+    await m.click('#er-abrir'); await ate(() => m.isVisible('.er-livro'));
+    ok('o Livro tem 4 modelos, com Aventura', (await m.$$('[data-modelo]')).length === 4 && await m.isVisible('[data-modelo=aventura]'));
+    await m.click('[data-modelo=aventura]'); await m.click('#erl-a-classes');
+    ok('a aba Classes mostra as 4 classes com o emblema do papel', await ate(async () => (await m.$$('.er-cl')).length === 4) && (await m.$$('.er-cl .pp-med')).length === 4
+      && (await m.$$eval('.er-cl-op[data-cl-papel][aria-checked=true]', l => l.map(x => x.dataset.clPapel))).join() === 'tanque,cura,dano,suporte');
+    { const v = await axe(m); ok('Livro na aba Classes sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    await print(m, '1-livro-classes', '.er-livro');
+    ok('a prévia ganha Classe e Nível e mostra só o recurso da classe', await m.isVisible('#er-cl-campo') && await m.isVisible('#er-nv-campo') && /Fúria/.test(await m.textContent('#er-resultado')) && !/Mana/.test(await m.textContent('#er-resultado')));
+    ok('sem a ficha montada na mesa, o livro avisa que a classe não será escolhida', /Ficha montada na mesa/.test(await m.textContent('#er-avisos')));
+    // mudar o papel do Arauto e desfazer
+    await m.click('[data-cl="3"] [data-cl-papel=dano]');
+    ok('trocar o papel troca o emblema na hora', await ate(async () => (await m.getAttribute('[data-cl="3"] [data-cl-papel=dano]', 'aria-checked')) === 'true') && await m.evaluate(() => !!document.querySelector('[data-cl="3"] .er-cl-emb .pp-dano')));
+    await m.click('[data-cl="3"] [data-cl-papel=suporte]');
+    await m.click('#erl-a-nivel');
+    ok('a aba Nível mostra "Nível de 1 a 20" e os 20 degraus da XP', await ate(async () => (await m.getAttribute('[data-prog=nivel]', 'aria-checked')) === 'true') && (await m.$$('.er-nv')).length === 20);
+    await m.click('[data-curva="200"]');
+    ok('a curva "Lenta" reescreve a tabela (nível 2 com 200 XP)', await ate(async () => (await m.inputValue('[data-k="nv-xp:1"]')) === '200'));
+    await m.fill('[data-k="nv-xp:3"]', '50');
+    ok('XP fora de ordem é barrada, com "Ir até lá" na aba Nível', await ate(async () => /Tabela de experiência/.test(await m.textContent('#er-erros'))) && await m.evaluate(() => document.querySelector('#er-salvar').disabled) && !(await m.$('#erl-a-nivel .er-l-n[hidden]')));
+    await m.click('[data-curva="100"]');
+    ok('a curva "Padrão" volta à tabela da Aventura', await ate(async () => (await m.inputValue('[data-k="nv-xp:1"]')) === '100' && !(await m.isVisible('#er-erros'))));
+    await print(m, '2-livro-nivel', '.er-livro');
+    await m.setViewportSize({ width: 375, height: 812 }); await m.click('#erl-a-classes');
+    ok('no celular o livro com as classes não rola para o lado', await m.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await print(m, '3-livro-celular', '.er-livro');
+    await m.setViewportSize({ width: 1180, height: 900 });
+    await m.click('#er-salvar'); await m.waitForSelector('#cf-ok'); await m.click('#cf-ok');
+    const vAv = await ate(() => { const r = srv.db.mesa_regras.filter(x => x.mesa_id === mesaId).sort((x, y) => y.versao - x.versao)[0]; return r && JSON.stringify(r.regras) === JSON.stringify(Regras.AVENTURA); });
+    ok('salvar grava a Aventura igual à predefinição', vAv);
+    await m.click('#er-fechar'); await ate(async () => !(await m.$('.er-livro')));
+    ok('o resumo da aba Regras fala de nível e das classes', /nível de 1 a 20/.test(await m.textContent('#er-resumo')) && /Sentinela/.test(await m.textContent('#er-resumo')));
+    // 4) a ficha montada na mesa, com o passo Classe
+    await m.click('#m-cfg-ficha'); await m.waitForSelector('#cf-ok'); await m.click('#cf-ok');
+    await ate(() => srv.db.mesas[0].ficha_na_mesa === true);
+    await j.click('#mesa-x').catch(() => {}); await j.click('#fab-mesa').catch(() => {}); await j.click('.aba[data-aba=testes]').catch(() => {});
+    await ate(() => j.isVisible('#fm-abrir')); await j.click('#fm-abrir'); await ate(() => j.isVisible('.fm-assist'));
+    ok('o assistente chama o segundo passo de "Classe"', /Classe/.test(await j.textContent('.fm-passos')) && !/Origem/.test(await j.textContent('.fm-passos')));
+    await j.click('.fm-op[data-ir=nova]'); srv.proximosDados(...[6, 6, 5, 1, 5, 5, 4, 1, 6, 5, 4, 2, 3, 3, 3, 3, 4, 4, 4, 1, 6, 4, 3, 2]); await j.click('#fm-rolar');
+    await ate(() => j.isVisible('.fm-ats.revela')); await j.click('[data-ir=origem]');
+    ok('quatro cartas, na ordem Tanque, Cura, Dano, Suporte, cada uma com o emblema', await ate(async () => (await j.$$('.fm-cl')).length === 4) && (await j.$$eval('.fm-cl-papel', l => l.map(x => x.textContent))).join() === 'Tanque,Cura,Dano,Suporte' && (await j.$$('.fm-cl .pp-med')).length === 4);
+    ok('cada carta diz o recurso e a vida no nível 1', /Fúria/.test(await j.textContent('[data-classe=sentinela]')) && /Vida no nível 1/.test(await j.textContent('[data-classe=sentinela]')) && /Energia/.test(await j.textContent('[data-classe=duelista]')));
+    ok('sem classe escolhida, "Ver a ficha pronta" fica travado', await j.isDisabled('[data-ir=selar]'));
+    { const v = await axe(j); ok('passo Classe sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    await print(j, '4-classes', '.fm-livro');
+    await j.setViewportSize({ width: 375, height: 812 });
+    ok('no celular as cartas de classe cabem sem rolagem lateral', await j.evaluate(() => document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll('.fm-cl')].every(c => c.getBoundingClientRect().right <= innerWidth)));
+    await print(j, '5-classes-celular', '.fm-livro');
+    await j.setViewportSize({ width: 1180, height: 900 });
+    await j.click('[data-classe=sentinela]');
+    ok('escolher marca a carta e libera o próximo passo', await ate(async () => (await j.getAttribute('[data-classe=sentinela]', 'aria-pressed')) === 'true') && !(await j.isDisabled('[data-ir=selar]')));
+    await j.click('[data-ir=selar]');
+    ok('a ficha pronta mostra a classe, a vida e a fúria (sem mana nem energia)', /Sentinela/.test(await j.textContent('.fm-intro')) && /Fúria/.test(await j.textContent('.fm-rec')) && !/Mana|Energia/.test(await j.textContent('.fm-rec')));
+    await j.click('#fm-selar');
+    ok('com a aprovação ligada, a ficha vai ao mestre com a classe', await ate(() => fm() && fm().estado === 'pendente' && fm().classe_id === 'sentinela'));
+    ok('a fila "Fichas para aprovar" mostra a classe e só a fúria', await ate(async () => /Sentinela · Tanque/.test(await m.textContent('#m-fichas')) && /Fúria/.test(await m.textContent('#m-fichas .fmp-rec')) && !/Mana|Energia/.test(await m.textContent('#m-fichas .fmp-rec'))));
+    await print(m, '6a-fila-aprovar', '#m-fichas .fmp');
+    await m.click('#m-fichas .fmp-ok');
+    ok('aprovada: o jogador recebe o selo de cera', await ate(async () => /aprova sua ficha/.test(await j.textContent('.decreto'))));
+    await j.click('#dec-ok'); await ate(async () => !(await j.$('.decreto')));
+    ok('selada: o servidor guarda a classe e calcula vida e fúria', await ate(() => fm() && fm().classe_id === 'sentinela' && linha().ficha.classeId === 'sentinela' && linha().ficha.maximos.furia === 100 && Number.isInteger(linha().ficha.maximos.pv) && !('mana' in linha().ficha.maximos)));
+    ok('a carta da aba Testes mostra a classe, o nível 1, a corrente e os frascos', await ate(async () => /Sentinela/.test(await j.textContent('.pp-bloco')) && /Nível\s*1/.test(await j.textContent('.pp-nivel')) && (await j.$$('.pp-elo')).length === 10 && (await j.$$('.pp-elo.on')).length === 0 && (await j.$$('.pp-frasco')).length === 2));
+    await print(j, '6-carta', '.fm-carta.fm-aprovada');
+    // 5) o Grimório: carta com emblema e nível; "Dar experiência" aparece
+    ok('a carta do jogador no Grimório tem o emblema do papel, o nível e a fúria', await ate(async () => !!(await m.$(`${carta} .m-cj-nivel .pp-tanque`)) && /Nv\s*1/.test(await m.textContent(`${carta} .m-cj-nivel`)) && /Fúria/.test(await m.textContent(`${carta} .m-cj-rec`)) && /Sentinela/.test(await m.textContent(`${carta} .m-cj-classe`))));
+    ok('"Dar experiência" aparece com o grupo e o Klein', await ate(() => m.isVisible('#m-xp')) && (await m.$$('.xp-alvo')).length === 2 && (await m.getAttribute('.xp-grupo', 'aria-pressed')) === 'true');
+    { const v = await axe(m); ok('Grimório com a XP e a carta do Sentinela sem violações de acessibilidade', v.length === 0, v.join(' | ')); }
+    await print(m, '7-carta-grimorio', carta);
+    // 6) XP para o Klein: sobe ao nível 3, com cerimônia, marco e Crônica
+    await m.click(`.xp-alvo[data-xu="${uidJ}"]`);
+    ok('marcar o Klein desmarca o grupo', await ate(async () => (await m.getAttribute(`.xp-alvo[data-xu="${uidJ}"]`, 'aria-pressed')) === 'true' && (await m.getAttribute('.xp-grupo', 'aria-pressed')) === 'false'));
+    await m.fill('#xp-qtd', '0'); await m.click('#xp-dar');
+    ok('XP zero é barrada antes do servidor', await ate(async () => /1 a 100000/.test(await m.textContent('#m-erro-xp'))) && !srv.db.marcos.length);
+    await m.fill('#xp-qtd', '350'); await m.fill('#xp-motivo', 'A queda do Lorde Sombrio');
+    await print(m, '8-dar-xp', '#m-xp');
+    await m.click('#xp-dar');
+    ok('o servidor sobe o Klein ao nível 3 (350 XP) e registra o marco', await ate(() => linha().nivel === 3 && linha().xp === 350 && linha().ficha.nivel === 3) && srv.db.marcos.some(x => x.user_id === uidJ && x.de === 1 && x.para === 3 && x.motivo === 'A queda do Lorde Sombrio'));
+    ok('a Crônica registra a XP e o nível novo', srv.db.cronica.some(c => c.texto === '✦ Klein ganha 350 XP — A queda do Lorde Sombrio') && srv.db.cronica.some(c => c.texto === '▲ Klein chega ao nível 3'));
+    ok('a lista do mestre mostra "+350 XP ▲ nível 3"', await ate(async () => /\+350 XP/.test(await m.textContent('#xp-ultimos')) && /nível 3/.test(await m.textContent('#xp-ultimos'))));
+    ok('a cerimônia de nível chega ao jogador, com o emblema e o que cresceu', await ate(() => j.isVisible('.asc.nivel')) && /NÍVEL III/.test(await j.textContent('.asc.nivel .asc-eyebrow')) && /Sentinela/.test(await j.textContent('#niv-t')) && /\+\d+ Pontos de Vida/.test(await j.textContent('.asc-ganhos')) && /\+350 XP/.test(await j.textContent('.asc-ganhos')) && /Lorde Sombrio/.test(await j.textContent('.asc.nivel')));
+    ok('o botão só vale depois da cerimônia', await j.isDisabled('#niv-ok') && await ate(async () => !(await j.isDisabled('#niv-ok')), 6000));
+    await print(j, '9-cerimonia', '.asc-core');
+    await j.click('#niv-ok'); await ate(async () => !(await j.$('.asc.nivel')));
+    ok('a carta passa ao nível 3, com elos acesos', await ate(async () => /3/.test(await j.textContent('.pp-nivel')) && (await j.$$('.pp-elo.on')).length >= 1) && /faltam 250 para o nível 4/.test(await j.textContent('.pp-xp')));
+    // 7) XP ao grupo sem subir de nível: o selo de cera com a corrente
+    await m.click('.xp-grupo'); await m.fill('#xp-qtd', '50'); await m.click('#xp-dar');
+    ok('sem subir de nível, chega o selo "+50 XP" com a trilha', await ate(() => j.isVisible('.decreto.dec-xp')) && /\+50 XP/.test(await j.textContent('.decreto.dec-xp')) && (await j.$$('.decreto .pp-elo')).length === 10 && linha().xp === 400 && linha().nivel === 3);
+    await print(j, '10-selo-xp', '.dec-papel');
+    await j.click('#dec-ok'); await ate(async () => !(await j.$('.decreto')));
+    // 8) o que o site manda não muda nível, XP nem classe
+    const forja = await j.evaluate(async ([mid, u]) => { const r = await (await Rede.tabela('jogador', 'jogadores')).update({ ficha: { ...Jogador.fichaParaMestre(), nivel: 20, xp: 99999, classeId: 'duelista' } }).eq('mesa_id', mid).eq('user_id', u).select('user_id'); return r.error ? r.error.message : 'ok'; }, [mesaId, uidJ]);
+    ok('mandar nível 20 e outra classe na ficha não muda nada', forja === 'ok' && linha().ficha.nivel === 3 && linha().ficha.xp === 400 && linha().ficha.classeId === 'sentinela');
+    ok('mudar a coluna nivel direto é recusado', /permission denied/.test(await j.evaluate(async ([mid, u]) => { const r = await (await Rede.tabela('jogador', 'jogadores')).update({ nivel: 20 }).eq('mesa_id', mid).eq('user_id', u); return r.error ? r.error.message : 'ok'; }, [mesaId, uidJ])));
+    ok('o jogador não consegue se dar XP', /Só o mestre/.test(await j.evaluate(async mid => { try { await Rede.rpc('jogador', 'dar_xp', { p_mesa: mid, p_users: [], p_xp: 1000, p_motivo: '' }); return 'deu'; } catch (e) { return Rede.mensagem(e); } }, mesaId)));
+    // 9) no celular: a carta do Grimório e a "Dar experiência"
+    await m.setViewportSize({ width: 375, height: 812 });
+    ok('no celular o Grimório com a XP não rola para o lado', await m.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await print(m, '11-grimorio-celular', '#m-xp');
+    await m.setViewportSize({ width: 1180, height: 900 });
+    await m.click(`${carta} .m-cj-ver`); await m.waitForSelector('.mf-nivel');
+    ok('a ficha aberta mostra a classe, o nível e a trilha de XP', /Sentinela/.test(await m.textContent('.mf-nivel')) && /Nível 3/.test(await m.textContent('.mf-nivel')) && (await m.$$('.mf-nivel .pp-elo')).length === 10);
+    await print(m, '12-ficha-grimorio', '.mf-cab');
+    await m.click('.m-ficha-x');
+    ok('sem erros nas páginas', m.erros.length + j.erros.length === 0, [...m.erros, ...j.erros].join(' | '));
+    // volta ao LotM com a ficha do site (as seções seguintes contam com isso)
+    ok('o mestre volta ao LotM', typeof (await inserir(Regras.LOTM)) === 'number');
+    await m.click('#m-cfg-ficha'); await ate(() => srv.db.mesas[0].ficha_na_mesa === false && !('classeId' in linha().ficha));
+    await j.evaluate(a => { P.attrs = JSON.parse(a); salvar(); }, attrsAntes);
+    ok('a ficha do site do Klein volta a ser a de antes', await ate(() => JSON.stringify(linha().ficha.mods) === modsAntes));
+    ok('desligada a ficha na mesa, a classe sai da ficha e "Dar experiência" some', !('classeId' in linha().ficha) && await ate(async () => !(await m.isVisible('#m-xp'))));
     await j.click('#fab-mesa').catch(() => {}); await j.click('.aba[data-aba=testes]').catch(() => {});
   }
 

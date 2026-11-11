@@ -111,7 +111,7 @@ novos no Supabase falso, migração verificada com papéis reais numa transaçã
    ou o jogador refazer.
 3. **Aprovação da ficha no modo 2:** **opcional, o mestre liga** nas configurações da mesa. Ligada, a ficha fica
    "pendente", como as habilidades propostas hoje.
-4. **Modo 3:** ainda aberto. Proposta padrão: combate por turnos (a Roda), papéis tanque/cura/dano e recursos
+4. **Modo 3:** decidido em 2026-11-10 (ver "Fase C" no fim). Proposta padrão: combate por turnos (a Roda), papéis tanque/cura/dano e recursos
    mana/fúria/energia na primeira versão. Decidir antes da Fase C.
 5. **Ordem:** **Fase A primeiro.** Motor + predefinição LotM idêntica ao de hoje + servidor calculando os modificadores
    (fecha a brecha do `mods`). Uma sessão própria, partindo deste arquivo.
@@ -123,3 +123,54 @@ novos no Supabase falso, migração verificada com papéis reais numa transaçã
 3. Ficha **trazida do site** (convertida) **sempre** espera a aprovação, mesmo com a aprovação desligada.
 4. Ficha **pendente** joga sem modificador; o veredito chega com o selo de cera.
 5. **Cada ficha na sua versão** das regras (nas mesas com ficha na mesa) até o mestre migrar; migrar só se os atributos continuam valendo.
+
+## Fase C (2026-11-10): modo MMO, decisões do Pedro
+
+1. **Papéis:** os quatro — **Tanque** (protege e atrai golpes), **Cura** (recupera o grupo), **Dano** (corpo a corpo ou à
+   distância) e **Suporte** (bônus e controle). Uma classe pronta por papel; o mestre cria outras no Livro de regras.
+2. **Recursos de classe:** **mana** (regenera devagar), **fúria** (sobe ao bater e apanhar), **energia** (regenera rápido,
+   limite baixo). Cada classe usa um, além de PV.
+3. **Nível:** 1 a 20 com tabela de experiência; o **mestre dá XP** (ao grupo ou a um jogador) e o nível sobe sozinho no
+   servidor, com cerimônia para o jogador.
+4. **Ordem:** em três partes publicáveis — **C1** nível, classes e recursos; **C2** recarga e ameaça na Roda; **C3**
+   talentos e equipamento.
+5. **Estética:** própria em tudo (regra permanente do Pedro). Nada de barra de progresso ou cartão "de framework".
+
+### Plano da C1 (nível, classes e recursos): implementado em 2026-11-10 (ver HANDOFF; falta aplicar a migração 20261118 e publicar)
+
+**Motor (`js/regras.js` e o intérprete plpgsql, sempre iguais):**
+- `progressao: { tipo: 'nivel', de: 1, ate: 20, xp: [0, 300, 900, …] }` (XP acumulada para cada nível; validada: crescente, 20 valores).
+- `classes: [{ id, nome, papel: 'tanque'|'cura'|'dano'|'suporte', recurso: 'mana'|'furia'|'energia', principal: <id de atributo>, dv: <inteiro>, desc }]`.
+- Nome novo nas fórmulas: `DV` (dado de vida da classe da ficha). `recursos[].so` opcional = id de recurso de classe
+  (`mana`/`furia`/`energia`): o máximo só existe para a ficha cuja classe usa aquele recurso.
+- `calcular()` lê `ficha.classeId` e `ficha.nivel`; casos novos em `tests/formulas-casos.json` (JS e banco iguais).
+
+**Predefinição "Aventura"** (4º modelo do Livro de regras, ao lado de LotM, Clássico d20 e Simples): os 6 atributos com os
+ids do LotM (o Teste e o Duelo continuam funcionando), `progressao` por nível, as 4 classes prontas (nomes nossos, sem
+copiar jogo nenhum), PV = `10 + DV + mod(VIG) + (NIVEL - 1) * (DV / 2 + mod(VIG))`, mana/fúria/energia com fórmulas próprias.
+O Livro ganha a aba **Classes** (em frases, como as outras) e a aba **Nível** (tabela de XP editável).
+
+**Banco (migração nova, verificada com papéis reais numa transação desfeita):**
+- `jogadores.nivel` (1–20) e `jogadores.xp` (≥ 0), fora do grant de update; o gatilho `ficha_do_servidor` escreve
+  `ficha.nivel` e `ficha.xp` a partir da coluna (como faz com a Sequência).
+- `fichas_mesa.classe_id` (escolhida no assistente, travada como Caminho e raça; vale a classe da versão das regras da ficha).
+- `dar_xp(p_mesa, p_users uuid[], p_xp int, p_motivo text)`: só o mestre; recalcula o nível pela tabela da versão da ficha;
+  grava um registro (tabela `marcos` ou reusar `ascensoes` com `tipo`) para o jogador receber a cerimônia de nível.
+- Na Crônica: "Klein ganha 300 XP — A queda do Lorde Sombrio"; "Klein chega ao nível 4".
+
+**Jogador:**
+- Assistente da ficha da mesa: com `progressao.tipo = 'nivel'`, o passo **Origem** vira **Classe** — cartas grandes por
+  papel, cada uma com emblema desenhado (escudo, cálice, lâmina, estandarte), o recurso da classe e o que ela faz.
+- Aba Testes: a carta "Ficha da mesa" mostra nível, a **trilha de XP** como uma corrente de elos que acendem (não barra
+  comum), PV e o recurso da classe como frascos/runas com a cor do recurso.
+- Cerimônia de nível (como a de ascensão, mas com o emblema da classe e "Nível N").
+
+**Grimório:**
+- Ação **"Dar experiência"** (grupo, alguns ou um jogador; quantidade; motivo), com o efeito na Crônica.
+- Carta do jogador: emblema do papel, nível e o recurso da classe; a ficha do jogador mostra a classe e a trilha de XP.
+
+**Provas:** casos de fórmula JS = banco; Supabase falso com `dar_xp`; nova seção em `tests/mestre.js` (montar ficha
+Aventura, escolher classe, dar XP, subir de nível, cerimônia, axe, celular); prints criticados antes de entregar.
+
+**C2 depois:** `recarga` nas habilidades (turnos da Roda), regeneração por turno (mana/energia), fúria ao causar e
+receber dano, ameaça opcional nas criaturas. **C3:** talentos a cada N níveis (1 de 3) e equipamento entregue pelo mestre.

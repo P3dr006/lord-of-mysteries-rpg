@@ -19,3 +19,4 @@ interface Window {
 
 // js/regras.js também é carregado pelo Node nos testes (module.exports); no navegador é um global
 declare const Regras: typeof import("./regras.js");
+declare const Papeis: typeof import("./papeis.js");

@@ -15,11 +15,16 @@ const EditorRegras = Object.freeze((() => {
   const limpo = v => (Array.isArray(v) ? v.map(limpo) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => k[0] !== '_').map(([k, x]) => [k, limpo(x)])) : v);
   const inteiro = v => Number.isInteger(v);
   const LOTM_IDS = ['forca', 'agil', 'vigor', 'intel', 'espir', 'pres'];   // pedidos.atributo só aceita estes (ver HANDOFF)
-  const RESERVADOS = ['ATR', 'SEQ', 'NIVEL', 'MOD', 'MIN', 'MAX', 'FLOOR'];
+  const RESERVADOS = ['ATR', 'SEQ', 'NIVEL', 'DV', 'MOD', 'MIN', 'MAX', 'FLOOR'];
   const CORES = ['#e05a6a', '#6fb4ff', '#b08cff', '#f0b35a', '#5ad0a0', '#d9b86a', '#ff7ab8', '#9aa3b8'];
   const METODOS = { '4d6-menor': '4d6, descarta o menor', '3d6': '3d6 somados' };
   const EXEMPLO = [15, 14, 13, 12, 10, 8];
-  const SECOES = [['comecar', 'Começar'], ['atributos', 'Atributos'], ['modificador', 'Modificador'], ['recursos', 'Recursos'], ['caminho', 'Caminhos'], ['racas', 'Raças'], ['sequencia', 'Sequência']];
+  const SECOES = [['comecar', 'Começar'], ['atributos', 'Atributos'], ['modificador', 'Modificador'], ['recursos', 'Recursos'], ['caminho', 'Caminhos'], ['racas', 'Raças'], ['sequencia', 'Sequência'], ['classes', 'Classes'], ['nivel', 'Nível']];
+  const PAPEIS_ORD = ['tanque', 'cura', 'dano', 'suporte'], RECS_ORD = ['mana', 'furia', 'energia'], DVS = [4, 6, 8, 10, 12, 20];
+  const PP = () => (typeof Papeis === 'object' ? Papeis : null);
+  const nomePapel = k => (PP() && PP().PAPEL[k] ? PP().PAPEL[k].nome : k), nomeRec = k => (PP() && PP().RECURSO[k] ? PP().RECURSO[k].nome : k);
+  const curva = f => Array.from({ length: 20 }, (_, n) => Math.round((f * n * (n + 1)) / 2));   // XP total: f × (1 + 2 + … + n)
+  const CURVAS = [[60, 'Rápida'], [100, 'Padrão'], [200, 'Lenta']];
   const LISTA_CAMINHOS = () => (typeof CAMINHOS !== 'undefined' ? CAMINHOS : []);
   const LISTA_RACAS = () => (typeof RACAS !== 'undefined' ? RACAS : []);
   const sem = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -30,6 +35,7 @@ const EditorRegras = Object.freeze((() => {
     { id: 'd20', nome: 'Clássico d20', desc: 'Seis atributos de 3 a 18, +1 a cada 2 pontos acima de 10, sem bônus de Caminho. Vida, Defesa e Iniciativa.',
       regras: () => base('d20', [{ id: 'forca', nome: 'Força', abrev: 'FOR' }, { id: 'agil', nome: 'Destreza', abrev: 'DES' }, { id: 'vigor', nome: 'Constituição', abrev: 'CON' }, { id: 'intel', nome: 'Inteligência', abrev: 'INT' }, { id: 'espir', nome: 'Sabedoria', abrev: 'SAB' }, { id: 'pres', nome: 'Carisma', abrev: 'CAR' }], 'floor((ATR - 10) / 2)',
         [{ id: 'pv', nome: 'Pontos de Vida', max: '10 + mod(CON) * 2', cor: '#e05a6a' }, { id: 'defesa', nome: 'Defesa', max: '10 + mod(DES)', cor: '#9aa3b8' }, { id: 'inic', nome: 'Iniciativa', max: 'mod(DES)', cor: '#f0b35a' }]) },
+    { id: 'aventura', nome: 'Aventura', desc: 'Estilo MMO: nível de 1 a 20 com a XP que você dá, quatro classes (Tanque, Cura, Dano, Suporte) e mana, fúria ou energia por classe. Use com a ficha montada na mesa.', regras: () => Regras.AVENTURA },
     { id: 'simples', nome: 'Simples', desc: 'Três atributos (Corpo, Mente, Alma), +1 a cada 3 pontos acima de 10. Bom para uma sessão rápida.',
       regras: () => base('simples', [{ id: 'forca', nome: 'Corpo', abrev: 'COR' }, { id: 'intel', nome: 'Mente', abrev: 'MEN' }, { id: 'espir', nome: 'Alma', abrev: 'ALM' }], 'floor((ATR - 10) / 3)',
         [{ id: 'pv', nome: 'Vida', max: '10 + mod(COR) * 3', cor: '#e05a6a' }, { id: 'foco', nome: 'Foco', max: '5 + mod(MEN) * 2', cor: '#6fb4ff' }]) },
@@ -122,7 +128,9 @@ const EditorRegras = Object.freeze((() => {
       <div><dt>Rolagem</dt><dd>de ${esc(V.geracao && V.geracao.min)} a ${esc(V.geracao && V.geracao.max)} (${esc(METODOS[V.geracao && V.geracao.metodo] || (V.geracao && V.geracao.metodo) || '')})</dd></div>
       <div><dt>Modificador</dt><dd>${esc(fraseMod(V.modificador))}</dd></div>
       ${(V.recursos || []).map(r => `<div><dt><i class="er-pingo" style="--rc:${esc(r.cor || '#9aa3b8')}"></i>${esc(r.nome || r.id)}</dt><dd>${esc(fraseRc(r, ats))}</dd></div>`).join('')}
-      <div><dt>Bônus</dt><dd>${bonus.length ? esc(bonus.join(', ')) : 'nenhum'}</dd></div></dl>`;
+      <div><dt>Bônus</dt><dd>${bonus.length ? esc(bonus.join(', ')) : 'nenhum'}</dd></div>
+      <div><dt>Progressão</dt><dd>${V.progressao && V.progressao.tipo === 'nivel' ? 'nível de 1 a 20, com a experiência que você dá' : 'Sequência (de 9 a 0)'}</dd></div>
+      ${(V.classes || []).length ? `<div><dt>Classes</dt><dd>${V.classes.map(c => `<span class="er-tag er-tag-cl" style="--pc:${esc(PP() && PP().PAPEL[c.papel] ? PP().PAPEL[c.papel].cor : '#d9b86a')}">${PP() ? PP().glifo(c.papel, 13) : ''}${esc(c.nome)} <b>${esc(nomePapel(c.papel))}</b></span>`).join(' ')}</dd></div>` : ''}</dl>`;
     C.raiz.querySelector('#er-vigor').textContent = 'em vigor: ' + nomeVigor();
   }
 
@@ -151,7 +159,9 @@ const EditorRegras = Object.freeze((() => {
       <div class="er-l-corpo"><div class="er-l-sec" id="erl-sec" role="tabpanel" tabindex="-1"></div>
         <aside class="er-l-previa" aria-labelledby="t-er-previa"><h3 id="t-er-previa">Prévia</h3>
           <div class="m-grade er-p-esc"><div class="m-campo"><label for="er-ficha">Ficha</label><select id="er-ficha"></select></div>
-            <div class="m-campo"><label for="er-seq">Sequência</label><select id="er-seq">${[9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map(s => `<option value="${s}" ${s === 7 ? 'selected' : ''}>Sequência ${s}</option>`).join('')}</select></div></div>
+            <div class="m-campo"><label for="er-seq">Sequência</label><select id="er-seq">${[9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map(s => `<option value="${s}" ${s === 7 ? 'selected' : ''}>Sequência ${s}</option>`).join('')}</select></div>
+            <div class="m-campo" id="er-cl-campo" hidden><label for="er-classe">Classe</label><select id="er-classe"></select></div>
+            <div class="m-campo" id="er-nv-campo" hidden><label for="er-nivel">Nível</label><select id="er-nivel">${Array.from({ length: 20 }, (_, k) => `<option value="${k + 1}" ${k === 4 ? 'selected' : ''}>Nível ${k + 1}</option>`).join('')}</select></div></div>
           <div id="er-resultado" class="er-resultado" aria-live="polite"></div>
           <div id="er-erros" class="er-erros" hidden></div><ul id="er-avisos" class="er-avisos" hidden></ul>
           <p class="m-erro" id="er-msg" role="alert" hidden></p></aside></div>
@@ -180,7 +190,7 @@ const EditorRegras = Object.freeze((() => {
     secao = id;
     livro.querySelectorAll('.er-l-aba').forEach(b => { const on = b.dataset.sec === id; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
     const sec = $('#erl-sec'); sec.setAttribute('aria-labelledby', 'erl-a-' + id);
-    sec.innerHTML = ({ comecar: secComecar, atributos: secAtributos, modificador: secModificador, recursos: secRecursos, caminho: secCaminho, racas: secRacas, sequencia: secSequencia })[id]();
+    sec.innerHTML = ({ comecar: secComecar, atributos: secAtributos, modificador: secModificador, recursos: secRecursos, caminho: secCaminho, racas: secRacas, sequencia: secSequencia, classes: secClasses, nivel: secNivel })[id]();
     sec.scrollTop = 0;
     if (foco === true) sec.focus({ preventScroll: true }); else if (typeof foco === 'string') { const el = $(foco); if (el) el.focus(); }
     atualizar();
@@ -240,7 +250,7 @@ const EditorRegras = Object.freeze((() => {
           ${ajuda('Um bônus negativo de raça pode derrubar um atributo; este limite segura.')}`}
       <button type="button" class="link-remover er-alt" data-alternar="tot">${modoTot === 'avancado' ? 'Voltar ao modo simples' : 'Escrever a fórmula do total'}</button>`;
   }
-  const ajudaFormula = () => ajuda('Vale: números, <code>+ - * /</code>, parênteses, as abreviações dos atributos, <code>SEQ</code> (a Sequência), <code>NIVEL</code>, <code>mod(VIG)</code>, <code>min(a, b)</code>, <code>max(a, b)</code>, <code>floor(x)</code> (arredonda para baixo).');
+  const ajudaFormula = () => ajuda('Vale: números, <code>+ - * /</code>, parênteses, as abreviações dos atributos, <code>SEQ</code> (a Sequência), <code>NIVEL</code>, <code>DV</code> (o dado de vida da classe), <code>mod(VIG)</code>, <code>min(a, b)</code>, <code>max(a, b)</code>, <code>floor(x)</code> (arredonda para baixo).');
 
   function secRecursos() {
     return `<h3 class="er-s-t">Recursos</h3>
@@ -261,6 +271,7 @@ const EditorRegras = Object.freeze((() => {
             de ${selAtr(`rc-atr:${k}`, p.atr, 'Atributo', 'nenhum atributo')}
             + ${num(`rc-s:${k}`, p.s, 0, 99, 'Por Sequência avançada')} por Sequência avançada.</p>`
         : `<label class="er-f"><span>Fórmula do máximo</span><input type="text" class="er-formula" data-k="rc-texto:${k}" data-campo="recursos[${k}].max" value="${esc(r.max)}" maxlength="200" autocomplete="off" spellcheck="false"></label>${ajudaFormula()}`}
+      <p class="er-frase er-rc-so">Vale para <select data-k="rc-so:${k}" aria-label="Para quem vale ${esc(r.nome || 'o recurso ' + (k + 1))}"><option value="" ${r.so ? '' : 'selected'}>toda ficha</option>${RECS_ORD.map(x => `<option value="${x}" ${r.so === x ? 'selected' : ''}>só a classe que usa ${esc(nomeRec(x))}</option>`).join('')}</select>.</p>
       <p class="er-rc-res" data-derivado="rc:${k}"></p>
       <button type="button" class="link-remover er-alt" data-alternar="rc:${k}">${frase ? 'Escrever a fórmula' : 'Voltar ao modo simples'}</button></li>`;
   }
@@ -291,6 +302,41 @@ const EditorRegras = Object.freeze((() => {
       ${ligado('seq-on', !!sq, 'Usar bônus por Sequência')}
       ${sq ? linha('principal', 'O atributo do Caminho ganha +1 ao chegar na Sequência:') + linha('todos', 'Todos os atributos ganham +1 ao chegar na Sequência:') : ''}`;
   }
+
+  // ---------- Classes e Nível (Fase C1, modo MMO) ----------
+  function secClasses() {
+    const cs = R.classes || [], P = PP();
+    const temRec = k => (R.recursos || []).some(r => r.so === k);
+    const grupo = (k, rot, lista, atual, nome, cor, gl) => `<div class="er-cl-grupo" role="radiogroup" aria-label="${esc(rot)}">${lista.map(v => { const on = v === atual;
+      return `<button type="button" role="radio" class="er-b er-cl-op" data-${k}="${esc(v)}" aria-checked="${on}" tabindex="${on ? 0 : -1}" style="--pc:${esc(cor(v))}">${gl(v)}<span>${esc(nome(v))}</span></button>`; }).join('')}</div>`;
+    return `<h3 class="er-s-t">Classes</h3>
+      ${ajuda('Cada classe tem um <b>papel</b> no grupo e usa <b>um recurso</b> além da vida. O jogador escolhe a classe ao montar a ficha na mesa; o <b>dado de vida</b> (DV) entra nas contas da vida. Sem classes, a ficha não pede classe.')}
+      <ol class="er-cls">${cs.map((c, k) => `<li class="er-cl" data-cl="${k}" style="--pc:${esc(P && P.PAPEL[c.papel] ? P.PAPEL[c.papel].cor : '#d9b86a')}">
+        <div class="er-cl-cab"><span class="er-cl-emb">${P ? P.emblema(c.papel, 52) : ''}</span>
+          <label class="er-mini"><span>Nome</span><input type="text" data-k="cl-nome:${k}" value="${esc(c.nome)}" maxlength="30" autocomplete="off" aria-label="Nome da classe ${k + 1}"></label>
+          <button type="button" class="link-remover" data-tirar-cl="${k}">Tirar<span class="sr-only"> ${esc(c.nome || 'classe ' + (k + 1))}</span></button></div>
+        <div class="er-frase er-cl-linha"><span class="er-cl-rot">Papel</span>${grupo('cl-papel', `Papel de ${c.nome || 'classe ' + (k + 1)}`, PAPEIS_ORD, c.papel, nomePapel, v => (P && P.PAPEL[v] ? P.PAPEL[v].cor : '#d9b86a'), v => (P ? P.glifo(v, 16) : ''))}</div>
+        <div class="er-frase er-cl-linha"><span class="er-cl-rot">Recurso</span>${grupo('cl-rec', `Recurso de ${c.nome || 'classe ' + (k + 1)}`, RECS_ORD, c.recurso, nomeRec, v => (P && P.RECURSO[v] ? P.RECURSO[v].cor : '#d9b86a'), v => (P ? P.glifo(v, 16) : ''))}
+          ${temRec(c.recurso) ? '' : `<span class="er-cl-aviso">Nenhum recurso é a ${esc(nomeRec(c.recurso))} ainda: <button type="button" class="link-remover" data-criar-rec="${esc(c.recurso)}">criar em Recursos</button></span>`}</div>
+        <p class="er-frase">Atributo principal ${`<select data-k="cl-principal:${k}" aria-label="Atributo principal de ${esc(c.nome || 'classe ' + (k + 1))}">${R.atributos.map(a => `<option value="${esc(a.id)}" ${a.id === c.principal ? 'selected' : ''}>${esc(a.nome || a.abrev)}</option>`).join('')}</select>`}
+          e dado de vida <select data-k="cl-dv:${k}" aria-label="Dado de vida de ${esc(c.nome || 'classe ' + (k + 1))}">${(DVS.includes(c.dv) ? DVS : DVS.concat([c.dv]).filter(inteiro).sort((x, y) => x - y)).map(d => `<option value="${d}" ${d === c.dv ? 'selected' : ''}>d${d}</option>`).join('')}</select>.</p>
+        <label class="er-f"><span>O que ela faz <i>(o jogador lê na carta)</i></span><textarea data-k="cl-desc:${k}" maxlength="200" rows="2">${esc(c.desc || '')}</textarea></label></li>`).join('')}</ol>
+      <button type="button" class="ghost er-mais" id="er-mais-cl" ${cs.length >= 12 ? 'disabled' : ''}>+ Classe</button>`;
+  }
+  function secNivel() {
+    const pg = R.progressao || {}, porNivel = pg.tipo === 'nivel', xp = Array.isArray(pg.xp) ? pg.xp : curva(100);
+    const op = (v, n, d) => { const on = (v === 'nivel') === porNivel; return `<button type="button" role="radio" class="er-b er-opcao" data-prog="${v}" aria-checked="${on}" tabindex="${on ? 0 : -1}"><b>${n}</b><span>${d}</span></button>`; };
+    return `<h3 class="er-s-t">Nível</h3>
+      ${ajuda('Como o personagem cresce. Com <b>nível</b>, você dá experiência no Grimório (aba Ações) e o nível sobe sozinho quando a XP alcança a tabela.')}
+      <div class="er-opcoes" role="radiogroup" aria-label="Como o personagem cresce">${op('sequencia', 'Sequência', 'Lord of the Mysteries: da 9 à 0, com a ascensão que você aprova.')}${op('nivel', 'Nível de 1 a 20', 'Estilo MMO: experiência que você dá.')}</div>
+      ${porNivel ? `<h4 class="er-s-sub">Experiência total para cada nível</h4>
+        <div class="er-curvas" role="group" aria-label="Curvas prontas"><span>Curva pronta:</span>${CURVAS.map(([f, n]) => `<button type="button" class="c-chip er-curva" data-curva="${f}">${n}</button>`).join('')}</div>
+        <ol class="er-niveis">${xp.slice(0, 20).map((v, k) => `<li class="er-nv${k === 0 ? ' um' : ''}"><span class="er-nv-n" aria-hidden="true">${PP() ? PP().ROMANOS[k + 1] : k + 1}</span>
+          ${k === 0 ? `<b class="er-nv-zero">0 XP</b><small>começo</small>` : `${num(`nv-xp:${k}`, v, 1, 1000000, `XP total para o nível ${k + 1}`)}<small data-derivado="nv:${k}">${inteiro(v) && inteiro(xp[k - 1]) ? `+${v - xp[k - 1]}` : ''}</small>`}</li>`).join('')}</ol>` : ''}`;
+  }
+  const classeNova = () => { const usados = (R.classes || []).map(c => c.papel), papel = PAPEIS_ORD.find(p => !usados.includes(p)) || 'dano';
+    return { id: idUnico('classe', R.classes || [], -1), nome: '', papel, recurso: papel === 'tanque' ? 'furia' : papel === 'dano' ? 'energia' : 'mana', principal: (R.atributos[0] || {}).id, dv: 8, desc: '', _novo: true }; };
+  const recursoDeClasse = k => ({ mana: { id: 'mana', nome: 'Mana', max: '20 + NIVEL * 5', cor: '#5b8cff', so: 'mana' }, furia: { id: 'furia', nome: 'Fúria', max: '100', cor: '#e0652a', so: 'furia' }, energia: { id: 'energia', nome: 'Energia', max: '40', cor: '#e8c84a', so: 'energia' } }[k]);
 
   // ---------- mudanças nos campos ----------
   const idUnico = (bruto, lista, menos) => { const b = (sem(bruto).toLowerCase().replace(/[^a-z]/g, '') || 'novo').slice(0, 10); let id = b, n = 0; while (lista.some((x, i) => i !== menos && x.id === id)) id = b + '_' + 'abcdefghij'[n++ % 10]; return id; };
@@ -334,21 +380,31 @@ const EditorRegras = Object.freeze((() => {
       case 'raca-on': if (v) bonus().raca = padraoBonus('raca'); else { delete bonus().raca; semBonusVazio(); } return irPara('racas', '[data-k="raca-on"]');
       case 'raca': { const t = R.bonus.raca, linha = t[a] || (t[a] = {}); if (n == null || n === 0) delete linha[b]; else linha[b] = n; if (!Object.keys(linha).length) delete t[a];
         el.classList.toggle('mais', n > 0); el.classList.toggle('menos', n < 0); break; }
+      case 'cl-nome': { const c = R.classes[+a]; c.nome = String(v).trim(); if (c._novo) c.id = idUnico(c.nome || 'classe', R.classes, +a); break; }
+      case 'cl-principal': R.classes[+a].principal = v; break;
+      case 'cl-dv': R.classes[+a].dv = n; break;
+      case 'cl-desc': { const t = String(v).trim(); if (t) R.classes[+a].desc = t; else delete R.classes[+a].desc; break; }
+      case 'nv-xp': { R.progressao.xp[+a] = n == null ? null : Math.round(n); const d = $(`[data-derivado="nv:${a}"]`), x = R.progressao.xp; if (d) d.textContent = inteiro(x[+a]) && inteiro(x[+a - 1]) ? `+${x[+a] - x[+a - 1]}` : ''; break; }
+      case 'rc-so': if (v) rc.so = v; else delete rc.so; break;
       case 'seq-on': if (v) bonus().sequencia = padraoBonus('sequencia'); else { delete bonus().sequencia; semBonusVazio(); } return irPara('sequencia', '[data-k="seq-on"]');
     }
     atualizar();
   }
 
   // ---------- derivados: erros, frases, tabela, prévia, botão salvar ----------
-  const SEC_DO_CAMPO = c => (/^atributos|^geracao/.test(c) ? 'atributos' : /^modificador|^total/.test(c) ? 'modificador' : /^recursos/.test(c) ? 'recursos' : c === 'bonus.caminho' ? 'caminho' : c === 'bonus.raca' ? 'racas' : c === 'bonus.sequencia' ? 'sequencia' : 'atributos');
+  const SEC_DO_CAMPO = c => (/^atributos|^geracao/.test(c) ? 'atributos' : /^modificador|^total/.test(c) ? 'modificador' : /^recursos/.test(c) ? 'recursos' : c === 'bonus.caminho' ? 'caminho' : c === 'bonus.raca' ? 'racas' : c === 'bonus.sequencia' ? 'sequencia' : /^classes/.test(c) ? 'classes' : /^progressao/.test(c) ? 'nivel' : 'atributos');
   function rotuloCampo(campo) {
-    const m = /^(atributos|recursos)\[(\d+)\]\.(\w+)$/.exec(campo);
-    if (m) { const x = (R[m[1]] || [])[+m[2]] || {}; return `${m[1] === 'atributos' ? 'Atributo' : 'Recurso'} ${+m[2] + 1}${x.nome ? ` (${x.nome})` : ''}, ${{ id: 'nome', abrev: 'abreviação', nome: 'nome', max: 'máximo' }[m[3]] || m[3]}`; }
-    return { atributos: 'Atributos', geracao: 'Rolagem', modificador: 'Modificador', total: 'Limite do atributo', recursos: 'Recursos', 'bonus.caminho': 'Bônus de Caminho', 'bonus.raca': 'Bônus de raça', 'bonus.sequencia': 'Bônus por Sequência' }[campo] || campo;
+    const m = /^(atributos|recursos|classes)\[(\d+)\]\.(\w+)$/.exec(campo);
+    if (m) { const x = (R[m[1]] || [])[+m[2]] || {}; return `${{ atributos: 'Atributo', recursos: 'Recurso', classes: 'Classe' }[m[1]]} ${+m[2] + 1}${x.nome ? ` (${x.nome})` : ''}, ${{ id: 'nome', abrev: 'abreviação', nome: 'nome', max: 'máximo', so: 'para quem vale', papel: 'papel', recurso: 'recurso', principal: 'atributo principal', dv: 'dado de vida', desc: 'descrição' }[m[3]] || m[3]}`; }
+    return { atributos: 'Atributos', geracao: 'Rolagem', modificador: 'Modificador', total: 'Limite do atributo', recursos: 'Recursos', 'bonus.caminho': 'Bônus de Caminho', 'bonus.raca': 'Bônus de raça', 'bonus.sequencia': 'Bônus por Sequência', classes: 'Classes', 'progressao.xp': 'Tabela de experiência' }[campo] || campo;
   }
   // mensagens do motor em palavras de mesa
   function emPalavras(e) {
     const m = e.erro.replace(/^Fórmula inválida na posição \d+: /, '');
+    if (/^tabela de XP/.test(m)) return 'cada nível precisa de mais XP que o anterior (o nível 1 começa em 0; no máximo 1000000)';
+    if (/^dado de vida/.test(m)) return 'escolha um dado de vida de d4 a d20';
+    if (/^atributo principal/.test(m)) return 'o atributo principal não existe mais: escolha outro';
+    if (/^id:/.test(m) && /^classes/.test(e.campo)) return 'duas classes com o mesmo nome, ou nome sem letras';
     if (/^id:/.test(m)) return 'dois atributos (ou recursos) com o mesmo nome, ou nome sem letras';
     if (/^abreviação:/.test(m)) return 'use de 2 a 4 letras, sem repetir outra abreviação (e sem ATR, SEQ, MOD…)';
     if (/^nome:/.test(m)) return 'dê um nome (até 30 letras)';
@@ -369,13 +425,15 @@ const EditorRegras = Object.freeze((() => {
   function seletorDoCampo(campo) {
     let m = /^atributos\[(\d+)\]\.(\w+)$/.exec(campo); if (m) return `[data-k="at-${m[2] === 'abrev' ? 'abrev' : 'nome'}:${m[1]}"]`;
     m = /^recursos\[(\d+)\]\.(\w+)$/.exec(campo); if (m) return m[2] === 'max' ? `[data-rc="${m[1]}"] [data-campo] input, [data-rc="${m[1]}"] input[data-campo]` : `[data-k="rc-nome:${m[1]}"]`;
-    return { geracao: '[data-k="ger-min"]', modificador: '[data-k="mod-passo"], [data-k="mod-texto"]', total: '[data-k="tot-piso"], [data-k="tot-texto"]', 'bonus.caminho': '[data-k="cam-valor"]', 'bonus.raca': '[data-k="raca-on"]', 'bonus.sequencia': '[data-k="seq-on"]' }[campo] || '';
+    return { geracao: '[data-k="ger-min"]', modificador: '[data-k="mod-passo"], [data-k="mod-texto"]', total: '[data-k="tot-piso"], [data-k="tot-texto"]', 'bonus.caminho': '[data-k="cam-valor"]', 'bonus.raca': '[data-k="raca-on"]', 'bonus.sequencia': '[data-k="seq-on"]', 'progressao.xp': '.er-niveis input' }[campo]
+      || ((m = /^classes\[(\d+)\]\.(\w+)$/.exec(campo)) ? `[data-cl="${m[1]}"] ${{ nome: '[data-k^="cl-nome"]', id: '[data-k^="cl-nome"]', principal: 'select[data-k^="cl-principal"]', dv: 'select[data-k^="cl-dv"]', desc: 'textarea' }[m[2]] || '.er-cl-op'}` : '');
   }
 
   function fichasDaMesa() { return (C.jogadores() || []).filter(j => j && j.ficha && j.ficha.base && typeof j.ficha.base === 'object'); }
   function fichaExemplo(L) {
     const g = L.geracao || {}, lo = inteiro(g.min) ? g.min : 3, hi = inteiro(g.max) ? g.max : 18;
-    return { base: Object.fromEntries(L.atributos.map((a, k) => [a.id, Math.max(lo, Math.min(hi, EXEMPLO[k % EXEMPLO.length]))])), seq: +(($('#er-seq') || {}).value) || 0, caminhoId: '', racaId: '' };
+    const cs = Array.isArray(L.classes) ? L.classes : [], cl = (($('#er-classe') || {}).value) || (cs[0] || {}).id || '';
+    return { base: Object.fromEntries(L.atributos.map((a, k) => [a.id, Math.max(lo, Math.min(hi, EXEMPLO[k % EXEMPLO.length]))])), seq: +(($('#er-seq') || {}).value) || 0, caminhoId: '', racaId: '', classeId: cl, nivel: +(($('#er-nivel') || {}).value) || 1 };
   }
   function preencherFichas() {
     const sel = $('#er-ficha'); if (!sel) return; const antes = sel.value;
@@ -385,6 +443,10 @@ const EditorRegras = Object.freeze((() => {
   function previa(L) {
     const uid = ($('#er-ficha') || {}).value, j = uid && uid !== 'ex' ? fichasDaMesa().find(x => x.user_id === uid) : null;
     $('#er-seq').disabled = !!j;
+    { const cs = Array.isArray(L.classes) ? L.classes : [], sel = $('#er-classe'), v = sel.value, porNivel = !!(L.progressao && L.progressao.tipo === 'nivel');
+      $('#er-cl-campo').hidden = !cs.length || !!j; $('#er-nv-campo').hidden = !porNivel || !!j; $('#er-seq').closest('.m-campo').hidden = porNivel;
+      const html = cs.map(c => `<option value="${esc(c.id)}">${esc(c.nome || c.id)}</option>`).join('');
+      if (sel.innerHTML !== html) { sel.innerHTML = html; sel.value = cs.some(c => c.id === v) ? v : (cs[0] || {}).id || ''; } }
     const ficha = j ? j.ficha : fichaExemplo(L);
     let novo, velho;
     try { novo = Regras.calcular(L, ficha); } catch (e) { return '<p class="hint">A prévia volta quando as contas estiverem certas.</p>'; }
@@ -395,15 +457,19 @@ const EditorRegras = Object.freeze((() => {
       return t == null ? `<li class="er-p-at falta"><b>${esc(a.abrev)}</b><span>${esc(a.nome)}</span><em>sem valor</em></li>`
         : `<li class="er-p-at"><b>${esc(a.abrev)}</b><span>${esc(a.nome)}</span><strong>${t}</strong><em>${sinal(m)}${dif(m, velho.mods[a.id])}</em></li>`;
     }).join('');
-    const rcs = (L.recursos || []).map(r => { const v = novo.maximos[r.id], cor = /^#[0-9a-f]{6}$/i.test(r.cor || '') ? r.cor : '#9aa3b8';
+    const rcs = (L.recursos || []).filter(r => Object.hasOwn(novo.maximos, r.id)).map(r => { const v = novo.maximos[r.id], cor = /^#[0-9a-f]{6}$/i.test(r.cor || '') ? r.cor : '#9aa3b8';
       return `<li class="er-p-rc" style="--rc:${cor}"><span>${esc(r.nome || r.id)}</span><b>${v == null ? '—' : v}</b>${dif(v, velho.maximos[r.id])}<i class="er-p-barra" style="--p:${v == null ? 0 : Math.max(4, Math.min(100, v * 2))}%"></i></li>`; }).join('');
-    return `<p class="hint">${j ? `Ficha de ${esc(j.ficha.nome || j.nome)}, Sequência ${esc(ficha.seq ?? 9)}.` : 'Ficha de exemplo, sem Caminho nem raça.'} ▲▼ comparam com a ${esc(nomeVigor())}.</p>
+    const clx = Regras.classeDe(L, ficha);
+    return `<p class="hint">${j ? `Ficha de ${esc(j.ficha.nome || j.nome)}, ${L.progressao && L.progressao.tipo === 'nivel' ? `nível ${esc(ficha.nivel ?? 1)}` : `Sequência ${esc(ficha.seq ?? 9)}`}.` : clx ? `Ficha de exemplo: ${esc(clx.nome)}, nível ${esc(ficha.nivel)}.` : 'Ficha de exemplo, sem Caminho nem raça.'} ▲▼ comparam com a ${esc(nomeVigor())}.</p>
       <ul class="er-p-ats">${ats}</ul>${rcs ? `<ul class="er-p-rcs">${rcs}</ul>` : ''}`;
   }
   function avisos(L) {
     const a = [], fora = L.atributos.filter(x => x.id && !LOTM_IDS.includes(x.id));
     if (fora.length) a.push(`Teste pedido ainda não mira ${fora.map(x => x.nome || x.id).join(', ')}: por enquanto os pedidos só aceitam os seis atributos do Lord of the Mysteries (nas contas eles já valem).`);
     const semValor = fichasDaMesa().filter(j => { try { const c = Regras.calcular(L, j.ficha); return L.atributos.some(x => c.attrs[x.id] == null); } catch (e) { return false; } });
+    const cs = Array.isArray(L.classes) ? L.classes : [], faltam = [...new Set(cs.map(c => c.recurso))].filter(k => !(L.recursos || []).some(r => r.so === k));
+    if (faltam.length) a.push(`As classes usam ${faltam.map(nomeRec).join(', ')}, mas nenhum recurso é ${faltam.length === 1 ? 'esse' : 'esses'}: em Recursos, marque “só a classe que usa…” (ou use o botão na aba Classes).`);
+    if (cs.length && C.fichaNaMesa && !C.fichaNaMesa()) a.push('A classe é escolhida quando a ficha é montada na mesa: ligue “Ficha montada na mesa” no cartão Jogadores. Desligada, as fichas ficam sem classe (e sem a vida que depende dela).');
     if (semValor.length) a.push(`${semValor.length === 1 ? 'A ficha de ' + (semValor[0].ficha.nome || semValor[0].nome) + ' ficaria' : semValor.length + ' fichas da mesa ficariam'} com atributo sem valor (rolagem fora de ${L.geracao.min} a ${L.geracao.max}, ou atributo que a ficha não tem): o modificador vira 0.`);
     return a;
   }
@@ -462,7 +528,7 @@ const EditorRegras = Object.freeze((() => {
   function ligarLivro() {
     livro.addEventListener('input', e => {
       const t = /** @type {HTMLElement} */ (e.target);
-      if (t.id === 'er-ficha' || t.id === 'er-seq') return atualizar();
+      if (['er-ficha', 'er-seq', 'er-classe', 'er-nivel'].includes(t.id)) return atualizar();
       if (t.dataset && t.dataset.k) aplicar(t);
     });
     livro.addEventListener('focusin', e => { const t = /** @type {HTMLElement} */ (e.target); if (t.dataset && /^at-abrev:/.test(t.dataset.k || '')) t.dataset.antes = t.value.toUpperCase(); });
@@ -506,6 +572,13 @@ const EditorRegras = Object.freeze((() => {
         if (r._modo === 'avancado') { if (!lerRc(r.max, R.atributos)) r.max = escreverRc({ b: 10, atr: '', tipo: 'mod', m: 0, s: 0 }); r._modo = 'frase'; } else r._modo = 'avancado';
         return irPara('recursos', `[data-alternar="rc:${k}"]`);
       }
+      if (d.clPapel || d.clRec) { const li = b.closest('[data-cl]'), k = li.dataset.cl, c = R.classes[+k]; if (d.clPapel) c.papel = d.clPapel; else c.recurso = d.clRec;
+        return irPara('classes', `[data-cl="${k}"] [data-${d.clPapel ? 'cl-papel' : 'cl-rec'}="${d.clPapel || d.clRec}"]`); }
+      if (b.id === 'er-mais-cl') { (R.classes || (R.classes = [])).push(classeNova()); return irPara('classes', `[data-k="cl-nome:${R.classes.length - 1}"]`); }
+      if (d.tirarCl != null) { const [c] = R.classes.splice(+d.tirarCl, 1); C.anunciar(`${c.nome || 'Classe'} tirada`); return irPara('classes', '#er-mais-cl'); }
+      if (d.criarRec) { const nr = recursoDeClasse(d.criarRec); if (nr && (R.recursos || []).length < 12) { nr.id = idUnico(nr.id, R.recursos || [], -1); nr._modo = 'avancado'; (R.recursos || (R.recursos = [])).push(nr); C.anunciar(`${nr.nome} criada em Recursos`); } return irPara('classes', '#er-mais-cl'); }
+      if (d.prog) { R.progressao = d.prog === 'nivel' ? { tipo: 'nivel', de: 1, ate: 20, xp: Array.isArray((R.progressao || {}).xp) ? R.progressao.xp : curva(100) } : { tipo: 'sequencia', de: 9, ate: 0 }; return irPara('nivel', `[data-prog="${d.prog}"]`); }
+      if (d.curva) { R.progressao.xp = curva(+d.curva); C.anunciar('Tabela de experiência trocada'); return irPara('nivel', `[data-curva="${d.curva}"]`); }
       if (d.seq) {
         const [k, n] = d.seq.split(':'), sq = R.bonus.sequencia, l = Array.isArray(sq[k]) ? sq[k] : (sq[k] = []), i = l.indexOf(+n);
         if (i >= 0) l.splice(i, 1); else if (l.length < 10) { l.push(+n); l.sort((x, y) => y - x); }
@@ -516,7 +589,7 @@ const EditorRegras = Object.freeze((() => {
       const t = /** @type {HTMLElement} */ (e.target);
       if (e.key === 'Escape') { if (document.querySelector('.m-conf-fundo, .esc-lista')) return; e.preventDefault(); fecharLivro(); return; }
       // setas nos grupos (abas do livro, cores, opções do modificador)
-      const grupo = t.classList && (t.classList.contains('er-l-aba') ? '.er-l-aba' : t.classList.contains('er-cor') ? '.er-cor' : t.classList.contains('er-opcao') ? '.er-opcao' : '');
+      const grupo = t.classList && (t.classList.contains('er-l-aba') ? '.er-l-aba' : t.classList.contains('er-cor') ? '.er-cor' : t.classList.contains('er-opcao') ? '.er-opcao' : t.classList.contains('er-cl-op') ? '.er-cl-op' : '');
       const k = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
       if (grupo && k) { e.preventDefault(); const bs = [...t.parentElement.querySelectorAll(grupo)], alvo = bs[(bs.indexOf(t) + k + bs.length) % bs.length]; alvo.focus(); if (grupo !== '.er-opcao') alvo.click(); return; }
       if (e.key === 'Tab') {   // o foco não sai do livro

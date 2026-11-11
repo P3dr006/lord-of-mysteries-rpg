@@ -6,7 +6,8 @@ const FichaMesa = Object.freeze((() => {
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const sinal = n => (n >= 0 ? '+' : '−') + Math.abs(n);
   const METODO = { '4d6-menor': '4d6, descartando o menor', '3d6': '3d6 somados' };
-  const PASSOS = [['atributos', 'Atributos'], ['origem', 'Origem'], ['selar', 'Selar']];
+  const comClasse = R => Array.isArray(R && R.classes) && R.classes.length > 0;   // Fase C1: com classes, o passo Origem vira Classe
+  const PASSOS = R => [['atributos', 'Atributos'], ['origem', comClasse(R) ? 'Classe' : 'Origem'], ['selar', 'Selar']];
   let m = null, ctx = null, st = null, soltar = () => {}, antes = null;
 
   const faixa = R => { const g = R.geracao || {}; return { mn: Number.isInteger(g.min) ? g.min : 3, mx: Number.isInteger(g.max) ? g.max : 18 }; };
@@ -21,7 +22,7 @@ const FichaMesa = Object.freeze((() => {
     ctx = c; antes = document.activeElement;
     const fm = c.fm, continua = !!(fm && fm.estado === 'rolada' && !fm.liberada);
     st = { passo: continua ? 'origem' : 'inicio', modo: continua ? 'rolar' : '', base: continua ? fm.base : null, rolagens: continua ? fm.rolagens : null, revelar: false,
-      caminho: caminhoOk(c.local.caminho), raca: racaOk(c.local.raca), ocupado: false, erro: '' };
+      caminho: caminhoOk(c.local.caminho), raca: racaOk(c.local.raca), classe: '', ocupado: false, erro: '' };
     m = document.createElement('div'); m.className = 'fm-assist'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'fm-t');
     document.body.appendChild(m); document.body.classList.add('com-assistente');
     desenhar();
@@ -41,11 +42,11 @@ const FichaMesa = Object.freeze((() => {
   // ---------- desenho ----------
   function passos() {
     const at = st.passo === 'inicio' || st.passo === 'rolar' ? 0 : st.passo === 'origem' ? 1 : 2;
-    return `<ol class="fm-passos" aria-label="Passos da ficha">${PASSOS.map(([k, n], i) => `<li class="${i < at ? 'feito' : i === at ? 'agora' : ''}"${i === at ? ' aria-current="step"' : ''}><i aria-hidden="true">${i < at ? '✓' : i + 1}</i>${n}</li>`).join('')}</ol>`;
+    return `<ol class="fm-passos" aria-label="Passos da ficha">${PASSOS(ctx.regras).map(([k, n], i) => `<li class="${i < at ? 'feito' : i === at ? 'agora' : ''}"${i === at ? ' aria-current="step"' : ''}><i aria-hidden="true">${i < at ? '✓' : i + 1}</i>${n}</li>`).join('')}</ol>`;
   }
   function desenhar() {
     if (!m) return;
-    const R = ctx.regras, corpo = { inicio: telaInicio, rolar: telaRolar, origem: telaOrigem, selar: telaSelar }[st.passo](R);
+    const R = ctx.regras, corpo = { inicio: telaInicio, rolar: telaRolar, origem: comClasse(R) ? telaClasse : telaOrigem, selar: telaSelar }[st.passo](R);
     m.innerHTML = `<div class="fm-livro">
       <div class="fm-cab"><small class="fm-olho">Ficha da mesa <b>${esc(ctx.codigo)}</b></small><h2 id="fm-t" tabindex="-1">${esc(ctx.nome || 'Sua ficha')}</h2>${passos()}
         <button type="button" class="fm-b fm-x" id="fm-fechar" aria-label="Fechar o assistente" ${st.ocupado ? 'disabled' : ''}>×</button></div>
@@ -57,6 +58,7 @@ const FichaMesa = Object.freeze((() => {
     const r = m.querySelector('#fm-rolar'); if (r) r.addEventListener('click', rolar);
     const s = m.querySelector('#fm-selar'); if (s) s.addEventListener('click', selar);
     m.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => { st.caminho = b.dataset.cam; redesenharMantendo(b, '[data-cam="' + b.dataset.cam + '"]'); }));
+    m.querySelectorAll('[data-classe]').forEach(b => b.addEventListener('click', () => { st.classe = b.dataset.classe; redesenharMantendo(b, '[data-classe="' + b.dataset.classe + '"]'); }));
     m.querySelectorAll('[data-raca]').forEach(b => b.addEventListener('click', () => { st.raca = b.dataset.raca; redesenharMantendo(b, '[data-raca="' + b.dataset.raca + '"]'); }));
   }
   function redesenharMantendo(b, sel) { const g = m.querySelector('.fm-corpo'), y = g ? g.scrollTop : 0; desenhar(); const g2 = m.querySelector('.fm-corpo'); if (g2) g2.scrollTop = y; const n = m.querySelector(sel); if (n) n.focus(); }
@@ -92,7 +94,7 @@ const FichaMesa = Object.freeze((() => {
       <div class="fm-acoes"><button type="button" class="ghost" data-ir="inicio">Voltar</button><button type="button" class="primary" id="fm-rolar" data-ic="dado" data-foco ${st.ocupado ? 'disabled' : ''}>${st.ocupado ? 'Rolando…' : 'Rolar os atributos'}</button></div>`;
     return `<p class="fm-intro">O servidor rolou. ${met === '3d6' ? '' : 'O dado apagado é o menor, descartado.'}</p>
       <ul class="fm-ats ${st.revelar ? 'revela' : ''}" aria-label="Atributos rolados">${R.atributos.map((a, i) => `<li style="--i:${i}"><span>${esc(a.nome)}</span>${dadosHtml((st.rolagens || {})[a.id], st.base[a.id], met)}<span class="sr-only">${esc(a.nome)}: ${st.base[a.id]}</span></li>`).join('')}</ul>
-      <div class="fm-acoes"><button type="button" class="primary" data-ir="origem" data-foco>Escolher a origem</button></div>`;
+      <div class="fm-acoes"><button type="button" class="primary" data-ir="origem" data-foco>${comClasse(R) ? 'Escolher a classe' : 'Escolher a origem'}</button></div>`;
   }
 
   function telaOrigem(R) {
@@ -108,15 +110,38 @@ const FichaMesa = Object.freeze((() => {
       <div class="fm-acoes">${st.modo === 'converter' ? '<button type="button" class="ghost" data-ir="inicio">Voltar</button>' : ''}<button type="button" class="primary" data-ir="selar" data-foco>Ver a ficha pronta</button></div>`;
   }
 
+  // ---------- Classe (Fase C1): uma carta grande por classe, na ordem dos papéis, com o emblema desenhado ----------
+  const fichaDe = (R, classe) => ({ base: st.base, caminhoId: st.caminho, racaId: st.raca, classeId: classe, seq: Number.isInteger(ctx.local.seq) ? ctx.local.seq : 9, nivel: Number.isInteger(ctx.local.nivel) ? ctx.local.nivel : 1 });
+  function telaClasse(R) {
+    const P = typeof Papeis === 'object' ? Papeis : null, ordem = ['tanque', 'cura', 'dano', 'suporte'];
+    const cs = R.classes.slice().sort((a, b) => ordem.indexOf(a.papel) - ordem.indexOf(b.papel));
+    const cartas = cs.map(cl => {
+      const on = st.classe === cl.id, pa = P && P.PAPEL[cl.papel], rc = P && P.RECURSO[cl.recurso], rr = (R.recursos || []).find(r => r.so === cl.recurso);
+      let mx = {}; try { mx = Regras.calcular(R, fichaDe(R, cl.id)).maximos; } catch (e) { /* prévia sem números */ }
+      return `<button type="button" class="fm-b fm-cl${on ? ' on' : ''}" data-classe="${esc(cl.id)}" aria-pressed="${on}" style="--pc:${esc(pa ? pa.cor : '#d9b86a')};--rc:${esc(rr && /^#[0-9a-f]{6}$/i.test(rr.cor || '') ? rr.cor : rc ? rc.cor : '#d9b86a')}">
+        <span class="fm-cl-emb">${P ? P.emblema(cl.papel, 64) : ''}</span>
+        <small class="fm-cl-papel">${esc(pa ? pa.nome : cl.papel)}</small><b class="fm-cl-nome">${esc(cl.nome)}</b>
+        ${cl.desc ? `<span class="fm-cl-desc">${esc(cl.desc)}</span>` : ''}
+        <span class="fm-cl-fatos"><span class="fm-cl-rec">${P ? P.glifo(cl.recurso, 15) : ''}<b>${esc(rr ? rr.nome : rc ? rc.nome : cl.recurso)}</b>${rc ? ` <i>${esc(rc.faz)}</i>` : ''}</span>
+          <span><i>Principal</i> ${esc(nomeAt(R, cl.principal))}</span><span><i>Dado de vida</i> d${esc(cl.dv)}</span>${mx.pv != null ? `<span><i>Vida no nível ${fichaDe(R, cl.id).nivel}</i> ${mx.pv}</span>` : ''}</span></button>`;
+    }).join('');
+    const bo = R.bonus || {}, origem = (bo.caminho || bo.raca) ? telaOrigem(R).replace(/<div class="fm-acoes">[\s\S]*$/, '') : '';
+    return `<p class="fm-intro">Cada classe tem um papel no grupo e usa um recurso, além da vida. A classe fica com a ficha: trocar, só com o mestre.</p>
+      <div class="fm-classes" role="group" aria-label="Classes">${cartas}</div>${origem}
+      <div class="fm-acoes">${st.modo === 'converter' ? '<button type="button" class="ghost" data-ir="inicio">Voltar</button>' : ''}<button type="button" class="primary" data-ir="selar" data-foco ${st.classe ? '' : 'disabled aria-describedby="fm-cl-falta"'}>Ver a ficha pronta</button></div>
+      ${st.classe ? '' : '<p class="fm-nota" id="fm-cl-falta">Escolha uma classe para continuar.</p>'}`;
+  }
+
   function telaSelar(R) {
-    let c; try { c = Regras.calcular(R, { base: st.base, caminhoId: st.caminho, racaId: st.raca, seq: Number.isInteger(ctx.local.seq) ? ctx.local.seq : 9 }); } catch (e) { c = { attrs: {}, mods: {}, maximos: {} }; }
+    let c; try { c = Regras.calcular(R, fichaDe(R, st.classe)); } catch (e) { c = { attrs: {}, mods: {}, maximos: {} }; }
     const pend = ctx.aprovar || st.modo === 'converter';
     const cam = caminhoOk(st.caminho) && CAMINHOS.find(x => x.id === st.caminho), rc = racaOk(st.raca) && RACAS.find(x => x.id === st.raca);
-    return `<p class="fm-intro">${cam ? `<b>${esc(cam.nome)}</b>` : 'Sem Caminho'} · ${rc ? `${esc(rc.icone)} <b>${esc(rc.nome)}</b>` : 'sem raça'}${st.modo === 'converter' ? ' · <i>ficha trazida do site</i>' : ''}</p>
+    const cl = comClasse(R) && R.classes.find(x => x.id === st.classe), pa = cl && typeof Papeis === 'object' ? Papeis.PAPEL[cl.papel] : null;
+    return `<p class="fm-intro">${cl ? `<span class="fm-cl-linha" style="--pc:${esc(pa ? pa.cor : '#d9b86a')}">${typeof Papeis === 'object' ? Papeis.emblema(cl.papel, 26) : ''}<b>${esc(cl.nome)}</b>${pa ? ` <i>· ${esc(pa.nome)}</i>` : ''}</span>` : `${cam ? `<b>${esc(cam.nome)}</b>` : 'Sem Caminho'} · ${rc ? `${esc(rc.icone)} <b>${esc(rc.nome)}</b>` : 'sem raça'}`}${st.modo === 'converter' ? ' · <i>ficha trazida do site</i>' : ''}</p>
       <table class="fm-tab"><caption class="sr-only">Prévia da ficha</caption><thead><tr><th scope="col">Atributo</th><th scope="col">Dado</th><th scope="col">Total</th><th scope="col">Mod.</th></tr></thead>
       <tbody>${R.atributos.map(a => { const b = st.base[a.id], t = c.attrs[a.id], md = c.mods[a.id];
         return `<tr><th scope="row">${esc(a.nome)}</th><td>${b ?? '—'}</td><td>${t ?? '—'}${t != null && b != null && t !== b ? ` <small class="${t < b ? 'neg' : ''}">(${sinal(t - b)})</small>` : ''}</td><td class="fm-mod"><span class="${md != null && md < 0 ? 'neg' : ''}">${md == null ? '—' : sinal(md)}</span></td></tr>`; }).join('')}</tbody></table>
-      ${(R.recursos || []).length ? `<ul class="fm-rec" aria-label="Recursos">${R.recursos.map(r => `<li style="--rc:${/^#[0-9a-f]{6}$/i.test(r.cor || '') ? r.cor : '#d9b86a'}"><span>${esc(r.nome)}</span><b>${c.maximos[r.id] ?? '—'}</b></li>`).join('')}</ul>` : ''}
+      ${(R.recursos || []).some(r => Object.hasOwn(c.maximos, r.id)) ? `<ul class="fm-rec" aria-label="Recursos">${R.recursos.filter(r => Object.hasOwn(c.maximos, r.id)).map(r => `<li style="--rc:${/^#[0-9a-f]{6}$/i.test(r.cor || '') ? r.cor : '#d9b86a'}"><span>${esc(r.nome)}</span><b>${c.maximos[r.id] ?? '—'}</b></li>`).join('')}</ul>` : ''}
       <p class="fm-nota">${pend ? (st.modo === 'converter' ? 'Ficha trazida do site: o mestre confere antes de valer.' : 'O mestre aprova antes de a ficha valer.') + ' Até lá, seus testes vão sem modificador.' : 'Ao selar, a ficha vale na hora. O servidor refaz a conta com as regras da mesa.'}</p>
       <div class="fm-acoes"><button type="button" class="ghost" data-ir="origem">Voltar</button><button type="button" class="primary" id="fm-selar" data-foco ${st.ocupado ? 'disabled' : ''}>${st.ocupado ? 'Enviando…' : pend ? 'Enviar ao mestre' : 'Selar a ficha'}</button></div>`;
   }
@@ -138,9 +163,9 @@ const FichaMesa = Object.freeze((() => {
     if (st.ocupado) return;
     st.ocupado = true; st.erro = ''; desenhar();
     try {
-      const estado = st.modo === 'converter' ? await ctx.converter(st.base, st.caminho, st.raca) : await ctx.enviar(st.caminho, st.raca);
+      const estado = st.modo === 'converter' ? await ctx.converter(st.base, st.caminho, st.raca, st.classe) : await ctx.enviar(st.caminho, st.raca, st.classe);
       st.ocupado = false;
-      const fim = { estado, modo: st.modo, base: st.base, rolagens: st.rolagens, metodo: st.metodo || (ctx.regras.geracao || {}).metodo, caminho: st.caminho, raca: st.raca };
+      const fim = { estado, modo: st.modo, base: st.base, rolagens: st.rolagens, metodo: st.metodo || (ctx.regras.geracao || {}).metodo, caminho: st.caminho, raca: st.raca, classe: st.classe };
       fechar();
       if (ctx.aoTerminar) ctx.aoTerminar(fim);
       return;
